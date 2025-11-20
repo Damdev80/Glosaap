@@ -179,6 +179,9 @@ class ImapClient:
             return []
 
     def download_attachments(self, msg_id, folder="INBOX", dest_dir=None):
+        """
+        Descarga solo adjuntos de tipo Excel, Word o PDF
+        """
         self.select_folder(folder)
         typ, msg_data = self.conn.fetch(msg_id.encode() if isinstance(msg_id, str) else msg_id, "(RFC822)")
         if typ != "OK":
@@ -188,7 +191,17 @@ class ImapClient:
         out_dir = dest_dir or os.path.join(tempfile.gettempdir(), "glosaap_attachments")
         if os.path.exists(out_dir) is False:
             os.makedirs(out_dir, exist_ok=True)
+        
+        # Extensiones permitidas
+        ALLOWED_EXTENSIONS = (
+            '.xlsx', '.xls', '.xlsm', '.xlsb',  # Excel
+            '.doc', '.docx', '.docm',            # Word
+            '.pdf'                                # PDF
+        )
+        
         saved = []
+        skipped = []
+        
         for part in msg.walk():
             # Múltiples métodos para detectar adjuntos
             filename = part.get_filename()
@@ -205,18 +218,34 @@ class ImapClient:
             
             if filename:
                 filename = _decode_header(filename)
+                
+                # Filtrar: solo guardar archivos permitidos
+                file_ext = os.path.splitext(filename.lower())[1]
+                
+                if file_ext not in ALLOWED_EXTENSIONS:
+                    skipped.append(filename)
+                    print(f"⏭️  Omitido (no es Excel/Word/PDF): {filename}")
+                    continue
+                
                 payload = part.get_payload(decode=True)
                 if not payload:
                     continue
+                    
                 safe_name = filename.replace(os.path.sep, "_")
                 path = os.path.join(out_dir, safe_name)
+                
                 with open(path, "wb") as f:
                     f.write(payload)
+                    
                 saved.append(path)
                 print(f"✅ Adjunto guardado: {safe_name}")
         
+        if skipped:
+            print(f"ℹ️  {len(skipped)} archivo(s) omitido(s) (imágenes, etc.)")
+        
         if not saved:
-            print("⚠️ No se encontraron adjuntos en el mensaje")
+            print("⚠️ No se encontraron adjuntos Excel/Word/PDF en el mensaje")
+            
         return saved
 
     def logout(self):

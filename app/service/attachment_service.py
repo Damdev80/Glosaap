@@ -37,10 +37,32 @@ class AttachmentService:
         return self.downloaded_files
     
     def get_excel_files(self):
-        """Filtra y retorna solo archivos Excel y CSV"""
+        """Filtra y retorna archivos Excel y CSV"""
         return [
             f for f in self.downloaded_files 
-            if f.endswith(('.xlsx', '.xls', '.csv'))
+            if f.endswith(('.xlsx', '.xls', '.xlsm', '.xlsb', '.csv'))
+        ]
+    
+    def get_word_files(self):
+        """Filtra y retorna archivos Word"""
+        return [
+            f for f in self.downloaded_files 
+            if f.endswith(('.doc', '.docx', '.docm'))
+        ]
+    
+    def get_pdf_files(self):
+        """Filtra y retorna archivos PDF"""
+        return [
+            f for f in self.downloaded_files 
+            if f.endswith('.pdf')
+        ]
+    
+    def get_document_files(self):
+        """Retorna todos los archivos de documentos (Excel, Word, PDF)"""
+        return [
+            f for f in self.downloaded_files 
+            if f.endswith(('.xlsx', '.xls', '.xlsm', '.xlsb', '.csv', 
+                          '.doc', '.docx', '.docm', '.pdf'))
         ]
     
     def get_file_info(self, file_path):
@@ -63,6 +85,8 @@ class AttachmentService:
     def get_summary(self):
         """Retorna un resumen de archivos descargados"""
         excel_files = self.get_excel_files()
+        word_files = self.get_word_files()
+        pdf_files = self.get_pdf_files()
         total_size = sum(
             os.path.getsize(f) for f in self.downloaded_files 
             if os.path.exists(f)
@@ -71,6 +95,8 @@ class AttachmentService:
         return {
             "total_files": len(self.downloaded_files),
             "excel_files": len(excel_files),
+            "word_files": len(word_files),
+            "pdf_files": len(pdf_files),
             "total_size": total_size,
             "base_dir": self.base_dir
         }
