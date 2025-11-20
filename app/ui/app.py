@@ -1,49 +1,52 @@
 """
 Aplicación Glosaap - Cliente IMAP con Flet
-Busca correos con 'glosa' en el asunto y descarga adjuntos
+Versión modular con separación de responsabilidades
 """
 import flet as ft
 import os
 import sys
 import threading
-import pandas as pd
 
 # Configurar path para imports
 PROJECT_APP_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_APP_DIR not in sys.path:
     sys.path.insert(0, PROJECT_APP_DIR)
 
-from core.imap_client import ImapClient
+from service.email_service import EmailService
+from core.data_processor import DataProcessor
+from ui.styles import COLORS, FONT_SIZES, SPACING, WINDOW_SIZES
+from ui.components.message_row import MessageRow
+from ui.components.data_table import DataTable as DataTableComponent
 
 
 def main(page: ft.Page):
     """Función principal de la aplicación"""
     
-    # Configuración inicial de la página
+    # Configuración inicial
     page.title = "Glosaap"
-    page.window_width = 480
-    page.window_height = 420
-    page.bgcolor = "#FFFFFF"  # Blanco puro
+    page.window_width = WINDOW_SIZES["login"]["width"]
+    page.window_height = WINDOW_SIZES["login"]["height"]
+    page.bgcolor = COLORS["bg_white"]
     page.padding = 0
     
-    # Variable para guardar el cliente IMAP
-    imap_client = {"client": None}
+    # Servicios
+    email_service = EmailService()
+    data_processor = DataProcessor()
     
     # ==================== PANTALLA DE LOGIN ====================
     
-    # Componentes de login con diseño minimalista
     title = ft.Text(
         "Glosaap",
-        size=36,
+        size=FONT_SIZES["title"],
         weight=ft.FontWeight.W_300,
-        color="#2C3E50",
+        color=COLORS["text_primary"],
         text_align=ft.TextAlign.CENTER
     )
     
     subtitle = ft.Text(
         "Gestor de correos IMAP",
-        size=14,
-        color="#7F8C8D",
+        size=FONT_SIZES["body"],
+        color=COLORS["text_secondary"],
         text_align=ft.TextAlign.CENTER
     )
     
@@ -51,12 +54,12 @@ def main(page: ft.Page):
         label="Correo electrónico",
         width=380,
         autofocus=True,
-        border_color="#E8E8E8",
-        focused_border_color="#3498DB",
-        bgcolor="#FAFAFA",
-        color="#2C3E50",
-        cursor_color="#3498DB",
-        text_size=14
+        border_color=COLORS["border"],
+        focused_border_color=COLORS["primary"],
+        bgcolor=COLORS["bg_input"],
+        color=COLORS["text_primary"],
+        cursor_color=COLORS["primary"],
+        text_size=FONT_SIZES["body"]
     )
     
     password_input = ft.TextField(
@@ -64,274 +67,122 @@ def main(page: ft.Page):
         password=True,
         can_reveal_password=True,
         width=380,
-        border_color="#E8E8E8",
-        focused_border_color="#3498DB",
-        bgcolor="#FAFAFA",
-        color="#2C3E50",
-        cursor_color="#3498DB",
-        text_size=14
+        border_color=COLORS["border"],
+        focused_border_color=COLORS["primary"],
+        bgcolor=COLORS["bg_input"],
+        color=COLORS["text_primary"],
+        cursor_color=COLORS["primary"],
+        text_size=FONT_SIZES["body"]
     )
     
     status_text = ft.Text(
         "",
-        size=13,
-        color="#E74C3C",
+        size=FONT_SIZES["small"],
+        color=COLORS["error"],
         text_align=ft.TextAlign.CENTER,
         weight=ft.FontWeight.W_400
     )
     
-    # ProgressBar para login
-    login_progress = ft.ProgressBar(visible=False, color="#3498DB", bgcolor="#E8E8E8", width=380)
+    login_progress = ft.ProgressBar(
+        visible=False, 
+        color=COLORS["primary"], 
+        bgcolor=COLORS["border"], 
+        width=380
+    )
     
     login_button = ft.Container(
         content=ft.Text("Iniciar Sesión", size=15, weight=ft.FontWeight.W_500),
         alignment=ft.alignment.center,
-        bgcolor="#3498DB",
+        bgcolor=COLORS["primary"],
         border_radius=8,
         padding=15,
         width=380,
         ink=True
     )
     
-    # Contenedor de login con espaciado elegante
     login_view = ft.Container(
         content=ft.Column([
-            ft.Container(height=40),
+            ft.Container(height=SPACING["xxl"]),
             title,
             subtitle,
-            ft.Container(height=30),
+            ft.Container(height=SPACING["xl"]),
             email_input,
-            ft.Container(height=15),
+            ft.Container(height=SPACING["md"]),
             password_input,
-            ft.Container(height=25),
+            ft.Container(height=SPACING["lg"]),
             login_button,
-            ft.Container(height=10),
+            ft.Container(height=SPACING["sm"]),
             login_progress,
             status_text
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-        padding=ft.padding.symmetric(horizontal=40),
-        bgcolor="#FFFFFF"
+        padding=ft.padding.symmetric(horizontal=SPACING["xxl"]),
+        bgcolor=COLORS["bg_white"]
     )
     
     # ==================== PANTALLA DE MENSAJES ====================
     
-    messages_list = ft.Column([], scroll=ft.ScrollMode.AUTO, expand=True, spacing=10)
-    messages_status = ft.Text("", size=13, color="#7F8C8D")
-    loading_bar = ft.ProgressBar(visible=False, color="#3498DB", bgcolor="#E8E8E8")
-    
-    # Variable para guardar datos procesados
-    processed_data = {"df": None, "attachments": []}
-    
-    def create_message_row(msg, index):
-        """Crea una fila de lista para un mensaje con indicadores de descarga"""
-        subject = msg.get("subject", "(sin asunto)")
-        msg_id = msg.get("id", "")
-        
-        # Crear contenedor para el progreso de descarga
-        download_progress = ft.ProgressBar(
-            width=200,
-            color="#27AE60",
-            bgcolor="#E8E8E8",
-            visible=False,
-            height=3
-        )
-        
-        # Status de descarga
-        download_status = ft.Text(
-            "",
-            size=11,
-            color="#27AE60",
-            visible=False
-        )
-        
-        # Contador de adjuntos
-        attachment_count = ft.Text(
-            "",
-            size=11,
-            color="#7F8C8D",
-            visible=False
-        )
-        
-        # Guardar referencias en el mensaje para actualizarlas después
-        msg["_progress"] = download_progress
-        msg["_status"] = download_status
-        msg["_count"] = attachment_count
-        
-        return ft.Container(
-            content=ft.Row([
-                # Número
-                ft.Container(
-                    content=ft.Text(
-                        str(index),
-                        size=13,
-                        weight=ft.FontWeight.W_500,
-                        color="#95A5A6"
-                    ),
-                    width=40,
-                    alignment=ft.alignment.center
-                ),
-                # Subject
-                ft.Container(
-                    content=ft.Column([
-                        ft.Text(
-                            subject[:90] + "..." if len(subject) > 90 else subject,
-                            size=13,
-                            color="#2C3E50",
-                            weight=ft.FontWeight.W_400
-                        ),
-                        ft.Row([
-                            download_progress,
-                            download_status
-                        ], spacing=10, visible=False),
-                        attachment_count
-                    ], spacing=3),
-                    expand=True
-                ),
-                # Ícono de estado
-                ft.Container(
-                    content=ft.Icon(
-                        ft.Icons.CHECK_CIRCLE,
-                        size=20,
-                        color="#27AE60"
-                    ) if msg.get("_downloaded") else ft.Icon(
-                        ft.Icons.DOWNLOADING,
-                        size=20,
-                        color="#3498DB"
-                    ),
-                    width=40
-                )
-            ], spacing=10),
-            padding=ft.padding.symmetric(horizontal=15, vertical=12),
-            border=ft.border.only(bottom=ft.BorderSide(1, "#F0F0F0")),
-            bgcolor="#FFFFFF"
-        )
-        """Crea una tarjeta visual minimalista para un mensaje"""
-        subject = msg.get("subject", "(sin asunto)")
-        from_addr = msg.get("from", "")
-        date = msg.get("date", "")
-        has_attach = msg.get("has_attachments", False)
-        
-        return ft.Container(
-            content=ft.Column([
-                # Header del mensaje
-                ft.Row([
-                    ft.Container(
-                        content=ft.Icon(
-                            ft.Icons.ATTACH_FILE if has_attach else ft.Icons.MAIL_OUTLINE,
-                            size=20,
-                            color="#3498DB" if has_attach else "#BDC3C7"
-                        ),
-                        width=40
-                    ),
-                    ft.Column([
-                        ft.Text(
-                            subject,
-                            size=15,
-                            weight=ft.FontWeight.W_500,
-                            color="#2C3E50",
-                            overflow=ft.TextOverflow.ELLIPSIS
-                        ),
-                        ft.Text(
-                            f"De: {from_addr}",
-                            size=12,
-                            color="#7F8C8D",
-                            overflow=ft.TextOverflow.ELLIPSIS
-                        ),
-                        ft.Text(
-                            date,
-                            size=11,
-                            color="#95A5A6"
-                        )
-                    ], spacing=2, expand=True)
-                ], spacing=10),
-                # Botón de descarga si hay adjuntos
-                ft.Container(
-                    content=ft.TextButton(
-                        "Descargar adjuntos",
-                        icon=ft.Icons.DOWNLOAD,
-                        style=ft.ButtonStyle(
-                            color="#3498DB",
-                            bgcolor="#EBF5FB"
-                        ),
-                        on_click=lambda e, mid=msg["id"], subj=subject: download_attachments(mid, subj)
-                    ) if has_attach else ft.Text(
-                        "Sin archivos adjuntos",
-                        size=12,
-                        color="#BDC3C7",
-                        italic=True
-                    ),
-                    margin=ft.margin.only(left=40, top=5)
-                )
-            ], spacing=8),
-            bgcolor="#FFFFFF",
-            border=ft.border.all(1, "#E8E8E8"),
-            border_radius=10,
-            padding=20,
-            animate=ft.animation.Animation(300, "easeOut")
-        )
+    messages_list = ft.Column([], scroll=ft.ScrollMode.AUTO, expand=True, spacing=0)
+    messages_status = ft.Text("", size=FONT_SIZES["small"], color=COLORS["text_secondary"])
+    loading_bar = ft.ProgressBar(visible=False, color=COLORS["primary"], bgcolor=COLORS["border"])
     
     messages_view = ft.Column([
-        # Header fijo
+        # Header
         ft.Container(
             content=ft.Row([
                 ft.Text(
                     "Correos con 'glosa'",
-                    size=22,
+                    size=FONT_SIZES["heading"],
                     weight=ft.FontWeight.W_400,
-                    color="#2C3E50"
+                    color=COLORS["text_primary"]
                 ),
                 ft.Row([
                     ft.TextButton(
                         "📊 Ver Datos",
                         icon=ft.Icons.TABLE_CHART,
                         style=ft.ButtonStyle(
-                            color="#FFFFFF",
-                            bgcolor="#3498DB"
+                            color=COLORS["bg_white"],
+                            bgcolor=COLORS["primary"]
                         ),
                         on_click=lambda e: show_data_view()
                     ),
                     ft.IconButton(
                         icon=ft.Icons.REFRESH,
-                        icon_color="#3498DB",
+                        icon_color=COLORS["primary"],
                         tooltip="Actualizar",
                         on_click=lambda e: load_messages()
                     )
-                ], spacing=10)
+                ], spacing=SPACING["sm"])
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            bgcolor="#FFFFFF",
-            padding=20,
-            border=ft.border.only(bottom=ft.BorderSide(1, "#E8E8E8"))
+            bgcolor=COLORS["bg_white"],
+            padding=SPACING["lg"],
+            border=ft.border.only(bottom=ft.BorderSide(1, COLORS["border"]))
         ),
-        # Barra de carga
         loading_bar,
-        # Lista de mensajes
         ft.Container(
             content=messages_list,
             expand=True,
-            padding=20,
-            bgcolor="#F8F9FA"
+            padding=0,
+            bgcolor=COLORS["bg_light"]
         ),
-        # Footer con status
         ft.Container(
             content=messages_status,
-            padding=15,
-            bgcolor="#FFFFFF",
-            border=ft.border.only(top=ft.BorderSide(1, "#E8E8E8"))
+            padding=SPACING["md"],
+            bgcolor=COLORS["bg_white"],
+            border=ft.border.only(top=ft.BorderSide(1, COLORS["border"]))
         )
     ], expand=True, spacing=0, visible=False)
     
     # ==================== PANTALLA DE DATOS ====================
     
     data_table_container = ft.Column([], scroll=ft.ScrollMode.AUTO, expand=True)
-    data_status = ft.Text("", size=13, color="#7F8C8D")
+    data_status = ft.Text("", size=FONT_SIZES["small"], color=COLORS["text_secondary"])
     
     data_view = ft.Column([
-        # Header
         ft.Container(
             content=ft.Row([
                 ft.IconButton(
                     icon=ft.Icons.ARROW_BACK,
-                    icon_color="#3498DB",
+                    icon_color=COLORS["primary"],
                     tooltip="Volver a correos",
                     on_click=lambda e: (
                         setattr(data_view, 'visible', False),
@@ -341,28 +192,26 @@ def main(page: ft.Page):
                 ),
                 ft.Text(
                     "Datos Procesados",
-                    size=22,
+                    size=FONT_SIZES["heading"],
                     weight=ft.FontWeight.W_400,
-                    color="#2C3E50"
+                    color=COLORS["text_primary"]
                 ),
-            ], spacing=10),
-            bgcolor="#FFFFFF",
-            padding=20,
-            border=ft.border.only(bottom=ft.BorderSide(1, "#E8E8E8"))
+            ], spacing=SPACING["sm"]),
+            bgcolor=COLORS["bg_white"],
+            padding=SPACING["lg"],
+            border=ft.border.only(bottom=ft.BorderSide(1, COLORS["border"]))
         ),
-        # Tabla de datos
         ft.Container(
             content=data_table_container,
             expand=True,
-            padding=20,
-            bgcolor="#F8F9FA"
+            padding=SPACING["lg"],
+            bgcolor=COLORS["bg_light"]
         ),
-        # Footer con status
         ft.Container(
             content=data_status,
-            padding=15,
-            bgcolor="#FFFFFF",
-            border=ft.border.only(top=ft.BorderSide(1, "#E8E8E8"))
+            padding=SPACING["md"],
+            bgcolor=COLORS["bg_white"],
+            border=ft.border.only(top=ft.BorderSide(1, COLORS["border"]))
         )
     ], expand=True, spacing=0, visible=False)
     
@@ -371,7 +220,7 @@ def main(page: ft.Page):
     def show_status(msg, is_error=False):
         """Muestra mensaje de estado en login"""
         status_text.value = msg
-        status_text.color = "#E74C3C" if is_error else "#3498DB"
+        status_text.color = COLORS["error"] if is_error else COLORS["primary"]
         page.update()
     
     def show_messages_status(msg):
@@ -384,106 +233,52 @@ def main(page: ft.Page):
         data_status.value = msg
         page.update()
     
-    def process_excel_files(file_paths):
-        """Procesa archivos Excel y CSV y retorna un DataFrame consolidado"""
-        dfs = []
-        for file_path in file_paths:
-            try:
-                if file_path.endswith(('.xlsx', '.xls')):
-                    df = pd.read_excel(file_path)
-                    dfs.append(df)
-                elif file_path.endswith('.csv'):
-                    df = pd.read_csv(file_path)
-                    dfs.append(df)
-            except Exception as e:
-                print(f"Error procesando {file_path}: {e}")
-        
-        if dfs:
-            return pd.concat(dfs, ignore_index=True)
-        return None
-    
-    def create_data_table(df):
-        """Crea una tabla visual con los datos del DataFrame"""
-        if df is None or df.empty:
-            return ft.Text("No hay datos para mostrar", size=14, color="#7F8C8D")
-        
-        # Limitar a las primeras 100 filas para rendimiento
-        display_df = df.head(100)
-        
-        # Crear columnas de la tabla
-        columns = [ft.DataColumn(ft.Text(str(col), weight=ft.FontWeight.BOLD, size=12)) 
-                   for col in display_df.columns]
-        
-        # Crear filas
-        rows = []
-        for idx, row in display_df.iterrows():
-            cells = [ft.DataCell(ft.Text(str(val)[:50], size=11)) for val in row]
-            rows.append(ft.DataRow(cells=cells))
-        
-        return ft.DataTable(
-            columns=columns,
-            rows=rows,
-            border=ft.border.all(1, "#E8E8E8"),
-            border_radius=10,
-            horizontal_lines=ft.BorderSide(1, "#F0F0F0"),
-            heading_row_color="#F8F9FA",
-            heading_row_height=50,
-            data_row_max_height=40,
-        )
-    
     def show_data_view():
         """Muestra la vista de datos procesados"""
         def worker():
             try:
-                if not processed_data["attachments"]:
-                    show_messages_status("⚠️ No hay adjuntos descargados para procesar")
+                excel_files = email_service.get_excel_files()
+                
+                if not excel_files:
+                    show_messages_status("⚠️ No hay archivos Excel o CSV para procesar")
                     return
                 
                 show_messages_status("🔄 Procesando archivos...")
                 page.update()
                 
-                # Filtrar solo archivos Excel/CSV
-                excel_files = [f for f in processed_data["attachments"] 
-                              if f.endswith(('.xlsx', '.xls', '.csv'))]
-                
-                if not excel_files:
-                    show_messages_status("⚠️ No se encontraron archivos Excel o CSV")
-                    return
-                
                 # Procesar archivos
-                df = process_excel_files(excel_files)
+                df = data_processor.process_files(excel_files)
                 
                 if df is not None:
-                    processed_data["df"] = df
+                    # Crear componente de tabla
+                    data_table_component = DataTableComponent(df)
                     
-                    # Crear tabla
+                    # Limpiar y agregar contenido
                     data_table_container.controls.clear()
                     
                     # Información del dataset
-                    info_text = ft.Text(
-                        f"📊 {len(df)} filas × {len(df.columns)} columnas | "
-                        f"📁 {len(excel_files)} archivo(s) procesado(s)",
-                        size=13,
-                        color="#3498DB",
-                        weight=ft.FontWeight.W_500
-                    )
-                    data_table_container.controls.append(
-                        ft.Container(content=info_text, padding=10, bgcolor="#EBF5FB", border_radius=5)
-                    )
+                    info_widget = data_table_component.get_info_widget()
+                    if info_widget:
+                        data_table_container.controls.append(info_widget)
                     
                     # Agregar tabla
-                    table = create_data_table(df)
+                    table = data_table_component.build()
                     data_table_container.controls.append(
                         ft.Container(
                             content=ft.Row([table], scroll=ft.ScrollMode.ALWAYS),
-                            margin=ft.margin.only(top=10)
+                            margin=ft.margin.only(top=SPACING["sm"])
                         )
                     )
                     
                     # Cambiar a vista de datos
                     messages_view.visible = False
                     data_view.visible = True
-                    show_data_status(f"✅ Mostrando primeras 100 de {len(df)} filas")
+                    
+                    summary = data_processor.get_summary()
+                    show_data_status(
+                        f"✅ Mostrando {min(100, summary['rows'])} de {summary['rows']} filas | "
+                        f"{summary['files_processed']} archivo(s) procesado(s)"
+                    )
                     page.update()
                 else:
                     show_messages_status("❌ No se pudieron procesar los archivos")
@@ -494,23 +289,8 @@ def main(page: ft.Page):
         
         threading.Thread(target=worker, daemon=True).start()
     
-    def download_attachments(msg_id, subject):
-        """Descarga adjuntos de un mensaje"""
-        def worker():
-            try:
-                show_messages_status(f"📥 Descargando adjuntos de: {subject[:50]}...")
-                saved = imap_client["client"].download_attachments(msg_id)
-                if saved:
-                    show_messages_status(f"✅ Descargados {len(saved)} archivo(s) en: {os.path.dirname(saved[0])}")
-                else:
-                    show_messages_status("⚠️ No se encontraron adjuntos en este mensaje")
-            except Exception as e:
-                show_messages_status(f"❌ Error: {str(e)}")
-        
-        threading.Thread(target=worker, daemon=True).start()
-    
     def load_messages():
-        """Carga mensajes con 'glosa' en el asunto y descarga adjuntos automáticamente"""
+        """Carga mensajes con 'glosa' y descarga adjuntos"""
         def worker():
             try:
                 loading_bar.visible = True
@@ -518,36 +298,29 @@ def main(page: ft.Page):
                 show_messages_status("🔍 Buscando correos con 'glosa' en el asunto...")
                 page.update()
                 
-                found_count = [0]  # Lista para que sea mutable en el callback
-                all_attachments = []  # Guardar rutas de todos los adjuntos
-                all_messages = []  # Guardar referencias a los mensajes
+                message_rows = []
                 
                 def on_message_found(msg):
                     """Callback cuando se encuentra un mensaje"""
-                    found_count[0] += 1
-                    
-                    # Crear y agregar fila de mensaje
-                    msg_row = create_message_row(msg, found_count[0])
-                    messages_list.controls.append(msg_row)
-                    all_messages.append(msg)
-                    
-                    show_messages_status(f"🔍 Encontrados {found_count[0]} correo(s)...")
+                    msg_row = MessageRow(msg, len(message_rows) + 1)
+                    messages_list.controls.append(msg_row.build())
+                    message_rows.append(msg_row)
+                    show_messages_status(f"🔍 Encontrados {len(message_rows)} correo(s)...")
                     page.update()
                 
-                # Buscar mensajes sin descargar todavía
-                show_messages_status("🔍 Buscando correos...")
-                msgs = imap_client["client"].search_by_subject("glosa", limit=100, timeout=15, on_found=on_message_found)
+                # Buscar mensajes
+                msgs = email_service.search_messages("glosa", limit=100, timeout=15, on_found=on_message_found)
                 
                 if not msgs:
                     messages_list.controls.clear()
                     messages_list.controls.append(
                         ft.Container(
                             content=ft.Column([
-                                ft.Icon(ft.Icons.MAIL_OUTLINE, size=60, color="#BDC3C7"),
+                                ft.Icon(ft.Icons.MAIL_OUTLINE, size=60, color=COLORS["text_light"]),
                                 ft.Text(
                                     "No se encontraron correos con 'glosa' en el asunto",
-                                    size=15,
-                                    color="#7F8C8D",
+                                    size=FONT_SIZES["body"],
+                                    color=COLORS["text_secondary"],
                                     text_align=ft.TextAlign.CENTER
                                 )
                             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=15),
@@ -559,76 +332,38 @@ def main(page: ft.Page):
                     page.update()
                     return
                 
-                # Ahora descargar adjuntos de todos los mensajes
+                # Descargar adjuntos con callback de progreso
                 show_messages_status("📥 Descargando adjuntos...")
                 page.update()
                 
-                for idx, msg in enumerate(msgs):
-                    try:
-                        # Buscar el Row que contiene el progreso
-                        msg_row_controls = messages_list.controls[idx].content.controls[1].content.controls[1]
-                        
-                        # Mostrar progreso
-                        if "_progress" in msg:
-                            msg_row_controls.visible = True  # Hacer visible el Row
-                            msg["_progress"].visible = True
-                            msg["_status"].visible = True
-                            msg["_status"].value = "Descargando..."
-                            page.update()
-                        
-                        # Descargar adjuntos
-                        saved = imap_client["client"].download_attachments(msg["id"])
-                        
-                        if saved:
-                            all_attachments.extend(saved)
-                            
-                            # Actualizar UI
-                            if "_progress" in msg:
-                                msg["_progress"].visible = False
-                                msg["_status"].value = f"✓ {len(saved)} archivo(s)"
-                                msg["_status"].color = "#27AE60"
-                                
-                                # Mostrar nombres de archivos
-                                file_names = [os.path.basename(f) for f in saved]
-                                if len(file_names) <= 2:
-                                    msg["_count"].value = f"📎 {', '.join(file_names)}"
-                                else:
-                                    msg["_count"].value = f"📎 {file_names[0]}, {file_names[1]} y {len(file_names)-2} más"
-                                    
-                                msg["_count"].visible = True
-                                msg["_downloaded"] = True
-                                page.update()
-                        else:
-                            # Sin adjuntos
-                            if "_progress" in msg:
-                                msg["_progress"].visible = False
-                                msg["_status"].value = "Sin adjuntos"
-                                msg["_status"].color = "#95A5A6"
-                                page.update()
-                        
-                        show_messages_status(f"📥 Descargados: {len(all_attachments)} archivo(s) de {idx + 1}/{len(msgs)} correos")
-                        page.update()
-                        
-                    except Exception as e:
-                        print(f"Error descargando adjuntos del mensaje {msg.get('id')}: {e}")
-                        if "_progress" in msg:
-                            msg["_progress"].visible = False
-                            msg["_status"].value = "⚠ Error"
-                            msg["_status"].color = "#E74C3C"
-                            msg["_status"].visible = True
-                            page.update()
+                def on_download_progress(idx, total, msg, files):
+                    """Callback de progreso de descarga"""
+                    msg_row = message_rows[idx]
+                    msg_row.show_downloading()
+                    page.update()
+                    
+                    if files:
+                        msg_row.show_success(files)
+                    else:
+                        msg_row.show_no_attachments()
+                    
+                    show_messages_status(f"📥 Procesado: {idx + 1}/{total} correos")
+                    page.update()
                 
-                # Guardar adjuntos en variable global para procesamiento
-                processed_data["attachments"] = all_attachments
+                stats = email_service.download_all_attachments(msgs, on_download_progress)
                 
-                # Mostrar resumen final
-                if all_attachments:
-                    show_messages_status(f"✅ {len(msgs)} correo(s) | 📎 {len(all_attachments)} adjunto(s) descargado(s)")
+                # Resumen final
+                if stats["total_files"] > 0:
+                    show_messages_status(
+                        f"✅ {len(msgs)} correo(s) | "
+                        f"📎 {stats['total_files']} adjunto(s) descargado(s)"
+                    )
                 else:
                     show_messages_status(f"✅ {len(msgs)} correo(s) encontrado(s) | ⚠ Sin adjuntos")
                 
                 loading_bar.visible = False
                 page.update()
+                
             except Exception as e:
                 loading_bar.visible = False
                 show_messages_status(f"❌ Error: {str(e)}")
@@ -653,17 +388,12 @@ def main(page: ft.Page):
         
         def worker():
             try:
-                # Conectar al servidor IMAP
-                client = ImapClient()
-                client.connect(email, password)
-                imap_client["client"] = client
-                
-                # Ocultar loader
+                email_service.connect(email, password)
                 login_progress.visible = False
                 
                 # Cambiar a pantalla de mensajes
-                page.window_width = 900
-                page.window_height = 700
+                page.window_width = WINDOW_SIZES["main"]["width"]
+                page.window_height = WINDOW_SIZES["main"]["height"]
                 login_view.visible = False
                 messages_view.visible = True
                 page.update()
@@ -678,10 +408,9 @@ def main(page: ft.Page):
         
         threading.Thread(target=worker, daemon=True).start()
     
-    # Asignar evento al botón (click en el contenedor)
     login_button.on_click = do_login
     
-    # Agregar vistas a la página
+    # Agregar vistas
     page.add(login_view)
     page.add(messages_view)
     page.add(data_view)
