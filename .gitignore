@@ -1,0 +1,75 @@
+# ============================
+#   PYTHON
+# ============================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+*.egg
+dist/
+build/
+pip-wheel-metadata/
+.python-version
+
+# ============================
+#   ENTORNOS VIRTUALES
+# ============================
+env/
+venv/
+ENV/
+.venv/
+
+# ============================
+#   FLET
+# ============================
+# Carpeta de build para apps de escritorio / web
+build/
+dist/
+.flet/
+.flet-build/
+.flet-cache/
+
+# ============================
+#   PANDAS / DATA
+# ============================
+# Archivos de datos que no deben versionarse
+*.csv
+*.xlsx
+*.xls
+*.parquet
+*.pkl
+*.json
+
+# ============================
+#   LOGS / TEMP
+# ============================
+*.log
+*.tmp
+*.temp
+*.bak
+
+# ============================
+#   SISTEMA / EDITORES
+# ============================
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# VSCode
+.vscode/
+.history/
+*.code-workspace
+
+# PyCharm
+.idea/
+
+# ====================================
+#   OTROS
+# ====================================
+# Archivos que prefieras ignorar
+local_settings.py
