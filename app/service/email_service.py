@@ -4,6 +4,7 @@ Orquesta las operaciones entre IMAP y adjuntos
 """
 from core.imap_client import ImapClient
 from service.attachment_service import AttachmentService
+from core.eps_processors import MutualserProcessor, CosaludProcessor
 
 
 class EmailService:
@@ -13,6 +14,9 @@ class EmailService:
         self.imap_client = None
         self.attachment_service = AttachmentService()
         self.messages = []
+        # Procesadores por EPS
+        self.mutualser_processor = MutualserProcessor()
+        self.cosalud_processor = CosaludProcessor()
     
     def connect(self, email, password, server="imap.gmail.com", port=993):
         """Conecta al servidor IMAP"""
@@ -20,6 +24,7 @@ class EmailService:
         self.imap_client.connect(email, password, server, port)
         return True
     
+
     def search_messages(self, keyword, limit=100, timeout=15, on_found=None):
         """
         Busca mensajes por palabra clave en el asunto
@@ -116,3 +121,71 @@ class EmailService:
         if self.imap_client:
             self.imap_client.logout()
             self.imap_client = None
+
+    # Métodos específicos para procesamiento de EPS
+    
+    def procesar_mutualser(self, archivos=None):
+        """
+        Procesa archivos de MUTUALSER y genera Excel consolidado
+        
+        Args:
+            archivos: Lista de rutas de archivos (usa archivos descargados si es None)
+            
+        Returns:
+            Dict con rutas de archivos generados y resumen
+        """
+        # Si no se especifican archivos, usar los Excel descargados
+        if archivos is None:
+            archivos = self.get_excel_files()
+        
+        if not archivos:
+            return {
+                'success': False,
+                'message': 'No hay archivos para procesar'
+            }
+        
+        # Procesar archivos
+        df = self.mutualser_processor.procesar_multiples_archivos(archivos)
+        
+        if df is None or df.empty:
+            return {
+                'success': False,
+                'message': 'No se pudo procesar ningún archivo'
+            }
+        
+        # Exportar consolidado y generar archivo de objeciones
+        resultado = self.mutualser_processor.exportar_consolidado()
+        
+        if resultado:
+            output_path, objeciones_path = resultado
+            resumen = self.mutualser_processor.get_resumen()
+            return {
+                'success': True,
+                'output_file': output_path,
+                'objeciones_file': objeciones_path,
+                'resumen': resumen
+            }
+        else:
+            return {
+                'success': False,
+                'message': 'Error al exportar archivos'
+            }
+    
+    def procesar_cosalud(self, archivos=None):
+        """
+        Procesa archivos de COSALUD y genera Excel consolidado
+        
+        Args:
+            archivos: Lista de rutas de archivos (usa archivos descargados si es None)
+            
+        Returns:
+            Dict con ruta del archivo generado y resumen
+        """
+        # TODO: Implementar cuando se defina estructura de COSALUD
+        return {
+            'success': False,
+            'message': 'Procesador de COSALUD aún no implementado'
+        }
+
+
+# Procesar adjunto de acuerdo a la EPS

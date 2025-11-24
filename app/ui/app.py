@@ -6,6 +6,7 @@ import flet as ft
 import os
 import sys
 import threading
+import subprocess
 
 # Configurar path para imports
 PROJECT_APP_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -29,7 +30,7 @@ def main(page: ft.Page):
     
     # Servicios
     email_service = EmailService()
-    selected_eps = {"name": "Todas las EPS", "filter": None}  # EPS seleccionada
+    selected_eps = {"name": "Todas las EPS", "filter": None, "filter_type": None, "subject_pattern": None}  # EPS seleccionada
 
     
     
@@ -155,12 +156,13 @@ def main(page: ft.Page):
     
     # Lista de EPS disponibles (puedes agregar más después)
     eps_list = [
-        {"name": "Todas las EPS", "icon": "", "description": "Buscar en todas las EPS", "filter": None},
-        {"name": "Sanitas", "icon": "🟢", "description": "Sanitas EPS", "filter": "sanitas"},
-        {"name": "Sura", "icon": "🔵", "description": "Sura EPS", "filter": "sura"},
-        {"name": "Nueva EPS", "icon": "🟠", "description": "Nueva EPS", "filter": "nuevaeps"},
-        {"name": "Compensar", "icon": "🟡", "description": "Compensar EPS", "filter": "compensar"},
-        {"name": "Famisanar", "icon": "🟣", "description": "Famisanar EPS", "filter": "famisanar"},
+        {"name": "Todas las EPS", "icon": "", "description": "Buscar en todas las EPS", "filter": None, "filter_type": None},
+        {"name": "Sanitas", "icon": "🟢", "description": "Sanitas EPS", "filter": "sanitas", "filter_type": "keyword"},
+        {"name": "Mutualser", "icon": "🔵", "description": "Mutualser", "filter": "mutualser", "filter_type": "subject_exact_pattern", "subject_pattern": "objeciones de glosa factura fc"},
+        {"name": "Nueva EPS", "icon": "🟠", "description": "Nueva EPS", "filter": "nuevaeps", "filter_type": "keyword"},
+        {"name": "Compensar", "icon": "🟡", "description": "Compensar EPS", "filter": "compensar", "filter_type": "keyword"},
+        {"name": "Famisanar", "icon": "🟣", "description": "Famisanar EPS", "filter": "famisanar", "filter_type": "keyword"},
+        {"name": "Cosalud", "icon": "🔴", "description": "Cosalud EPS", "filter": "cosalud", "filter_type": "keyword"}
     ]
     
     def create_eps_card(eps_info):
@@ -168,6 +170,8 @@ def main(page: ft.Page):
         def on_click(e):
             selected_eps["name"] = eps_info["name"]
             selected_eps["filter"] = eps_info["filter"]
+            selected_eps["filter_type"] = eps_info.get("filter_type")
+            selected_eps["subject_pattern"] = eps_info.get("subject_pattern")
             
             # Cambiar a pantalla de mensajes
             eps_view.visible = False
@@ -270,6 +274,27 @@ def main(page: ft.Page):
     messages_list = ft.Column([], scroll=ft.ScrollMode.AUTO, expand=True, spacing=0)
     messages_status = ft.Text("", size=FONT_SIZES["small"], color=COLORS["text_secondary"])
     loading_bar = ft.ProgressBar(visible=False, color=COLORS["primary"], bgcolor=COLORS["border"])
+    processing_bar = ft.ProgressBar(visible=False, color=COLORS["success"], bgcolor=COLORS["border"])
+    processing_status = ft.Text("", size=FONT_SIZES["small"], color=COLORS["text_secondary"])
+    
+    # Botones de procesamiento de EPS
+    process_mutualser_btn = ft.ElevatedButton(
+        "📊 Procesar MUTUALSER",
+        icon=ft.Icons.TABLE_CHART,
+        on_click=lambda e: process_eps_files("mutualser"),
+        bgcolor=COLORS["primary"],
+        color=COLORS["bg_white"],
+        disabled=False
+    )
+    
+    process_cosalud_btn = ft.ElevatedButton(
+        "📊 Procesar COSALUD",
+        icon=ft.Icons.TABLE_CHART,
+        on_click=lambda e: process_eps_files("cosalud"),
+        bgcolor=COLORS["success"],
+        color=COLORS["bg_white"],
+        disabled=True  # Deshabilitado por ahora
+    )
     
     messages_view = ft.Column([
         # Header
@@ -306,6 +331,20 @@ def main(page: ft.Page):
             expand=True,
             padding=0,
             bgcolor=COLORS["bg_light"]
+        ),
+        # Sección de procesamiento
+        ft.Container(
+            content=ft.Column([
+                ft.Row([
+                    process_mutualser_btn,
+                    process_cosalud_btn
+                ], spacing=SPACING["md"], alignment=ft.MainAxisAlignment.CENTER),
+                processing_bar,
+                processing_status
+            ], spacing=SPACING["sm"]),
+            padding=SPACING["md"],
+            bgcolor=COLORS["bg_white"],
+            border=ft.border.only(top=ft.BorderSide(1, COLORS["border"]))
         ),
         ft.Container(
             content=messages_status,
@@ -351,15 +390,69 @@ def main(page: ft.Page):
         
         filtered = []
         filter_keyword = selected_eps["filter"].lower()
+        filter_type = selected_eps.get("filter_type", "keyword")
+        subject_pattern = selected_eps.get("subject_pattern", "").lower()
         
         for msg in messages:
-            # Buscar en remitente y asunto
             from_addr = msg.get("from", "").lower()
             subject = msg.get("subject", "").lower()
             
-            if filter_keyword in from_addr or filter_keyword in subject:
-                filtered.append(msg)
+            # Debug: imprimir info del mensaje
+            print(f"DEBUG - Evaluando mensaje:")
+            print(f"  From: {from_addr}")
+            print(f"  Subject: {subject}")
+            
+            # Filtro para Mutualser: debe contener patrón específico en asunto y NO ser de Sanitas
+            if filter_type == "subject_exact_pattern":
+                print(f"  Filtro tipo: subject_exact_pattern")
+                print(f"  Buscando patrón: {subject_pattern}")
+                
+                # Verificar que el asunto contenga las palabras clave
+                palabras_clave = ["objeciones", "glosa", "factura", "fc"]
+                tiene_todas = all(palabra in subject for palabra in palabras_clave)
+                
+                # Excluir específicamente correos de Sanitas
+                es_sanitas = "sanitas" in from_addr or "sanitas" in subject
+                
+                if tiene_todas and not es_sanitas:
+                    print(f"  ✓ Asunto coincide y NO es Sanitas")
+                    filtered.append(msg)
+                else:
+                    if not tiene_todas:
+                        print(f"  ✗ Asunto no coincide (faltan palabras clave)")
+                    if es_sanitas:
+                        print(f"  ✗ Es de Sanitas, excluido")
+            
+            # Filtro especial para correo específico + patrón exacto en asunto
+            elif filter_type == "email_exact_subject":
+                print(f"  Filtro tipo: email_exact_subject")
+                print(f"  Buscando email: {filter_keyword}")
+                print(f"  Buscando patrón: {subject_pattern}")
+                
+                # Verificar correo del remitente
+                if filter_keyword in from_addr:
+                    print(f"  ✓ Email coincide")
+                    # Verificar que el asunto contenga las palabras clave (más flexible)
+                    palabras_clave = ["objeciones", "glosa", "factura", "fc"]
+                    tiene_todas = all(palabra in subject for palabra in palabras_clave)
+                    
+                    if tiene_todas:
+                        print(f"  ✓ Asunto coincide con patrón")
+                        filtered.append(msg)
+                    else:
+                        print(f"  ✗ Asunto no coincide (faltan palabras clave)")
+                else:
+                    print(f"  ✗ Email no coincide")
+            # Si el filtro contiene @ es un correo específico, buscar solo en remitente
+            elif "@" in filter_keyword:
+                if filter_keyword in from_addr:
+                    filtered.append(msg)
+            else:
+                # Si no es correo, buscar en remitente y asunto
+                if filter_keyword in from_addr or filter_keyword in subject:
+                    filtered.append(msg)
         
+        print(f"\nRESULTADO: {len(filtered)} de {len(messages)} mensajes pasaron el filtro\n")
         return filtered
     
     def load_messages():
@@ -388,24 +481,38 @@ def main(page: ft.Page):
                 msgs = filter_messages_by_eps(all_msgs)
                 
                 # Actualizar UI con mensajes filtrados
-                if len(msgs) < len(all_msgs):
-                    messages_list.controls.clear()
-                    message_rows.clear()
+                messages_list.controls.clear()
+                message_rows.clear()
+                
+                if msgs:
                     for i, msg in enumerate(msgs):
                         msg_row = MessageRow(msg, i + 1)
                         messages_list.controls.append(msg_row.build())
                         message_rows.append(msg_row)
-                    show_messages_status(f"🔍 Filtrados {len(msgs)} de {len(all_msgs)} correo(s) para {selected_eps['name']}")
+                    
+                    if len(msgs) < len(all_msgs):
+                        show_messages_status(f"🔍 Filtrados {len(msgs)} de {len(all_msgs)} correo(s) para {selected_eps['name']}")
+                    else:
+                        show_messages_status(f"🔍 Encontrados {len(msgs)} correo(s)")
                     page.update()
                 
                 if not msgs:
                     messages_list.controls.clear()
+                    
+                    # Mensaje diferenciado según si hay filtro o no
+                    if selected_eps["filter"]:
+                        mensaje = f"No se encontraron correos de {selected_eps['name']}"
+                        if len(all_msgs) > 0:
+                            mensaje += f"\n\n(Se encontraron {len(all_msgs)} correos con 'glosa' pero ninguno cumple los filtros de {selected_eps['name']})"
+                    else:
+                        mensaje = "No se encontraron correos con 'glosa' en el asunto"
+                    
                     messages_list.controls.append(
                         ft.Container(
                             content=ft.Column([
                                 ft.Icon(ft.Icons.MAIL_OUTLINE, size=60, color=COLORS["text_light"]),
                                 ft.Text(
-                                    "No se encontraron correos con 'glosa' en el asunto",
+                                    mensaje,
                                     size=FONT_SIZES["body"],
                                     color=COLORS["text_secondary"],
                                     text_align=ft.TextAlign.CENTER
@@ -443,10 +550,14 @@ def main(page: ft.Page):
                 if stats["total_files"] > 0:
                     show_messages_status(
                         f"✅ {len(msgs)} correo(s) | "
-                        f"📎 {stats['total_files']} adjunto(s) descargado(s)"
+                        f"📎 {stats['total_files']} adjunto(s) descargado(s) | "
+                        f"Ahora puedes procesar los archivos"
                     )
+                    # Habilitar botón de MUTUALSER si hay archivos
+                    process_mutualser_btn.disabled = False
                 else:
                     show_messages_status(f"✅ {len(msgs)} correo(s) encontrado(s) | ⚠ Sin adjuntos")
+                    process_mutualser_btn.disabled = True
                 
                 loading_bar.visible = False
                 page.update()
@@ -455,6 +566,86 @@ def main(page: ft.Page):
                 loading_bar.visible = False
                 show_messages_status(f"❌ Error: {str(e)}")
                 page.update()
+        
+        threading.Thread(target=worker, daemon=True).start()
+    
+    def process_eps_files(eps_type):
+        """Procesa archivos descargados según la EPS seleccionada"""
+        def worker():
+            try:
+                processing_bar.visible = True
+                process_mutualser_btn.disabled = True
+                process_cosalud_btn.disabled = True
+                processing_status.value = f"🔄 Iniciando procesamiento de {eps_type.upper()}..."
+                page.update()
+                
+                if eps_type == "mutualser":
+                    processing_status.value = "📂 Escaneando archivos descargados..."
+                    page.update()
+                    
+                    # Obtener archivos Excel descargados
+                    excel_files = email_service.get_excel_files()
+                    
+                    if not excel_files:
+                        processing_status.value = "⚠️ No hay archivos Excel para procesar"
+                        processing_bar.visible = False
+                        process_mutualser_btn.disabled = False
+                        page.update()
+                        return
+                    
+                    processing_status.value = f"📊 Procesando {len(excel_files)} archivo(s)..."
+                    page.update()
+                    
+                    # Procesar con el servicio
+                    resultado = email_service.procesar_mutualser()
+                    
+                    processing_bar.visible = False
+                    
+                    if resultado['success']:
+                        resumen = resultado['resumen']
+                        
+                        # Construir mensaje con ambos archivos
+                        mensaje_archivos = f"✅ ¡Archivos generados exitosamente!\n\n"
+                        mensaje_archivos += f"📄 Consolidado:\n{resultado['output_file']}\n\n"
+                        
+                        if resultado.get('objeciones_file'):
+                            mensaje_archivos += f"📋 Objeciones:\n{resultado['objeciones_file']}\n\n"
+                        
+                        mensaje_archivos += (
+                            f"📊 {resumen['total_registros']} registros | "
+                            f"📁 {resumen['archivos_procesados']} archivos procesados\n"
+                            f"🔗 {resumen['codigos_homologados']} códigos homologados"
+                        )
+                        
+                        processing_status.value = mensaje_archivos
+                        processing_status.color = COLORS["success"]
+                        
+                        # Abrir carpeta de salida
+                        import subprocess
+                        output_dir = os.path.dirname(resultado['output_file'])
+                        subprocess.Popen(f'explorer "{output_dir}"')
+                    else:
+                        processing_status.value = f"❌ Error: {resultado['message']}"
+                        processing_status.color = COLORS["error"]
+                    
+                    process_mutualser_btn.disabled = False
+                    page.update()
+                    
+                elif eps_type == "cosalud":
+                    processing_status.value = "⚠️ Procesador de COSALUD aún no implementado"
+                    processing_bar.visible = False
+                    process_cosalud_btn.disabled = False
+                    page.update()
+                
+            except Exception as e:
+                processing_bar.visible = False
+                processing_status.value = f"❌ Error al procesar: {str(e)}"
+                processing_status.color = COLORS["error"]
+                process_mutualser_btn.disabled = False
+                process_cosalud_btn.disabled = False
+                page.update()
+                import traceback
+                traceback.print_exc()
         
         threading.Thread(target=worker, daemon=True).start()
     
