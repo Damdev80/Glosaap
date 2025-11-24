@@ -90,11 +90,11 @@ class ImapClient:
         """
         Busca correos que contengan una palabra clave en el asunto.
         Busca tanto correos leídos como no leídos.
-        timeout: tiempo máximo en segundos para buscar
+        timeout: tiempo máximo en segundos SIN ENCONTRAR un nuevo correo
         on_found: callback que se llama cada vez que se encuentra un mensaje
         """
         import time
-        start_time = time.time()
+        last_found_time = time.time()  # Tiempo del último correo encontrado
         
         try:
             self.select_folder(folder)
@@ -112,9 +112,10 @@ class ImapClient:
             
             # Procesar en orden inverso (más recientes primero)
             for msg_id in reversed(ids):
-                # Verificar timeout
-                if time.time() - start_time > timeout:
-                    print(f"⏱️ Timeout alcanzado: {len(msgs)} correos encontrados en {timeout}s")
+                # Verificar timeout: tiempo desde el ÚLTIMO correo encontrado
+                time_since_last = time.time() - last_found_time
+                if time_since_last > timeout:
+                    print(f"⏱️ Timeout: {timeout}s sin encontrar nuevos correos. Total encontrados: {len(msgs)}")
                     break
                     
                 if len(msgs) >= limit:
@@ -132,6 +133,9 @@ class ImapClient:
                     # Filtrar por palabra clave (case-insensitive)
                     if keyword.lower() not in subject.lower():
                         continue
+                    
+                    # ¡Encontramos un correo! Reiniciar el contador
+                    last_found_time = time.time()
                     
                     from_ = _decode_header(msg.get("From"))
                     date = _decode_header(msg.get("Date"))
