@@ -29,6 +29,7 @@ def main(page: ft.Page):
     
     # Servicios
     email_service = EmailService()
+    selected_eps = {"name": "Todas las EPS", "filter": None}  # EPS seleccionada
 
     
     
@@ -150,6 +151,120 @@ def main(page: ft.Page):
         expand=True
     )
     
+    # ==================== PANTALLA DE SELECCIÓN DE EPS ====================
+    
+    # Lista de EPS disponibles (puedes agregar más después)
+    eps_list = [
+        {"name": "Todas las EPS", "icon": "", "description": "Buscar en todas las EPS", "filter": None},
+        {"name": "Sanitas", "icon": "🟢", "description": "Sanitas EPS", "filter": "sanitas"},
+        {"name": "Sura", "icon": "🔵", "description": "Sura EPS", "filter": "sura"},
+        {"name": "Nueva EPS", "icon": "🟠", "description": "Nueva EPS", "filter": "nuevaeps"},
+        {"name": "Compensar", "icon": "🟡", "description": "Compensar EPS", "filter": "compensar"},
+        {"name": "Famisanar", "icon": "🟣", "description": "Famisanar EPS", "filter": "famisanar"},
+    ]
+    
+    def create_eps_card(eps_info):
+        """Crea una tarjeta para cada EPS"""
+        def on_click(e):
+            selected_eps["name"] = eps_info["name"]
+            selected_eps["filter"] = eps_info["filter"]
+            
+            # Cambiar a pantalla de mensajes
+            eps_view.visible = False
+            messages_view.visible = True
+            page.update()
+            
+            # Cargar mensajes
+            load_messages()
+        
+        return ft.Container(
+            content=ft.Column([
+                ft.Text(eps_info["icon"], size=40),
+                ft.Text(
+                    eps_info["name"],
+                    size=FONT_SIZES["body"],
+                    weight=ft.FontWeight.W_500,
+                    color=COLORS["text_primary"],
+                    text_align=ft.TextAlign.CENTER
+                ),
+                ft.Text(
+                    eps_info["description"],
+                    size=FONT_SIZES["small"],
+                    color=COLORS["text_secondary"],
+                    text_align=ft.TextAlign.CENTER
+                )
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8),
+            bgcolor=COLORS["bg_white"],
+            border_radius=12,
+            padding=SPACING["lg"],
+            width=160,
+            height=140,
+            ink=True,
+            on_click=on_click,
+            shadow=ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=8,
+                color=ft.Colors.with_opacity(0.08, COLORS["text_primary"]),
+                offset=ft.Offset(0, 2)
+            ),
+            border=ft.border.all(1, COLORS["border"])
+        )
+    
+    # Crear grid de EPSs
+    eps_grid = ft.Row(
+        [
+            create_eps_card(eps) for eps in eps_list
+        ],
+        wrap=True,
+        spacing=SPACING["md"],
+        run_spacing=SPACING["md"],
+        alignment=ft.MainAxisAlignment.CENTER
+    )
+    
+    eps_view = ft.Container(
+        content=ft.Column([
+            ft.Container(height=SPACING["xl"]),
+            ft.Text(
+                "Selecciona una EPS",
+                size=FONT_SIZES["title"],
+                weight=ft.FontWeight.W_300,
+                color=COLORS["text_primary"],
+                text_align=ft.TextAlign.CENTER
+            ),
+            ft.Text(
+                "Filtra los correos por entidad prestadora de salud",
+                size=FONT_SIZES["small"],
+                color=COLORS["text_secondary"],
+                text_align=ft.TextAlign.CENTER
+            ),
+            ft.Container(height=SPACING["xl"]),
+            ft.Container(
+                content=eps_grid,
+                padding=SPACING["lg"],
+                bgcolor=COLORS["bg_light"],
+                border_radius=12,
+                shadow=ft.BoxShadow(
+                    spread_radius=1,
+                    blur_radius=15,
+                    color=ft.Colors.with_opacity(0.05, COLORS["text_primary"]),
+                    offset=ft.Offset(0, 4)
+                )
+            ),
+            ft.Container(height=SPACING["md"]),
+            ft.TextButton(
+                "← Cerrar sesión",
+                icon=ft.Icons.LOGOUT,
+                on_click=lambda e: go_to_login(),
+                style=ft.ButtonStyle(color=COLORS["text_secondary"])
+            )
+        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+        padding=ft.padding.all(SPACING["xxl"]),
+        bgcolor=COLORS["bg_light"],
+        alignment=ft.alignment.center,
+        expand=True,
+        visible=False
+    )
+    
     # ==================== PANTALLA DE MENSAJES ====================
     
     messages_list = ft.Column([], scroll=ft.ScrollMode.AUTO, expand=True, spacing=0)
@@ -160,12 +275,20 @@ def main(page: ft.Page):
         # Header
         ft.Container(
             content=ft.Row([
-                ft.Text(
-                    "Correos con 'glosa'",
-                    size=FONT_SIZES["heading"],
-                    weight=ft.FontWeight.W_400,
-                    color=COLORS["text_primary"]
-                ),
+                ft.Row([
+                    ft.IconButton(
+                        icon=ft.Icons.ARROW_BACK,
+                        icon_color=COLORS["text_secondary"],
+                        tooltip="Volver a EPS",
+                        on_click=lambda e: go_to_eps_selection()
+                    ),
+                    ft.Text(
+                        "Correos con 'glosa'",
+                        size=FONT_SIZES["heading"],
+                        weight=ft.FontWeight.W_400,
+                        color=COLORS["text_primary"]
+                    ),
+                ], spacing=0),
                 ft.IconButton(
                     icon=ft.Icons.REFRESH,
                     icon_color=COLORS["primary"],
@@ -205,6 +328,40 @@ def main(page: ft.Page):
         messages_status.value = msg
         page.update()
     
+    def go_to_login():
+        """Vuelve a la pantalla de login"""
+        eps_view.visible = False
+        messages_view.visible = False
+        login_view.visible = True
+        email_service.disconnect()
+        page.window_width = WINDOW_SIZES["login"]["width"]
+        page.window_height = WINDOW_SIZES["login"]["height"]
+        page.update()
+    
+    def go_to_eps_selection():
+        """Vuelve a la pantalla de selección de EPS"""
+        messages_view.visible = False
+        eps_view.visible = True
+        page.update()
+    
+    def filter_messages_by_eps(messages):
+        """Filtra mensajes según la EPS seleccionada"""
+        if not selected_eps["filter"]:
+            return messages  # Todas las EPS
+        
+        filtered = []
+        filter_keyword = selected_eps["filter"].lower()
+        
+        for msg in messages:
+            # Buscar en remitente y asunto
+            from_addr = msg.get("from", "").lower()
+            subject = msg.get("subject", "").lower()
+            
+            if filter_keyword in from_addr or filter_keyword in subject:
+                filtered.append(msg)
+        
+        return filtered
+    
     def load_messages():
         """Carga mensajes con 'glosa' y descarga adjuntos"""
         def worker():
@@ -225,7 +382,21 @@ def main(page: ft.Page):
                     page.update()
                 
                 # Buscar mensajes
-                msgs = email_service.search_messages("glosa", limit=100, timeout=15, on_found=on_message_found)
+                all_msgs = email_service.search_messages("glosa", limit=100, timeout=15, on_found=on_message_found)
+                
+                # Filtrar por EPS seleccionada
+                msgs = filter_messages_by_eps(all_msgs)
+                
+                # Actualizar UI con mensajes filtrados
+                if len(msgs) < len(all_msgs):
+                    messages_list.controls.clear()
+                    message_rows.clear()
+                    for i, msg in enumerate(msgs):
+                        msg_row = MessageRow(msg, i + 1)
+                        messages_list.controls.append(msg_row.build())
+                        message_rows.append(msg_row)
+                    show_messages_status(f"🔍 Filtrados {len(msgs)} de {len(all_msgs)} correo(s) para {selected_eps['name']}")
+                    page.update()
                 
                 if not msgs:
                     messages_list.controls.clear()
@@ -341,15 +512,12 @@ def main(page: ft.Page):
                 email_service.connect(email, password, server=server)
                 login_progress.visible = False
                 
-                # Cambiar a pantalla de mensajes
+                # Cambiar a pantalla de selección de EPS
                 page.window_width = WINDOW_SIZES["main"]["width"]
                 page.window_height = WINDOW_SIZES["main"]["height"]
                 login_view.visible = False
-                messages_view.visible = True
+                eps_view.visible = True
                 page.update()
-                
-                # Cargar mensajes
-                load_messages()
                 
             except Exception as ex:
                 login_button.disabled = False
@@ -362,6 +530,7 @@ def main(page: ft.Page):
     
     # Agregar vistas
     page.add(login_view)
+    page.add(eps_view)
     page.add(messages_view)
 
 
