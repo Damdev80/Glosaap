@@ -3,7 +3,6 @@ import email
 from email.header import decode_header
 import os
 import tempfile
-import shutil
 
 
 def _decode_header(value):
@@ -224,7 +223,6 @@ class ImapClient:
                 
                 if file_ext not in ALLOWED_EXTENSIONS:
                     skipped.append(filename)
-                    print(f"⏭️  Omitido (no es Excel/Word/PDF): {filename}")
                     continue
                 
                 payload = part.get_payload(decode=True)
@@ -241,7 +239,7 @@ class ImapClient:
                 print(f"✅ Adjunto guardado: {safe_name}")
         
         if skipped:
-            print(f"ℹ️  {len(skipped)} archivo(s) omitido(s) (imágenes, etc.)")
+            print(f"ℹ️  {len(skipped)} archivo(s) omitido(s) (imágenes, etc.)") 
         
         if not saved:
             print("⚠️ No se encontraron adjuntos Excel/Word/PDF en el mensaje")

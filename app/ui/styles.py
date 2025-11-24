@@ -41,6 +41,6 @@ SPACING = {
 
 # Dimensiones de ventana
 WINDOW_SIZES = {
-    "login": {"width": 480, "height": 420},
+    "login": {"width": 480, "height": 500},
     "main": {"width": 900, "height": 700},
 }

@@ -13,10 +13,8 @@ if PROJECT_APP_DIR not in sys.path:
     sys.path.insert(0, PROJECT_APP_DIR)
 
 from service.email_service import EmailService
-from core.data_processor import DataProcessor
 from ui.styles import COLORS, FONT_SIZES, SPACING, WINDOW_SIZES
 from ui.components.message_row import MessageRow
-from ui.components.data_table import DataTable as DataTableComponent
 
 
 def main(page: ft.Page):
@@ -31,7 +29,8 @@ def main(page: ft.Page):
     
     # Servicios
     email_service = EmailService()
-    data_processor = DataProcessor()
+
+    
     
     # ==================== PANTALLA DE LOGIN ====================
     
@@ -44,8 +43,8 @@ def main(page: ft.Page):
     )
     
     subtitle = ft.Text(
-        "Gestor de correos IMAP",
-        size=FONT_SIZES["body"],
+        "Gestor de correos IMAP | Soporta Gmail, Outlook, dominios personalizados",
+        size=12,
         color=COLORS["text_secondary"],
         text_align=ft.TextAlign.CENTER
     )
@@ -63,9 +62,22 @@ def main(page: ft.Page):
     )
     
     password_input = ft.TextField(
-        label="Contraseña de aplicación",
+        label="Contraseña",
         password=True,
         can_reveal_password=True,
+        width=380,
+        border_color=COLORS["border"],
+        focused_border_color=COLORS["primary"],
+        bgcolor=COLORS["bg_input"],
+        color=COLORS["text_primary"],
+        cursor_color=COLORS["primary"],
+        text_size=FONT_SIZES["body"]
+    )
+    
+    # Campo para servidor IMAP personalizado (ahora visible por defecto)
+    server_input = ft.TextField(
+        label="Servidor IMAP",
+        hint_text="Ej: imap.gmail.com, mail.tudominio.com",
         width=380,
         border_color=COLORS["border"],
         focused_border_color=COLORS["primary"],
@@ -103,20 +115,39 @@ def main(page: ft.Page):
     login_view = ft.Container(
         content=ft.Column([
             ft.Container(height=SPACING["xxl"]),
-            title,
-            subtitle,
-            ft.Container(height=SPACING["xl"]),
-            email_input,
-            ft.Container(height=SPACING["md"]),
-            password_input,
-            ft.Container(height=SPACING["lg"]),
-            login_button,
-            ft.Container(height=SPACING["sm"]),
-            login_progress,
-            status_text
+            # Card contenedor del formulario
+            ft.Container(
+                content=ft.Column([
+                    title,
+                    subtitle,
+                    ft.Container(height=SPACING["lg"]),
+                    email_input,
+                    ft.Container(height=SPACING["md"]),
+                    password_input,
+                    ft.Container(height=SPACING["md"]),
+                    server_input,
+                    ft.Container(height=SPACING["lg"]),
+                    login_button,
+                    ft.Container(height=SPACING["sm"]),
+                    login_progress,
+                    status_text
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                padding=ft.padding.all(SPACING["xxl"]),
+                bgcolor=COLORS["bg_white"],
+                border_radius=12,
+                shadow=ft.BoxShadow(
+                    spread_radius=1,
+                    blur_radius=15,
+                    color=ft.Colors.with_opacity(0.1, COLORS["text_primary"]),
+                    offset=ft.Offset(0, 4)
+                )
+            ),
+            ft.Container(height=SPACING["xxl"]),
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
         padding=ft.padding.symmetric(horizontal=SPACING["xxl"]),
-        bgcolor=COLORS["bg_white"]
+        bgcolor=COLORS["bg_light"],
+        alignment=ft.alignment.center,
+        expand=True
     )
     
     # ==================== PANTALLA DE MENSAJES ====================
@@ -135,23 +166,12 @@ def main(page: ft.Page):
                     weight=ft.FontWeight.W_400,
                     color=COLORS["text_primary"]
                 ),
-                ft.Row([
-                    ft.TextButton(
-                        "📊 Ver Datos",
-                        icon=ft.Icons.TABLE_CHART,
-                        style=ft.ButtonStyle(
-                            color=COLORS["bg_white"],
-                            bgcolor=COLORS["primary"]
-                        ),
-                        on_click=lambda e: show_data_view()
-                    ),
-                    ft.IconButton(
-                        icon=ft.Icons.REFRESH,
-                        icon_color=COLORS["primary"],
-                        tooltip="Actualizar",
-                        on_click=lambda e: load_messages()
-                    )
-                ], spacing=SPACING["sm"])
+                ft.IconButton(
+                    icon=ft.Icons.REFRESH,
+                    icon_color=COLORS["primary"],
+                    tooltip="Actualizar",
+                    on_click=lambda e: load_messages()
+                )
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             bgcolor=COLORS["bg_white"],
             padding=SPACING["lg"],
@@ -172,49 +192,6 @@ def main(page: ft.Page):
         )
     ], expand=True, spacing=0, visible=False)
     
-    # ==================== PANTALLA DE DATOS ====================
-    
-    data_table_container = ft.Column([], scroll=ft.ScrollMode.AUTO, expand=True)
-    data_status = ft.Text("", size=FONT_SIZES["small"], color=COLORS["text_secondary"])
-    
-    data_view = ft.Column([
-        ft.Container(
-            content=ft.Row([
-                ft.IconButton(
-                    icon=ft.Icons.ARROW_BACK,
-                    icon_color=COLORS["primary"],
-                    tooltip="Volver a correos",
-                    on_click=lambda e: (
-                        setattr(data_view, 'visible', False),
-                        setattr(messages_view, 'visible', True),
-                        page.update()
-                    )
-                ),
-                ft.Text(
-                    "Datos Procesados",
-                    size=FONT_SIZES["heading"],
-                    weight=ft.FontWeight.W_400,
-                    color=COLORS["text_primary"]
-                ),
-            ], spacing=SPACING["sm"]),
-            bgcolor=COLORS["bg_white"],
-            padding=SPACING["lg"],
-            border=ft.border.only(bottom=ft.BorderSide(1, COLORS["border"]))
-        ),
-        ft.Container(
-            content=data_table_container,
-            expand=True,
-            padding=SPACING["lg"],
-            bgcolor=COLORS["bg_light"]
-        ),
-        ft.Container(
-            content=data_status,
-            padding=SPACING["md"],
-            bgcolor=COLORS["bg_white"],
-            border=ft.border.only(top=ft.BorderSide(1, COLORS["border"]))
-        )
-    ], expand=True, spacing=0, visible=False)
-    
     # ==================== FUNCIONES ====================
     
     def show_status(msg, is_error=False):
@@ -227,67 +204,6 @@ def main(page: ft.Page):
         """Muestra mensaje de estado en pantalla de mensajes"""
         messages_status.value = msg
         page.update()
-    
-    def show_data_status(msg):
-        """Muestra mensaje de estado en pantalla de datos"""
-        data_status.value = msg
-        page.update()
-    
-    def show_data_view():
-        """Muestra la vista de datos procesados"""
-        def worker():
-            try:
-                excel_files = email_service.get_excel_files()
-                
-                if not excel_files:
-                    show_messages_status("⚠️ No hay archivos Excel o CSV para procesar")
-                    return
-                
-                show_messages_status("🔄 Procesando archivos...")
-                page.update()
-                
-                # Procesar archivos
-                df = data_processor.process_files(excel_files)
-                
-                if df is not None:
-                    # Crear componente de tabla
-                    data_table_component = DataTableComponent(df)
-                    
-                    # Limpiar y agregar contenido
-                    data_table_container.controls.clear()
-                    
-                    # Información del dataset
-                    info_widget = data_table_component.get_info_widget()
-                    if info_widget:
-                        data_table_container.controls.append(info_widget)
-                    
-                    # Agregar tabla
-                    table = data_table_component.build()
-                    data_table_container.controls.append(
-                        ft.Container(
-                            content=ft.Row([table], scroll=ft.ScrollMode.ALWAYS),
-                            margin=ft.margin.only(top=SPACING["sm"])
-                        )
-                    )
-                    
-                    # Cambiar a vista de datos
-                    messages_view.visible = False
-                    data_view.visible = True
-                    
-                    summary = data_processor.get_summary()
-                    show_data_status(
-                        f"✅ Mostrando {min(100, summary['rows'])} de {summary['rows']} filas | "
-                        f"{summary['files_processed']} archivo(s) procesado(s)"
-                    )
-                    page.update()
-                else:
-                    show_messages_status("❌ No se pudieron procesar los archivos")
-                    
-            except Exception as e:
-                show_messages_status(f"❌ Error: {str(e)}")
-                page.update()
-        
-        threading.Thread(target=worker, daemon=True).start()
     
     def load_messages():
         """Carga mensajes con 'glosa' y descarga adjuntos"""
@@ -375,6 +291,7 @@ def main(page: ft.Page):
         """Procesa el login"""
         email = email_input.value
         password = password_input.value
+        custom_server = server_input.value.strip() if server_input.value else None
         
         if not email or not password:
             show_status("Por favor ingresa email y contraseña", True)
@@ -383,12 +300,45 @@ def main(page: ft.Page):
         login_button.disabled = True
         login_progress.visible = True
         status_text.value = ""
-        show_status("Conectando al servidor...")
         page.update()
         
         def worker():
             try:
-                email_service.connect(email, password)
+                # Si hay servidor personalizado, usarlo directamente
+                if custom_server:
+                    server = custom_server
+                    show_status(f"Conectando a {server}...")
+                    page.update()
+                else:
+                    # Detectar por dominio del email
+                    domain = email.split("@")[1].lower()
+                    
+                    # Servidores comunes
+                    imap_servers = {
+                        "gmail.com": "imap.gmail.com",
+                        "outlook.com": "outlook.office365.com",
+                        "hotmail.com": "outlook.office365.com",
+                        "yahoo.com": "imap.mail.yahoo.com",
+                        "icloud.com": "imap.mail.me.com",
+                    }
+                    
+                    if domain in imap_servers:
+                        server = imap_servers[domain]
+                        show_status(f"Conectando a {server}...")
+                    else:
+                        # Intentar patrones comunes para dominios personalizados
+                        possible_servers = [
+                            f"imap.{domain}",
+                            f"mail.{domain}",
+                            domain
+                        ]
+                        server = possible_servers[0]  # Intentar el primero
+                        show_status(f"Intentando {server}...")
+                    
+                    page.update()
+                
+                # Conectar al servidor
+                email_service.connect(email, password, server=server)
                 login_progress.visible = False
                 
                 # Cambiar a pantalla de mensajes
@@ -413,7 +363,6 @@ def main(page: ft.Page):
     # Agregar vistas
     page.add(login_view)
     page.add(messages_view)
-    page.add(data_view)
 
 
 if __name__ == "__main__":
