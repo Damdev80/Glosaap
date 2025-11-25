@@ -9,13 +9,18 @@ from ui.styles import COLORS, FONT_SIZES, SPACING
 class DateRangePicker:
     """Componente para seleccionar un rango de fechas"""
     
-    def __init__(self, page: ft.Page, on_change=None):
+    def __init__(self, page: ft.Page, on_change=None, on_validation_error=None):
         self.page = page
         self.on_change = on_change
+        self.on_validation_error = on_validation_error  # Callback para errores de validación
         
         # Valores seleccionados
         self.date_from = None
         self.date_to = None
+        
+        # Estado de validación
+        self.is_valid = True
+        self.validation_error = None
         
         # Textos de display
         self.date_from_text = ft.Text(
@@ -29,6 +34,15 @@ class DateRangePicker:
             size=13, 
             color=COLORS["text_secondary"],
             weight=ft.FontWeight.W_400
+        )
+        
+        # Texto de error de validación
+        self.error_text = ft.Text(
+            "",
+            size=12,
+            color=COLORS["error"],
+            text_align=ft.TextAlign.CENTER,
+            visible=False
         )
         
         # Crear controles
@@ -61,6 +75,7 @@ class DateRangePicker:
             self.date_from = e.control.value
             self.date_from_text.value = self.date_from.strftime("%d/%m/%Y")
             self.date_from_text.color = COLORS["text_primary"]
+            self._validate_dates()
         self.page.update()
         if self.on_change:
             self.on_change(self.date_from, self.date_to)
@@ -71,9 +86,37 @@ class DateRangePicker:
             self.date_to = e.control.value
             self.date_to_text.value = self.date_to.strftime("%d/%m/%Y")
             self.date_to_text.color = COLORS["text_primary"]
+            self._validate_dates()
         self.page.update()
         if self.on_change:
             self.on_change(self.date_from, self.date_to)
+    
+    def _validate_dates(self):
+        """Valida que el rango de fechas sea correcto"""
+        self.is_valid = True
+        self.validation_error = None
+        self.error_text.visible = False
+        
+        # Resetear estilos de los botones
+        self.btn_from.border = ft.border.all(1, COLORS["border"])
+        self.btn_to.border = ft.border.all(1, COLORS["border"])
+        
+        if self.date_from and self.date_to:
+            if self.date_from > self.date_to:
+                self.is_valid = False
+                self.validation_error = "⚠️ La fecha 'Desde' no puede ser mayor que la fecha 'Hasta'"
+                self.error_text.value = self.validation_error
+                self.error_text.visible = True
+                
+                # Resaltar campos con error
+                self.btn_from.border = ft.border.all(2, COLORS["error"])
+                self.btn_to.border = ft.border.all(2, COLORS["error"])
+                
+                # Notificar error si hay callback
+                if self.on_validation_error:
+                    self.on_validation_error(self.validation_error)
+        
+        return self.is_valid
     
     def _open_picker_from(self, e):
         """Abre el picker de fecha desde"""
@@ -93,6 +136,14 @@ class DateRangePicker:
         self.date_from_text.color = COLORS["text_secondary"]
         self.date_to_text.value = "Seleccionar"
         self.date_to_text.color = COLORS["text_secondary"]
+        
+        # Limpiar estado de validación
+        self.is_valid = True
+        self.validation_error = None
+        self.error_text.visible = False
+        self.btn_from.border = ft.border.all(1, COLORS["border"])
+        self.btn_to.border = ft.border.all(1, COLORS["border"])
+        
         self.page.update()
         if self.on_change:
             self.on_change(None, None)
@@ -163,6 +214,8 @@ class DateRangePicker:
                         padding=ft.padding.only(top=16)
                     )
                 ], alignment=ft.MainAxisAlignment.CENTER, spacing=16),
+                # Mensaje de error de validación
+                self.error_text,
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
             padding=SPACING["lg"],
             bgcolor=COLORS["bg_white"],
@@ -177,6 +230,14 @@ class DateRangePicker:
     def get_dates(self):
         """Retorna las fechas seleccionadas"""
         return self.date_from, self.date_to
+    
+    def is_date_range_valid(self):
+        """Verifica si el rango de fechas es válido"""
+        return self.is_valid
+    
+    def get_validation_error(self):
+        """Retorna el mensaje de error de validación si existe"""
+        return self.validation_error
     
     def get_date_info_text(self):
         """Retorna texto informativo de las fechas seleccionadas"""
