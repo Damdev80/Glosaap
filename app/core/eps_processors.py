@@ -220,6 +220,16 @@ class MutualserProcessor:
         # Agregar la columna al DataFrame
         self.df_consolidado['Codigo homologado DGH'] = codigos_homologados
         
+        # Agregar columna de tecnologías NO homologadas
+        def marcar_no_homologado(row):
+            codigo_hom = row.get('Codigo homologado DGH')
+            tecnologia = row.get('Tecnología')
+            if pd.isna(codigo_hom) or codigo_hom == '' or codigo_hom is None:
+                return tecnologia if pd.notna(tecnologia) else ''
+            return ''
+        
+        self.df_consolidado['Tecnologia NO homologada'] = self.df_consolidado.apply(marcar_no_homologado, axis=1)
+        
         print(f"\n✅ Homologación completada:")
         print(f"   • Total de registros: {total}")
         print(f"   • Códigos homologados encontrados: {encontrados}")
@@ -425,15 +435,15 @@ class MutualserProcessor:
             # Crear DataFrame con la estructura requerida
             df_objeciones = pd.DataFrame()
             
-            # Función para formatear fecha a MM/DD/YYYY
-            def formatear_fecha_mmddyyyy(fecha):
+            # Función para formatear fecha a DD/MM/YYYY
+            def formatear_fecha_ddmmyyyy(fecha):
                 if pd.isna(fecha) or fecha == '' or fecha is None:
                     return ''
                 
                 try:
                     # Si ya es un objeto datetime o Timestamp
                     if isinstance(fecha, (pd.Timestamp, datetime)):
-                        return fecha.strftime('%m/%d/%Y')
+                        return fecha.strftime('%d/%m/%Y')
                     
                     # Si es un string, intentar parsearlo
                     if isinstance(fecha, str):
@@ -445,19 +455,59 @@ class MutualserProcessor:
                         for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%m/%d/%Y']:
                             try:
                                 fecha_dt = datetime.strptime(fecha_str, fmt)
-                                return fecha_dt.strftime('%m/%d/%Y')
+                                return fecha_dt.strftime('%d/%m/%Y')
                             except:
                                 continue
                         
                         # Último intento con pandas
                         fecha_dt = pd.to_datetime(fecha_str, errors='coerce')
                         if pd.notna(fecha_dt):
-                            return fecha_dt.strftime('%m/%d/%Y')
+                            return fecha_dt.strftime('%d/%m/%Y')
                     
                     # Si es un número (serial de Excel), convertir
                     if isinstance(fecha, (int, float)):
                         fecha_dt = pd.Timestamp('1899-12-30') + pd.Timedelta(days=int(fecha))
-                        return fecha_dt.strftime('%m/%d/%Y')
+                        return fecha_dt.strftime('%d/%m/%Y')
+                        
+                except Exception as e:
+                    print(f"⚠️ Error formateando fecha '{fecha}': {e}")
+                
+                return ''
+            
+            # Función para formatear fecha a M/D/Y (mes/día/año)
+            def formatear_fecha_mdy(fecha):
+                if pd.isna(fecha) or fecha == '' or fecha is None:
+                    return ''
+                
+                try:
+                    # Si ya es un objeto datetime o Timestamp
+                    if isinstance(fecha, (pd.Timestamp, datetime)):
+                        return fecha.strftime('%-m/%-d/%Y') if os.name != 'nt' else fecha.strftime('%#m/%#d/%Y')
+                    
+                    # Si es un string, intentar parsearlo
+                    if isinstance(fecha, str):
+                        fecha_str = fecha.strip()
+                        if not fecha_str:
+                            return ''
+                        
+                        # Intentar varios formatos
+                        for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%m/%d/%Y']:
+                            try:
+                                fecha_dt = datetime.strptime(fecha_str, fmt)
+                                # En Windows usar %#m/%#d, en Linux usar %-m/%-d (sin ceros)
+                                return fecha_dt.strftime('%#m/%#d/%Y') if os.name == 'nt' else fecha_dt.strftime('%-m/%-d/%Y')
+                            except:
+                                continue
+                        
+                        # Último intento con pandas
+                        fecha_dt = pd.to_datetime(fecha_str, errors='coerce')
+                        if pd.notna(fecha_dt):
+                            return fecha_dt.strftime('%#m/%#d/%Y') if os.name == 'nt' else fecha_dt.strftime('%-m/%-d/%Y')
+                    
+                    # Si es un número (serial de Excel), convertir
+                    if isinstance(fecha, (int, float)):
+                        fecha_dt = pd.Timestamp('1899-12-30') + pd.Timedelta(days=int(fecha))
+                        return fecha_dt.strftime('%#m/%#d/%Y') if os.name == 'nt' else fecha_dt.strftime('%-m/%-d/%Y')
                         
                 except Exception as e:
                     print(f"⚠️ Error formateando fecha '{fecha}': {e}")
@@ -465,22 +515,29 @@ class MutualserProcessor:
                 return ''
             
             # Mapeo de columnas (consolidado -> objeciones)
-            # CDCONSEC: Número secuencial (1, 2, 3...)
-            df_objeciones['CDCONSEC'] = range(1, len(self.df_consolidado) + 1)
+            # CDCONSEC: Número consecutivo por factura (mismo consecutivo para misma factura)
+            facturas = self.df_consolidado.get('Número de factura', pd.Series())
+            facturas_unicas = facturas.unique()
+            # Crear diccionario: factura -> número consecutivo
+            factura_a_consecutivo = {factura: idx + 1 for idx, factura in enumerate(facturas_unicas)}
+            # Asignar consecutivo según la factura
+            df_objeciones['CDCONSEC'] = facturas.map(factura_a_consecutivo)
             
-            # CDFECDOC: Fecha del documento (formato MM/DD/YYYY)
+            # CDFECDOC: Fecha del documento (formato M/D/Y - mes/día/año)
             fecha_col = self.df_consolidado.get('Fecha')
             if fecha_col is not None:
-                df_objeciones['CDFECDOC'] = fecha_col.apply(formatear_fecha_mmddyyyy)
+                df_objeciones['CDFECDOC'] = fecha_col.apply(formatear_fecha_mdy)
             else:
                 df_objeciones['CDFECDOC'] = ''
             
             # CRNCXC: Número de factura
             df_objeciones['CRNCXC'] = self.df_consolidado.get('Número de factura', '')
             
-            # CROFECOBJ: Fecha actual (día que se genera el archivo) en formato DD/MM/YYYY
-            fecha_actual = datetime.now().strftime('%d/%m/%Y')
-            df_objeciones['CROFECOBJ'] = fecha_actual
+            # CROFECOBJ: Fecha de objeción (formato D/M/Y - día/mes/año)
+            if fecha_col is not None:
+                df_objeciones['CROFECOBJ'] = fecha_col.apply(formatear_fecha_ddmmyyyy)
+            else:
+                df_objeciones['CROFECOBJ'] = ''
             
             # CROREFERE: Valor fijo 0
             df_objeciones['CROREFERE'] = 0

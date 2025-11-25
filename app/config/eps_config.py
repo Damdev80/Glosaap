@@ -57,7 +57,7 @@ class TodasLasEps(EpsInfo):
             enabled=True
         )
 
-
+    
 class MutualserEps(EpsInfo):
     """Configuración para Mutualser EPS"""
     
@@ -68,7 +68,7 @@ class MutualserEps(EpsInfo):
             description="Mutualser EPS",
             filter_value="mutualser",
             filter_type="subject_exact_pattern",
-            subject_pattern="objeciones de glosa factura fc",
+            subject_pattern="Objeciones de glosa Factura FC",
             processor_class="MutualserProcessor",
             enabled=True
         )
