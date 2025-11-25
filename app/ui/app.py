@@ -1,6 +1,5 @@
 """
 Aplicación Glosaap - Cliente IMAP con Flet
-Versión 2.0 - Arquitectura modular
 """
 import flet as ft
 import os
@@ -132,20 +131,13 @@ def main(page: ft.Page):
     # Info de búsqueda actual
     search_info_text = ft.Text("", size=12, color=COLORS["text_secondary"])
     
-    process_mutualser_btn = ft.ElevatedButton(
-        "📊 Procesar MUTUALSER",
+    # Contenedor para el botón de procesamiento (se actualiza según la EPS seleccionada)
+    process_eps_btn = ft.ElevatedButton(
+        "📊 Procesar",
         icon=ft.Icons.TABLE_CHART,
         bgcolor=COLORS["primary"],
         color=COLORS["bg_white"],
-        disabled=False
-    )
-    
-    process_cosalud_btn = ft.ElevatedButton(
-        "📊 Procesar COSALUD",
-        icon=ft.Icons.TABLE_CHART,
-        bgcolor=COLORS["success"],
-        color=COLORS["bg_white"],
-        disabled=True
+        visible=False
     )
     
     messages_view = ft.Column([
@@ -176,7 +168,7 @@ def main(page: ft.Page):
         # Procesamiento
         ft.Container(
             content=ft.Column([
-                ft.Row([process_mutualser_btn, process_cosalud_btn], spacing=SPACING["md"], alignment=ft.MainAxisAlignment.CENTER),
+                ft.Row([process_eps_btn], spacing=SPACING["md"], alignment=ft.MainAxisAlignment.CENTER),
                 processing_bar,
                 processing_status
             ], spacing=SPACING["sm"]),
@@ -286,6 +278,22 @@ def main(page: ft.Page):
             date_info = f" | Hasta {date_to.strftime('%d/%m/%Y')}"
         
         search_info_text.value = f"EPS: {eps_name}{date_info}"
+        
+        # Configurar botón de procesamiento según la EPS
+        eps_filter = eps_info.get("filter", "").lower()
+        if eps_filter == "mutualser":
+            process_eps_btn.text = "📊 Procesar MUTUALSER"
+            process_eps_btn.bgcolor = COLORS["primary"]
+            process_eps_btn.visible = True
+            process_eps_btn.data = "mutualser"
+        elif eps_filter == "cosalud":
+            process_eps_btn.text = "📊 Procesar COSALUD"
+            process_eps_btn.bgcolor = COLORS["success"]
+            process_eps_btn.visible = True
+            process_eps_btn.data = "cosalud"
+        else:
+            # Para otras EPS o "Todas", ocultar el botón
+            process_eps_btn.visible = False
         
         # Navegar y cargar mensajes
         go_to_messages()
@@ -399,7 +407,7 @@ def main(page: ft.Page):
         def worker():
             try:
                 processing_bar.visible = True
-                process_mutualser_btn.disabled = True
+                process_eps_btn.disabled = True
                 processing_status.value = f"🔄 Procesando {eps_type.upper()}..."
                 page.update()
                 
@@ -409,7 +417,7 @@ def main(page: ft.Page):
                     if not excel_files:
                         processing_status.value = "⚠️ No hay archivos Excel"
                         processing_bar.visible = False
-                        process_mutualser_btn.disabled = False
+                        process_eps_btn.disabled = False
                         page.update()
                         return
                     
@@ -438,17 +446,30 @@ def main(page: ft.Page):
                         processing_status.value = f"❌ Error: {resultado['message']}"
                         processing_status.color = COLORS["error"]
                     
-                    process_mutualser_btn.disabled = False
+                    process_eps_btn.disabled = False
+                    page.update()
+                
+                elif eps_type == "cosalud":
+                    # TODO: Implementar procesamiento de COSALUD
+                    processing_status.value = "⚠️ Procesador de COSALUD pendiente de implementar"
+                    processing_bar.visible = False
+                    process_eps_btn.disabled = False
                     page.update()
                     
             except Exception as ex:
                 processing_bar.visible = False
                 processing_status.value = f"❌ Error: {str(ex)}"
                 processing_status.color = COLORS["error"]
-                process_mutualser_btn.disabled = False
+                process_eps_btn.disabled = False
                 page.update()
         
         threading.Thread(target=worker, daemon=True).start()
+    
+    def on_process_btn_click(e):
+        """Maneja el click en el botón de procesamiento"""
+        eps_type = process_eps_btn.data
+        if eps_type:
+            process_eps_files(eps_type)
     
     # ==================== PANTALLA EPS (MODULAR) ====================
     
@@ -461,7 +482,7 @@ def main(page: ft.Page):
     # ==================== CONECTAR EVENTOS ====================
     
     login_button.on_click = handle_login
-    process_mutualser_btn.on_click = lambda e: process_eps_files("mutualser")
+    process_eps_btn.on_click = on_process_btn_click
     
     # Botón volver en mensajes
     messages_view.controls[0].content.controls[0].controls[0].on_click = lambda e: go_to_eps_selection()
