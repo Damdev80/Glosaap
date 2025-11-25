@@ -230,7 +230,7 @@ class MutualserProcessor:
             for codigo in errores_busqueda:
                 print(f"     - {codigo}")
             #hay que agregar un mensaje de error en esa columna si no se encuentra el código homologado
-            self.df_consolidado['Codigo homologado DGH'] = self.df_consolidado['Codigo homologado DGH'].fillna('Código no encontrado')        
+            self.df_consolidado['Codigo homologado DGH'] = self.df_consolidado['Codigo homologado DGH'].fillna('')        
         
         # Cargar archivo de homologación
         self._cargar_homologacion()
@@ -437,32 +437,52 @@ class MutualserProcessor:
             
             # CROFECOBJ: Fecha - convertir a formato serial de Excel
             def convertir_fecha(fecha):
-                if pd.isna(fecha):
+                if pd.isna(fecha) or fecha == '' or fecha is None:
                     return ''
                 
-                # Si ya es un objeto datetime
-                if isinstance(fecha, pd.Timestamp) or isinstance(fecha, datetime):
-                    # Convertir a número serial de Excel (días desde 1899-12-30)
-                    delta = fecha - pd.Timestamp('1899-12-30')
-                    return delta.days + (delta.seconds / 86400)
-                
-                # Si es un string, intentar parsearlo
-                if isinstance(fecha, str):
-                    try:
-                        fecha_dt = pd.to_datetime(fecha, dayfirst=True, errors='coerce')
+                try:
+                    # Si ya es un objeto datetime o Timestamp
+                    if isinstance(fecha, (pd.Timestamp, datetime)):
+                        # Convertir a número serial de Excel (días desde 1899-12-30)
+                        delta = fecha - pd.Timestamp('1899-12-30')
+                        return int(delta.days + (delta.seconds / 86400))
+                    
+                    # Si es un string, intentar parsearlo
+                    if isinstance(fecha, str):
+                        fecha_str = fecha.strip()
+                        if not fecha_str:
+                            return ''
+                        
+                        # Intentar varios formatos
+                        for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y']:
+                            try:
+                                fecha_dt = datetime.strptime(fecha_str, fmt)
+                                delta = fecha_dt - datetime(1899, 12, 30)
+                                return int(delta.days)
+                            except:
+                                continue
+                        
+                        # Último intento con pandas
+                        fecha_dt = pd.to_datetime(fecha_str, errors='coerce')
                         if pd.notna(fecha_dt):
                             delta = fecha_dt - pd.Timestamp('1899-12-30')
-                            return delta.days + (delta.seconds / 86400)
-                    except:
-                        pass
+                            return int(delta.days)
+                    
+                    # Si es un número, asumir que ya está en formato serial
+                    if isinstance(fecha, (int, float)):
+                        return int(fecha)
+                        
+                except Exception as e:
+                    print(f"⚠️ Error convirtiendo fecha '{fecha}': {e}")
                 
-                # Si es un número, asumir que ya está en formato serial
-                try:
-                    return float(fecha)
-                except:
-                    return ''
+                return ''
             
-            df_objeciones['CROFECOBJ'] = self.df_consolidado.get('Fecha', '').apply(convertir_fecha)
+            # Aplicar conversión de fecha
+            fecha_col = self.df_consolidado.get('Fecha')
+            if fecha_col is not None:
+                df_objeciones['CROFECOBJ'] = fecha_col.apply(convertir_fecha)
+            else:
+                df_objeciones['CROFECOBJ'] = ''
             
             # CROREFERE: Valor fijo 0
             df_objeciones['CROREFERE'] = 0
@@ -488,19 +508,55 @@ class MutualserProcessor:
             # IDRIPS: Vacío
             df_objeciones['IDRIPS'] = ''
             
-            # CROVALOBJ: Valor glosado
-            df_objeciones['CROVALOBJ'] = self.df_consolidado.get('Valor glosado', 0)
+            # CROVALOBJ: Valor glosado (limpiar formato de moneda)
+            def limpiar_valor_numerico(valor):
+                if pd.isna(valor) or valor == '' or valor is None:
+                    return 0
+                
+                try:
+                    # Si ya es numérico, retornarlo
+                    if isinstance(valor, (int, float)):
+                        return float(valor)
+                    
+                    # Si es string, limpiar caracteres de formato
+                    valor_str = str(valor).strip()
+                    # Remover $, espacios, y caracteres especiales
+                    valor_str = valor_str.replace('$', '').replace(' ', '').replace(',', '').replace('.', '', valor_str.count('.') - 1 if valor_str.count('.') > 1 else 0)
+                    # Remover caracteres no numéricos excepto punto y guión
+                    valor_limpio = ''.join(c for c in valor_str if c.isdigit() or c in '.-')
+                    
+                    if valor_limpio:
+                        return float(valor_limpio)
+                    return 0
+                except:
+                    return 0
             
-            # CRDOBSERV: Concepto de glosa + Observacion
+            valor_glosado_col = self.df_consolidado.get('Valor glosado')
+            if valor_glosado_col is not None:
+                df_objeciones['CROVALOBJ'] = valor_glosado_col.apply(limpiar_valor_numerico)
+            else:
+                df_objeciones['CROVALOBJ'] = 0
+            
+            # CRDOBSERV: Concepto de glosa + Observacion (limpiar encoding)
+            def limpiar_texto(texto):
+                if pd.isna(texto) or texto is None:
+                    return ''
+                texto_str = str(texto).strip()
+                # Normalizar caracteres problemáticos
+                try:
+                    return texto_str.encode('utf-8', errors='replace').decode('utf-8')
+                except:
+                    return texto_str
+            
             def combinar_observaciones(row):
                 concepto = row.get('Concepto de glosa', '')
                 observacion = row.get('Observacion', '')
                 
                 partes = []
                 if pd.notna(concepto) and str(concepto).strip():
-                    partes.append(str(concepto).strip())
+                    partes.append(limpiar_texto(concepto))
                 if pd.notna(observacion) and str(observacion).strip():
-                    partes.append(str(observacion).strip())
+                    partes.append(limpiar_texto(observacion))
                 
                 return ' - '.join(partes) if partes else ''
             

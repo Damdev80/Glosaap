@@ -1,12 +1,11 @@
 """
 Aplicación Glosaap - Cliente IMAP con Flet
-Versión modular con separación de responsabilidades
+Versión 2.0 - Arquitectura modular
 """
 import flet as ft
 import os
 import sys
 import threading
-import subprocess
 
 # Configurar path para imports
 PROJECT_APP_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -16,40 +15,30 @@ if PROJECT_APP_DIR not in sys.path:
 from service.email_service import EmailService
 from ui.styles import COLORS, FONT_SIZES, SPACING, WINDOW_SIZES
 from ui.components.message_row import MessageRow
+from ui.screens.eps_screen import EpsScreen
 
 
 def main(page: ft.Page):
     """Función principal de la aplicación"""
     
-    # Configuración inicial
+    # ==================== CONFIGURACIÓN INICIAL ====================
     page.title = "Glosaap"
     page.window_width = WINDOW_SIZES["login"]["width"]
     page.window_height = WINDOW_SIZES["login"]["height"]
     page.bgcolor = COLORS["bg_white"]
     page.padding = 0
     
-    # Servicios
+    # ==================== SERVICIOS ====================
     email_service = EmailService()
-    selected_eps = {"name": "Todas las EPS", "filter": None, "filter_type": None, "subject_pattern": None}  # EPS seleccionada
-
     
+    # Estado global
+    app_state = {
+        "selected_eps": None,
+        "date_from": None,
+        "date_to": None
+    }
     
     # ==================== PANTALLA DE LOGIN ====================
-    
-    title = ft.Text(
-        "Glosaap",
-        size=FONT_SIZES["title"],
-        weight=ft.FontWeight.W_300,
-        color=COLORS["text_primary"],
-        text_align=ft.TextAlign.CENTER
-    )
-    
-    subtitle = ft.Text(
-        "Gestor de correos IMAP | Soporta Gmail, Outlook, dominios personalizados",
-        size=12,
-        color=COLORS["text_secondary"],
-        text_align=ft.TextAlign.CENTER
-    )
     
     email_input = ft.TextField(
         label="Correo electrónico",
@@ -76,7 +65,6 @@ def main(page: ft.Page):
         text_size=FONT_SIZES["body"]
     )
     
-    # Campo para servidor IMAP personalizado (ahora visible por defecto)
     server_input = ft.TextField(
         label="Servidor IMAP",
         hint_text="Ej: imap.gmail.com, mail.tudominio.com",
@@ -89,23 +77,11 @@ def main(page: ft.Page):
         text_size=FONT_SIZES["body"]
     )
     
-    status_text = ft.Text(
-        "",
-        size=FONT_SIZES["small"],
-        color=COLORS["error"],
-        text_align=ft.TextAlign.CENTER,
-        weight=ft.FontWeight.W_400
-    )
-    
-    login_progress = ft.ProgressBar(
-        visible=False, 
-        color=COLORS["primary"], 
-        bgcolor=COLORS["border"], 
-        width=380
-    )
+    status_text = ft.Text("", size=FONT_SIZES["small"], color=COLORS["error"])
+    login_progress = ft.ProgressBar(visible=False, color=COLORS["primary"], bgcolor=COLORS["border"], width=380)
     
     login_button = ft.Container(
-        content=ft.Text("Iniciar Sesión", size=15, weight=ft.FontWeight.W_500),
+        content=ft.Text("Iniciar Sesión", size=15, weight=ft.FontWeight.W_500, color=COLORS["bg_white"]),
         alignment=ft.alignment.center,
         bgcolor=COLORS["primary"],
         border_radius=8,
@@ -117,11 +93,10 @@ def main(page: ft.Page):
     login_view = ft.Container(
         content=ft.Column([
             ft.Container(height=SPACING["xxl"]),
-            # Card contenedor del formulario
             ft.Container(
                 content=ft.Column([
-                    title,
-                    subtitle,
+                    ft.Text("Glosaap", size=FONT_SIZES["title"], weight=ft.FontWeight.W_300, color=COLORS["text_primary"]),
+                    ft.Text("Gestor de correos IMAP", size=12, color=COLORS["text_secondary"]),
                     ft.Container(height=SPACING["lg"]),
                     email_input,
                     ft.Container(height=SPACING["md"]),
@@ -137,136 +112,13 @@ def main(page: ft.Page):
                 padding=ft.padding.all(SPACING["xxl"]),
                 bgcolor=COLORS["bg_white"],
                 border_radius=12,
-                shadow=ft.BoxShadow(
-                    spread_radius=1,
-                    blur_radius=15,
-                    color=ft.Colors.with_opacity(0.1, COLORS["text_primary"]),
-                    offset=ft.Offset(0, 4)
-                )
+                shadow=ft.BoxShadow(spread_radius=1, blur_radius=15, color=ft.Colors.with_opacity(0.1, COLORS["text_primary"]), offset=ft.Offset(0, 4))
             ),
-            ft.Container(height=SPACING["xxl"]),
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
         padding=ft.padding.symmetric(horizontal=SPACING["xxl"]),
         bgcolor=COLORS["bg_light"],
         alignment=ft.alignment.center,
         expand=True
-    )
-    
-    # ==================== PANTALLA DE SELECCIÓN DE EPS ====================
-    
-    # Lista de EPS disponibles (puedes agregar más después)
-    eps_list = [
-        {"name": "Todas las EPS", "icon": "", "description": "Buscar en todas las EPS", "filter": None, "filter_type": None},
-        {"name": "Sanitas", "icon": "🟢", "description": "Sanitas EPS", "filter": "sanitas", "filter_type": "keyword"},
-        {"name": "Mutualser", "icon": "🔵", "description": "Mutualser", "filter": "mutualser", "filter_type": "subject_exact_pattern", "subject_pattern": "objeciones de glosa factura fc"},
-        {"name": "Nueva EPS", "icon": "🟠", "description": "Nueva EPS", "filter": "nuevaeps", "filter_type": "keyword"},
-        {"name": "Compensar", "icon": "🟡", "description": "Compensar EPS", "filter": "compensar", "filter_type": "keyword"},
-        {"name": "Famisanar", "icon": "🟣", "description": "Famisanar EPS", "filter": "famisanar", "filter_type": "keyword"},
-        {"name": "Cosalud", "icon": "🔴", "description": "Cosalud EPS", "filter": "cosalud", "filter_type": "keyword"}
-    ]
-    
-    def create_eps_card(eps_info):
-        """Crea una tarjeta para cada EPS"""
-        def on_click(e):
-            selected_eps["name"] = eps_info["name"]
-            selected_eps["filter"] = eps_info["filter"]
-            selected_eps["filter_type"] = eps_info.get("filter_type")
-            selected_eps["subject_pattern"] = eps_info.get("subject_pattern")
-            
-            # Cambiar a pantalla de mensajes
-            eps_view.visible = False
-            messages_view.visible = True
-            page.update()
-            
-            # Cargar mensajes
-            load_messages()
-        
-        return ft.Container(
-            content=ft.Column([
-                ft.Text(eps_info["icon"], size=40),
-                ft.Text(
-                    eps_info["name"],
-                    size=FONT_SIZES["body"],
-                    weight=ft.FontWeight.W_500,
-                    color=COLORS["text_primary"],
-                    text_align=ft.TextAlign.CENTER
-                ),
-                ft.Text(
-                    eps_info["description"],
-                    size=FONT_SIZES["small"],
-                    color=COLORS["text_secondary"],
-                    text_align=ft.TextAlign.CENTER
-                )
-            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8),
-            bgcolor=COLORS["bg_white"],
-            border_radius=12,
-            padding=SPACING["lg"],
-            width=160,
-            height=140,
-            ink=True,
-            on_click=on_click,
-            shadow=ft.BoxShadow(
-                spread_radius=0,
-                blur_radius=8,
-                color=ft.Colors.with_opacity(0.08, COLORS["text_primary"]),
-                offset=ft.Offset(0, 2)
-            ),
-            border=ft.border.all(1, COLORS["border"])
-        )
-    
-    # Crear grid de EPSs
-    eps_grid = ft.Row(
-        [
-            create_eps_card(eps) for eps in eps_list
-        ],
-        wrap=True,
-        spacing=SPACING["md"],
-        run_spacing=SPACING["md"],
-        alignment=ft.MainAxisAlignment.CENTER
-    )
-    
-    eps_view = ft.Container(
-        content=ft.Column([
-            ft.Container(height=SPACING["xl"]),
-            ft.Text(
-                "Selecciona una EPS",
-                size=FONT_SIZES["title"],
-                weight=ft.FontWeight.W_300,
-                color=COLORS["text_primary"],
-                text_align=ft.TextAlign.CENTER
-            ),
-            ft.Text(
-                "Filtra los correos por entidad prestadora de salud",
-                size=FONT_SIZES["small"],
-                color=COLORS["text_secondary"],
-                text_align=ft.TextAlign.CENTER
-            ),
-            ft.Container(height=SPACING["xl"]),
-            ft.Container(
-                content=eps_grid,
-                padding=SPACING["lg"],
-                bgcolor=COLORS["bg_light"],
-                border_radius=12,
-                shadow=ft.BoxShadow(
-                    spread_radius=1,
-                    blur_radius=15,
-                    color=ft.Colors.with_opacity(0.05, COLORS["text_primary"]),
-                    offset=ft.Offset(0, 4)
-                )
-            ),
-            ft.Container(height=SPACING["md"]),
-            ft.TextButton(
-                "← Cerrar sesión",
-                icon=ft.Icons.LOGOUT,
-                on_click=lambda e: go_to_login(),
-                style=ft.ButtonStyle(color=COLORS["text_secondary"])
-            )
-        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-        padding=ft.padding.all(SPACING["xxl"]),
-        bgcolor=COLORS["bg_light"],
-        alignment=ft.alignment.center,
-        expand=True,
-        visible=False
     )
     
     # ==================== PANTALLA DE MENSAJES ====================
@@ -277,11 +129,12 @@ def main(page: ft.Page):
     processing_bar = ft.ProgressBar(visible=False, color=COLORS["success"], bgcolor=COLORS["border"])
     processing_status = ft.Text("", size=FONT_SIZES["small"], color=COLORS["text_secondary"])
     
-    # Botones de procesamiento de EPS
+    # Info de búsqueda actual
+    search_info_text = ft.Text("", size=12, color=COLORS["text_secondary"])
+    
     process_mutualser_btn = ft.ElevatedButton(
         "📊 Procesar MUTUALSER",
         icon=ft.Icons.TABLE_CHART,
-        on_click=lambda e: process_eps_files("mutualser"),
         bgcolor=COLORS["primary"],
         color=COLORS["bg_white"],
         disabled=False
@@ -290,10 +143,9 @@ def main(page: ft.Page):
     process_cosalud_btn = ft.ElevatedButton(
         "📊 Procesar COSALUD",
         icon=ft.Icons.TABLE_CHART,
-        on_click=lambda e: process_eps_files("cosalud"),
         bgcolor=COLORS["success"],
         color=COLORS["bg_white"],
-        disabled=True  # Deshabilitado por ahora
+        disabled=True
     )
     
     messages_view = ft.Column([
@@ -301,44 +153,30 @@ def main(page: ft.Page):
         ft.Container(
             content=ft.Row([
                 ft.Row([
-                    ft.IconButton(
-                        icon=ft.Icons.ARROW_BACK,
-                        icon_color=COLORS["text_secondary"],
-                        tooltip="Volver a EPS",
-                        on_click=lambda e: go_to_eps_selection()
-                    ),
-                    ft.Text(
-                        "Correos con 'glosa'",
-                        size=FONT_SIZES["heading"],
-                        weight=ft.FontWeight.W_400,
-                        color=COLORS["text_primary"]
-                    ),
+                    ft.IconButton(icon=ft.Icons.ARROW_BACK, icon_color=COLORS["text_secondary"], tooltip="Volver"),
+                    ft.Text("Correos con 'glosa'", size=FONT_SIZES["heading"], weight=ft.FontWeight.W_400, color=COLORS["text_primary"]),
                 ], spacing=0),
-                ft.IconButton(
-                    icon=ft.Icons.REFRESH,
-                    icon_color=COLORS["primary"],
-                    tooltip="Actualizar",
-                    on_click=lambda e: load_messages()
-                )
+                ft.IconButton(icon=ft.Icons.REFRESH, icon_color=COLORS["primary"], tooltip="Actualizar")
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             bgcolor=COLORS["bg_white"],
             padding=SPACING["lg"],
             border=ft.border.only(bottom=ft.BorderSide(1, COLORS["border"]))
         ),
-        loading_bar,
+        # Info de búsqueda
         ft.Container(
-            content=messages_list,
-            expand=True,
-            padding=0,
-            bgcolor=COLORS["bg_light"]
+            content=ft.Row([
+                ft.Icon(ft.Icons.INFO_OUTLINE, size=14, color=COLORS["primary"]),
+                search_info_text
+            ], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
+            padding=ft.padding.symmetric(horizontal=SPACING["md"], vertical=8),
+            bgcolor=COLORS["bg_input"]
         ),
-        # Sección de procesamiento
+        loading_bar,
+        ft.Container(content=messages_list, expand=True, padding=0, bgcolor=COLORS["bg_light"]),
+        # Procesamiento
         ft.Container(
             content=ft.Column([
-                ft.Row([
-                    process_mutualser_btn,
-                    process_cosalud_btn
-                ], spacing=SPACING["md"], alignment=ft.MainAxisAlignment.CENTER),
+                ft.Row([process_mutualser_btn, process_cosalud_btn], spacing=SPACING["md"], alignment=ft.MainAxisAlignment.CENTER),
                 processing_bar,
                 processing_status
             ], spacing=SPACING["sm"]),
@@ -346,15 +184,37 @@ def main(page: ft.Page):
             bgcolor=COLORS["bg_white"],
             border=ft.border.only(top=ft.BorderSide(1, COLORS["border"]))
         ),
-        ft.Container(
-            content=messages_status,
-            padding=SPACING["md"],
-            bgcolor=COLORS["bg_white"],
-            border=ft.border.only(top=ft.BorderSide(1, COLORS["border"]))
-        )
+        ft.Container(content=messages_status, padding=SPACING["md"], bgcolor=COLORS["bg_white"])
     ], expand=True, spacing=0, visible=False)
     
-    # ==================== FUNCIONES ====================
+    # ==================== FUNCIONES DE NAVEGACIÓN ====================
+    
+    def go_to_login():
+        """Navega a la pantalla de login"""
+        login_view.visible = True
+        eps_screen.hide()
+        messages_view.visible = False
+        page.window_width = WINDOW_SIZES["login"]["width"]
+        page.window_height = WINDOW_SIZES["login"]["height"]
+        page.update()
+    
+    def go_to_eps_selection():
+        """Navega a la pantalla de selección de EPS"""
+        login_view.visible = False
+        eps_screen.show()
+        messages_view.visible = False
+        page.window_width = WINDOW_SIZES["main"]["width"]
+        page.window_height = WINDOW_SIZES["main"]["height"]
+        page.update()
+    
+    def go_to_messages():
+        """Navega a la pantalla de mensajes"""
+        login_view.visible = False
+        eps_screen.hide()
+        messages_view.visible = True
+        page.update()
+    
+    # ==================== FUNCIONES DE NEGOCIO ====================
     
     def show_status(msg, is_error=False):
         """Muestra mensaje de estado en login"""
@@ -362,125 +222,136 @@ def main(page: ft.Page):
         status_text.color = COLORS["error"] if is_error else COLORS["primary"]
         page.update()
     
-    def show_messages_status(msg):
-        """Muestra mensaje de estado en pantalla de mensajes"""
-        messages_status.value = msg
-        page.update()
+    def handle_login(e):
+        """Maneja el proceso de login"""
+        email = email_input.value.strip()
+        password = password_input.value
+        server = server_input.value.strip()
+        
+        if not email or not password:
+            show_status("Por favor ingresa correo y contraseña", True)
+            return
+        
+        # Auto-detectar servidor si no se especifica
+        if not server:
+            if "gmail" in email.lower():
+                server = "imap.gmail.com"
+            elif "outlook" in email.lower() or "hotmail" in email.lower():
+                server = "imap-mail.outlook.com"
+            elif "yahoo" in email.lower():
+                server = "imap.mail.yahoo.com"
+            else:
+                domain = email.split("@")[1] if "@" in email else ""
+                server = f"mail.{domain}" if domain else "imap.gmail.com"
+        
+        def connect_worker():
+            try:
+                login_progress.visible = True
+                login_button.disabled = True
+                show_status("Conectando...")
+                page.update()
+                
+                email_service.connect(email, password, server)
+                
+                login_progress.visible = False
+                login_button.disabled = False
+                show_status("¡Conexión exitosa!")
+                page.update()
+                
+                # Navegar a selección de EPS
+                go_to_eps_selection()
+                
+            except Exception as ex:
+                login_progress.visible = False
+                login_button.disabled = False
+                show_status(f"Error: {str(ex)}", True)
+                page.update()
+        
+        threading.Thread(target=connect_worker, daemon=True).start()
     
-    def go_to_login():
-        """Vuelve a la pantalla de login"""
-        eps_view.visible = False
-        messages_view.visible = False
-        login_view.visible = True
-        email_service.disconnect()
-        page.window_width = WINDOW_SIZES["login"]["width"]
-        page.window_height = WINDOW_SIZES["login"]["height"]
-        page.update()
-    
-    def go_to_eps_selection():
-        """Vuelve a la pantalla de selección de EPS"""
-        messages_view.visible = False
-        eps_view.visible = True
-        page.update()
+    def on_eps_selected(eps_info, date_from, date_to):
+        """Callback cuando se selecciona una EPS"""
+        app_state["selected_eps"] = eps_info
+        app_state["date_from"] = date_from
+        app_state["date_to"] = date_to
+        
+        # Actualizar info de búsqueda
+        eps_name = eps_info["name"]
+        date_info = ""
+        if date_from and date_to:
+            date_info = f" | {date_from.strftime('%d/%m/%Y')} - {date_to.strftime('%d/%m/%Y')}"
+        elif date_from:
+            date_info = f" | Desde {date_from.strftime('%d/%m/%Y')}"
+        elif date_to:
+            date_info = f" | Hasta {date_to.strftime('%d/%m/%Y')}"
+        
+        search_info_text.value = f"EPS: {eps_name}{date_info}"
+        
+        # Navegar y cargar mensajes
+        go_to_messages()
+        load_messages()
     
     def filter_messages_by_eps(messages):
         """Filtra mensajes según la EPS seleccionada"""
-        if not selected_eps["filter"]:
-            return messages  # Todas las EPS
+        eps = app_state.get("selected_eps")
+        if not eps or not eps.get("filter"):
+            return messages
         
         filtered = []
-        filter_keyword = selected_eps["filter"].lower()
-        filter_type = selected_eps.get("filter_type", "keyword")
-        subject_pattern = selected_eps.get("subject_pattern", "").lower()
+        filter_type = eps.get("filter_type", "keyword")
+        filter_value = eps["filter"].lower()
+        subject_pattern = eps.get("subject_pattern", "").lower()
         
         for msg in messages:
-            from_addr = msg.get("from", "").lower()
-            subject = msg.get("subject", "").lower()
+            subject = (msg.get("subject") or "").lower()
+            from_addr = (msg.get("from") or "").lower()
             
-            # Debug: imprimir info del mensaje
-            print(f"DEBUG - Evaluando mensaje:")
-            print(f"  From: {from_addr}")
-            print(f"  Subject: {subject}")
-            
-            # Filtro para Mutualser: debe contener patrón específico en asunto y NO ser de Sanitas
-            if filter_type == "subject_exact_pattern":
-                print(f"  Filtro tipo: subject_exact_pattern")
-                print(f"  Buscando patrón: {subject_pattern}")
-                
-                # Verificar que el asunto contenga las palabras clave
-                palabras_clave = ["objeciones", "glosa", "factura", "fc"]
-                tiene_todas = all(palabra in subject for palabra in palabras_clave)
-                
-                # Excluir específicamente correos de Sanitas
-                es_sanitas = "sanitas" in from_addr or "sanitas" in subject
-                
-                if tiene_todas and not es_sanitas:
-                    print(f"  ✓ Asunto coincide y NO es Sanitas")
+            if filter_type == "keyword":
+                if filter_value in subject or filter_value in from_addr:
                     filtered.append(msg)
-                else:
-                    if not tiene_todas:
-                        print(f"  ✗ Asunto no coincide (faltan palabras clave)")
-                    if es_sanitas:
-                        print(f"  ✗ Es de Sanitas, excluido")
-            
-            # Filtro especial para correo específico + patrón exacto en asunto
-            elif filter_type == "email_exact_subject":
-                print(f"  Filtro tipo: email_exact_subject")
-                print(f"  Buscando email: {filter_keyword}")
-                print(f"  Buscando patrón: {subject_pattern}")
-                
-                # Verificar correo del remitente
-                if filter_keyword in from_addr:
-                    print(f"  ✓ Email coincide")
-                    # Verificar que el asunto contenga las palabras clave (más flexible)
-                    palabras_clave = ["objeciones", "glosa", "factura", "fc"]
-                    tiene_todas = all(palabra in subject for palabra in palabras_clave)
-                    
-                    if tiene_todas:
-                        print(f"  ✓ Asunto coincide con patrón")
+            elif filter_type == "subject_exact_pattern":
+                if subject_pattern in subject:
+                    # Excluir Sanitas si es filtro de Mutualser
+                    if "sanitas" not in subject and "sanitas" not in from_addr:
                         filtered.append(msg)
-                    else:
-                        print(f"  ✗ Asunto no coincide (faltan palabras clave)")
-                else:
-                    print(f"  ✗ Email no coincide")
-            # Si el filtro contiene @ es un correo específico, buscar solo en remitente
-            elif "@" in filter_keyword:
-                if filter_keyword in from_addr:
-                    filtered.append(msg)
-            else:
-                # Si no es correo, buscar en remitente y asunto
-                if filter_keyword in from_addr or filter_keyword in subject:
+            elif filter_type == "email":
+                if filter_value in from_addr:
                     filtered.append(msg)
         
-        print(f"\nRESULTADO: {len(filtered)} de {len(messages)} mensajes pasaron el filtro\n")
         return filtered
     
     def load_messages():
-        """Carga mensajes con 'glosa' y descarga adjuntos"""
+        """Carga mensajes del servidor"""
         def worker():
             try:
                 loading_bar.visible = True
                 messages_list.controls.clear()
-                show_messages_status("🔍 Buscando correos con 'glosa' en el asunto...")
+                messages_status.value = "🔍 Buscando correos..."
                 page.update()
                 
                 message_rows = []
                 
-                def on_message_found(msg):
-                    """Callback cuando se encuentra un mensaje"""
+                def on_found(msg):
                     msg_row = MessageRow(msg, len(message_rows) + 1)
                     messages_list.controls.append(msg_row.build())
                     message_rows.append(msg_row)
-                    show_messages_status(f"🔍 Encontrados {len(message_rows)} correo(s)...")
+                    messages_status.value = f"🔍 Encontrados {len(message_rows)} correo(s)..."
                     page.update()
                 
-                # Buscar mensajes
-                all_msgs = email_service.search_messages("glosa", limit=100, timeout=15, on_found=on_message_found)
+                # Buscar con filtro de fechas
+                all_msgs = email_service.search_messages(
+                    "glosa",
+                    limit=100,
+                    timeout=15,
+                    on_found=on_found,
+                    date_from=app_state.get("date_from"),
+                    date_to=app_state.get("date_to")
+                )
                 
-                # Filtrar por EPS seleccionada
+                # Filtrar por EPS
                 msgs = filter_messages_by_eps(all_msgs)
                 
-                # Actualizar UI con mensajes filtrados
+                # Actualizar lista con mensajes filtrados
                 messages_list.controls.clear()
                 message_rows.clear()
                 
@@ -490,104 +361,53 @@ def main(page: ft.Page):
                         messages_list.controls.append(msg_row.build())
                         message_rows.append(msg_row)
                     
-                    if len(msgs) < len(all_msgs):
-                        show_messages_status(f"🔍 Filtrados {len(msgs)} de {len(all_msgs)} correo(s) para {selected_eps['name']}")
-                    else:
-                        show_messages_status(f"🔍 Encontrados {len(msgs)} correo(s)")
-                    page.update()
-                
-                if not msgs:
-                    messages_list.controls.clear()
-                    
-                    # Mensaje diferenciado según si hay filtro o no
-                    if selected_eps["filter"]:
-                        mensaje = f"No se encontraron correos de {selected_eps['name']}"
-                        if len(all_msgs) > 0:
-                            mensaje += f"\n\n(Se encontraron {len(all_msgs)} correos con 'glosa' pero ninguno cumple los filtros de {selected_eps['name']})"
-                    else:
-                        mensaje = "No se encontraron correos con 'glosa' en el asunto"
-                    
+                    messages_status.value = f"✅ {len(msgs)} correo(s) encontrados"
+                else:
                     messages_list.controls.append(
                         ft.Container(
                             content=ft.Column([
                                 ft.Icon(ft.Icons.MAIL_OUTLINE, size=60, color=COLORS["text_light"]),
-                                ft.Text(
-                                    mensaje,
-                                    size=FONT_SIZES["body"],
-                                    color=COLORS["text_secondary"],
-                                    text_align=ft.TextAlign.CENTER
-                                )
+                                ft.Text("No se encontraron correos", size=FONT_SIZES["body"], color=COLORS["text_secondary"])
                             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=15),
                             alignment=ft.alignment.center,
                             expand=True
                         )
                     )
-                    loading_bar.visible = False
-                    page.update()
-                    return
-                
-                # Descargar adjuntos con callback de progreso
-                show_messages_status("📥 Descargando adjuntos...")
-                page.update()
-                
-                def on_download_progress(idx, total, msg, files):
-                    """Callback de progreso de descarga"""
-                    msg_row = message_rows[idx]
-                    msg_row.show_downloading()
-                    page.update()
-                    
-                    if files:
-                        msg_row.show_success(files)
-                    else:
-                        msg_row.show_no_attachments()
-                    
-                    show_messages_status(f"📥 Procesado: {idx + 1}/{total} correos")
-                    page.update()
-                
-                stats = email_service.download_all_attachments(msgs, on_download_progress)
-                
-                # Resumen final
-                if stats["total_files"] > 0:
-                    show_messages_status(
-                        f"✅ {len(msgs)} correo(s) | "
-                        f"📎 {stats['total_files']} adjunto(s) descargado(s) | "
-                        f"Ahora puedes procesar los archivos"
-                    )
-                    # Habilitar botón de MUTUALSER si hay archivos
-                    process_mutualser_btn.disabled = False
-                else:
-                    show_messages_status(f"✅ {len(msgs)} correo(s) encontrado(s) | ⚠ Sin adjuntos")
-                    process_mutualser_btn.disabled = True
+                    messages_status.value = "No hay resultados"
                 
                 loading_bar.visible = False
+                
+                # Descargar adjuntos si hay mensajes
+                if msgs:
+                    messages_status.value = "📥 Descargando adjuntos..."
+                    page.update()
+                    
+                    email_service.download_all_attachments(msgs)
+                    messages_status.value = f"✅ {len(msgs)} correo(s) - Adjuntos descargados"
+                
                 page.update()
                 
-            except Exception as e:
+            except Exception as ex:
                 loading_bar.visible = False
-                show_messages_status(f"❌ Error: {str(e)}")
+                messages_status.value = f"❌ Error: {str(ex)}"
                 page.update()
         
         threading.Thread(target=worker, daemon=True).start()
     
     def process_eps_files(eps_type):
-        """Procesa archivos descargados según la EPS seleccionada"""
+        """Procesa archivos de una EPS"""
         def worker():
             try:
                 processing_bar.visible = True
                 process_mutualser_btn.disabled = True
-                process_cosalud_btn.disabled = True
-                processing_status.value = f"🔄 Iniciando procesamiento de {eps_type.upper()}..."
+                processing_status.value = f"🔄 Procesando {eps_type.upper()}..."
                 page.update()
                 
                 if eps_type == "mutualser":
-                    processing_status.value = "📂 Escaneando archivos descargados..."
-                    page.update()
-                    
-                    # Obtener archivos Excel descargados
                     excel_files = email_service.get_excel_files()
                     
                     if not excel_files:
-                        processing_status.value = "⚠️ No hay archivos Excel para procesar"
+                        processing_status.value = "⚠️ No hay archivos Excel"
                         processing_bar.visible = False
                         process_mutualser_btn.disabled = False
                         page.update()
@@ -596,31 +416,21 @@ def main(page: ft.Page):
                     processing_status.value = f"📊 Procesando {len(excel_files)} archivo(s)..."
                     page.update()
                     
-                    # Procesar con el servicio
                     resultado = email_service.procesar_mutualser()
                     
                     processing_bar.visible = False
                     
                     if resultado['success']:
                         resumen = resultado['resumen']
-                        
-                        # Construir mensaje con ambos archivos
-                        mensaje_archivos = f"✅ ¡Archivos generados exitosamente!\n\n"
-                        mensaje_archivos += f"📄 Consolidado:\n{resultado['output_file']}\n\n"
-                        
+                        msg = f"✅ ¡Archivos generados!\n"
+                        msg += f"📄 {resultado['output_file']}\n"
                         if resultado.get('objeciones_file'):
-                            mensaje_archivos += f"📋 Objeciones:\n{resultado['objeciones_file']}\n\n"
-                        
-                        mensaje_archivos += (
-                            f"📊 {resumen['total_registros']} registros | "
-                            f"📁 {resumen['archivos_procesados']} archivos procesados\n"
-                            f"🔗 {resumen['codigos_homologados']} códigos homologados"
-                        )
-                        
-                        processing_status.value = mensaje_archivos
+                            msg += f"📋 {resultado['objeciones_file']}\n"
+                        msg += f"📊 {resumen['total_registros']} registros | {resumen['codigos_homologados']} homologados"
+                        processing_status.value = msg
                         processing_status.color = COLORS["success"]
                         
-                        # Abrir carpeta de salida
+                        # Abrir carpeta
                         import subprocess
                         output_dir = os.path.dirname(resultado['output_file'])
                         subprocess.Popen(f'explorer "{output_dir}"')
@@ -631,98 +441,42 @@ def main(page: ft.Page):
                     process_mutualser_btn.disabled = False
                     page.update()
                     
-                elif eps_type == "cosalud":
-                    processing_status.value = "⚠️ Procesador de COSALUD aún no implementado"
-                    processing_bar.visible = False
-                    process_cosalud_btn.disabled = False
-                    page.update()
-                
-            except Exception as e:
+            except Exception as ex:
                 processing_bar.visible = False
-                processing_status.value = f"❌ Error al procesar: {str(e)}"
+                processing_status.value = f"❌ Error: {str(ex)}"
                 processing_status.color = COLORS["error"]
                 process_mutualser_btn.disabled = False
-                process_cosalud_btn.disabled = False
                 page.update()
-                import traceback
-                traceback.print_exc()
         
         threading.Thread(target=worker, daemon=True).start()
     
-    def do_login(e):
-        """Procesa el login"""
-        email = email_input.value
-        password = password_input.value
-        custom_server = server_input.value.strip() if server_input.value else None
-        
-        if not email or not password:
-            show_status("Por favor ingresa email y contraseña", True)
-            return
-        
-        login_button.disabled = True
-        login_progress.visible = True
-        status_text.value = ""
-        page.update()
-        
-        def worker():
-            try:
-                # Si hay servidor personalizado, usarlo directamente
-                if custom_server:
-                    server = custom_server
-                    show_status(f"Conectando a {server}...")
-                    page.update()
-                else:
-                    # Detectar por dominio del email
-                    domain = email.split("@")[1].lower()
-                    
-                    # Servidores comunes
-                    imap_servers = {
-                        "gmail.com": "imap.gmail.com",
-                        "outlook.com": "outlook.office365.com",
-                        "hotmail.com": "outlook.office365.com",
-                        "yahoo.com": "imap.mail.yahoo.com",
-                        "icloud.com": "imap.mail.me.com",
-                    }
-                    
-                    if domain in imap_servers:
-                        server = imap_servers[domain]
-                        show_status(f"Conectando a {server}...")
-                    else:
-                        # Intentar patrones comunes para dominios personalizados
-                        possible_servers = [
-                            f"imap.{domain}",
-                            f"mail.{domain}",
-                            domain
-                        ]
-                        server = possible_servers[0]  # Intentar el primero
-                        show_status(f"Intentando {server}...")
-                    
-                    page.update()
-                
-                # Conectar al servidor
-                email_service.connect(email, password, server=server)
-                login_progress.visible = False
-                
-                # Cambiar a pantalla de selección de EPS
-                page.window_width = WINDOW_SIZES["main"]["width"]
-                page.window_height = WINDOW_SIZES["main"]["height"]
-                login_view.visible = False
-                eps_view.visible = True
-                page.update()
-                
-            except Exception as ex:
-                login_button.disabled = False
-                login_progress.visible = False
-                show_status(f"❌ Error: {str(ex)}", True)
-        
-        threading.Thread(target=worker, daemon=True).start()
+    # ==================== PANTALLA EPS (MODULAR) ====================
     
-    login_button.on_click = do_login
+    eps_screen = EpsScreen(
+        page=page,
+        on_eps_selected=on_eps_selected,
+        on_logout=go_to_login
+    )
     
-    # Agregar vistas
-    page.add(login_view)
-    page.add(eps_view)
-    page.add(messages_view)
+    # ==================== CONECTAR EVENTOS ====================
+    
+    login_button.on_click = handle_login
+    process_mutualser_btn.on_click = lambda e: process_eps_files("mutualser")
+    
+    # Botón volver en mensajes
+    messages_view.controls[0].content.controls[0].controls[0].on_click = lambda e: go_to_eps_selection()
+    # Botón refresh en mensajes
+    messages_view.controls[0].content.controls[1].on_click = lambda e: load_messages()
+    
+    # ==================== CONSTRUIR PÁGINA ====================
+    
+    page.add(
+        ft.Stack([
+            login_view,
+            eps_screen.build(),
+            messages_view
+        ], expand=True)
+    )
 
 
 if __name__ == "__main__":

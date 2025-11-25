@@ -86,21 +86,63 @@ class ImapClient:
             })
         return msgs
 
-    def search_by_subject(self, keyword, folder="INBOX", limit=100, timeout=15, on_found=None):
+    def search_by_subject(self, keyword, folder="INBOX", limit=100, timeout=15, on_found=None, date_from=None, date_to=None):
         """
         Busca correos que contengan una palabra clave en el asunto.
         Busca tanto correos leídos como no leídos.
         timeout: tiempo máximo en segundos SIN ENCONTRAR un nuevo correo
         on_found: callback que se llama cada vez que se encuentra un mensaje
+        date_from: fecha inicio del rango (datetime o string 'DD-Mon-YYYY')
+        date_to: fecha fin del rango (datetime o string 'DD-Mon-YYYY')
         """
         import time
+        from datetime import datetime
         last_found_time = time.time()  # Tiempo del último correo encontrado
         
         try:
             self.select_folder(folder)
             
-            # Buscar TODOS los correos (leídos y no leídos)
-            typ, data = self.conn.search(None, "ALL")
+            # Construir criterio de búsqueda con fechas
+            search_criteria = "ALL"
+            
+            if date_from or date_to:
+                # Formatear fechas para IMAP (formato: DD-Mon-YYYY)
+                def format_imap_date(date_obj):
+                    if date_obj is None:
+                        return None
+                    if isinstance(date_obj, str):
+                        # Si ya es string, intentar parsearlo
+                        try:
+                            date_obj = datetime.strptime(date_obj, '%Y-%m-%d')
+                        except:
+                            try:
+                                date_obj = datetime.strptime(date_obj, '%d/%m/%Y')
+                            except:
+                                return None
+                    # Formato IMAP: DD-Mon-YYYY (ej: 01-Nov-2025)
+                    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+                    return f"{date_obj.day:02d}-{months[date_obj.month-1]}-{date_obj.year}"
+                
+                criteria_parts = []
+                
+                if date_from:
+                    imap_date_from = format_imap_date(date_from)
+                    if imap_date_from:
+                        criteria_parts.append(f'SINCE {imap_date_from}')
+                        print(f"📅 Buscando desde: {imap_date_from}")
+                
+                if date_to:
+                    imap_date_to = format_imap_date(date_to)
+                    if imap_date_to:
+                        criteria_parts.append(f'BEFORE {imap_date_to}')
+                        print(f"📅 Buscando hasta: {imap_date_to}")
+                
+                if criteria_parts:
+                    search_criteria = ' '.join(criteria_parts)
+            
+            # Buscar correos según criterio
+            typ, data = self.conn.search(None, search_criteria)
             if typ != "OK":
                 return []
             
