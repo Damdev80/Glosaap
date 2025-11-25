@@ -425,27 +425,15 @@ class MutualserProcessor:
             # Crear DataFrame con la estructura requerida
             df_objeciones = pd.DataFrame()
             
-            # Mapeo de columnas (consolidado -> objeciones)
-            # CDCONSEC: Número secuencial (1, 2, 3...)
-            df_objeciones['CDCONSEC'] = range(1, len(self.df_consolidado) + 1)
-            
-            # CDFECDOC: Número de factura
-            df_objeciones['CDFECDOC'] = self.df_consolidado.get('Número de factura', '')
-            
-            # CRNCXC: Número de factura con formato (si es FC0000682556)
-            df_objeciones['CRNCXC'] = self.df_consolidado.get('Número de factura', '')
-            
-            # CROFECOBJ: Fecha - convertir a formato serial de Excel
-            def convertir_fecha(fecha):
+            # Función para formatear fecha a MM/DD/YYYY
+            def formatear_fecha_mmddyyyy(fecha):
                 if pd.isna(fecha) or fecha == '' or fecha is None:
                     return ''
                 
                 try:
                     # Si ya es un objeto datetime o Timestamp
                     if isinstance(fecha, (pd.Timestamp, datetime)):
-                        # Convertir a número serial de Excel (días desde 1899-12-30)
-                        delta = fecha - pd.Timestamp('1899-12-30')
-                        return int(delta.days + (delta.seconds / 86400))
+                        return fecha.strftime('%m/%d/%Y')
                     
                     # Si es un string, intentar parsearlo
                     if isinstance(fecha, str):
@@ -454,35 +442,45 @@ class MutualserProcessor:
                             return ''
                         
                         # Intentar varios formatos
-                        for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y']:
+                        for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%m/%d/%Y']:
                             try:
                                 fecha_dt = datetime.strptime(fecha_str, fmt)
-                                delta = fecha_dt - datetime(1899, 12, 30)
-                                return int(delta.days)
+                                return fecha_dt.strftime('%m/%d/%Y')
                             except:
                                 continue
                         
                         # Último intento con pandas
                         fecha_dt = pd.to_datetime(fecha_str, errors='coerce')
                         if pd.notna(fecha_dt):
-                            delta = fecha_dt - pd.Timestamp('1899-12-30')
-                            return int(delta.days)
+                            return fecha_dt.strftime('%m/%d/%Y')
                     
-                    # Si es un número, asumir que ya está en formato serial
+                    # Si es un número (serial de Excel), convertir
                     if isinstance(fecha, (int, float)):
-                        return int(fecha)
+                        fecha_dt = pd.Timestamp('1899-12-30') + pd.Timedelta(days=int(fecha))
+                        return fecha_dt.strftime('%m/%d/%Y')
                         
                 except Exception as e:
-                    print(f"⚠️ Error convirtiendo fecha '{fecha}': {e}")
+                    print(f"⚠️ Error formateando fecha '{fecha}': {e}")
                 
                 return ''
             
-            # Aplicar conversión de fecha
+            # Mapeo de columnas (consolidado -> objeciones)
+            # CDCONSEC: Número secuencial (1, 2, 3...)
+            df_objeciones['CDCONSEC'] = range(1, len(self.df_consolidado) + 1)
+            
+            # CDFECDOC: Fecha del documento (formato MM/DD/YYYY)
             fecha_col = self.df_consolidado.get('Fecha')
             if fecha_col is not None:
-                df_objeciones['CROFECOBJ'] = fecha_col.apply(convertir_fecha)
+                df_objeciones['CDFECDOC'] = fecha_col.apply(formatear_fecha_mmddyyyy)
             else:
-                df_objeciones['CROFECOBJ'] = ''
+                df_objeciones['CDFECDOC'] = ''
+            
+            # CRNCXC: Número de factura
+            df_objeciones['CRNCXC'] = self.df_consolidado.get('Número de factura', '')
+            
+            # CROFECOBJ: Fecha actual (día que se genera el archivo) en formato DD/MM/YYYY
+            fecha_actual = datetime.now().strftime('%d/%m/%Y')
+            df_objeciones['CROFECOBJ'] = fecha_actual
             
             # CROREFERE: Valor fijo 0
             df_objeciones['CROREFERE'] = 0
@@ -508,32 +506,60 @@ class MutualserProcessor:
             # IDRIPS: Vacío
             df_objeciones['IDRIPS'] = ''
             
-            # CROVALOBJ: Valor glosado (limpiar formato de moneda)
-            def limpiar_valor_numerico(valor):
+            # CROVALOBJ: Valor glosado (mantener el valor tal cual)
+            def obtener_valor_numerico(valor):
                 if pd.isna(valor) or valor == '' or valor is None:
                     return 0
                 
                 try:
-                    # Si ya es numérico, retornarlo
+                    # Si ya es numérico, retornarlo tal cual
                     if isinstance(valor, (int, float)):
-                        return float(valor)
+                        return int(valor)
                     
-                    # Si es string, limpiar caracteres de formato
+                    # Si es string, limpiar formato
                     valor_str = str(valor).strip()
-                    # Remover $, espacios, y caracteres especiales
-                    valor_str = valor_str.replace('$', '').replace(' ', '').replace(',', '').replace('.', '', valor_str.count('.') - 1 if valor_str.count('.') > 1 else 0)
-                    # Remover caracteres no numéricos excepto punto y guión
-                    valor_limpio = ''.join(c for c in valor_str if c.isdigit() or c in '.-')
                     
-                    if valor_limpio:
-                        return float(valor_limpio)
-                    return 0
+                    # Remover símbolo $ y espacios
+                    valor_str = valor_str.replace('$', '').replace(' ', '').strip()
+                    
+                    # Si no hay nada, retornar 0
+                    if not valor_str:
+                        return 0
+                    
+                    # Detectar formato: si tiene punto como separador de miles (ej: 30.000)
+                    # y NO tiene coma, entonces el punto es separador de miles
+                    if '.' in valor_str and ',' not in valor_str:
+                        # Verificar si parece separador de miles (grupos de 3 dígitos después del punto)
+                        partes = valor_str.split('.')
+                        # Si todas las partes después de la primera tienen 3 dígitos, es separador de miles
+                        es_separador_miles = all(len(p) == 3 for p in partes[1:])
+                        if es_separador_miles:
+                            # Quitar los puntos (son separadores de miles)
+                            valor_str = valor_str.replace('.', '')
+                    
+                    # Si tiene coma, puede ser decimal (formato español) o separador de miles
+                    if ',' in valor_str:
+                        # Si tiene punto Y coma, el punto es miles y coma es decimal
+                        if '.' in valor_str:
+                            valor_str = valor_str.replace('.', '').replace(',', '.')
+                        else:
+                            # Solo coma: verificar si es decimal o miles
+                            partes = valor_str.split(',')
+                            if len(partes) == 2 and len(partes[1]) <= 2:
+                                # Probablemente es decimal (ej: 30,50)
+                                valor_str = valor_str.replace(',', '.')
+                            else:
+                                # Es separador de miles
+                                valor_str = valor_str.replace(',', '')
+                    
+                    # Convertir a número entero (sin decimales)
+                    return int(float(valor_str))
                 except:
                     return 0
             
             valor_glosado_col = self.df_consolidado.get('Valor glosado')
             if valor_glosado_col is not None:
-                df_objeciones['CROVALOBJ'] = valor_glosado_col.apply(limpiar_valor_numerico)
+                df_objeciones['CROVALOBJ'] = valor_glosado_col.apply(obtener_valor_numerico)
             else:
                 df_objeciones['CROVALOBJ'] = 0
             
