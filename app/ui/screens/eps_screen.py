@@ -5,21 +5,11 @@ import flet as ft
 from ui.styles import COLORS, FONT_SIZES, SPACING
 from ui.components.date_range_picker import DateRangePicker
 from ui.components.eps_card import EpsCard
+from config.eps_config import get_eps_list
 
 
 class EpsScreen:
     """Pantalla para seleccionar EPS y rango de fechas"""
-    
-    # Lista de EPS disponibles
-    EPS_LIST = [
-        {"name": "Todas las EPS", "icon": "🏥", "description": "Sin filtro", "filter": None, "filter_type": None},
-        {"name": "Mutualser", "icon": "🔵", "description": "Mutualser EPS", "filter": "mutualser", "filter_type": "subject_exact_pattern", "subject_pattern": "objeciones de glosa factura fc"},
-        {"name": "Sanitas", "icon": "🟢", "description": "Sanitas EPS", "filter": "sanitas", "filter_type": "keyword"},
-        {"name": "Nueva EPS", "icon": "🟠", "description": "Nueva EPS", "filter": "nuevaeps", "filter_type": "keyword"},
-        {"name": "Compensar", "icon": "🟡", "description": "Compensar EPS", "filter": "compensar", "filter_type": "keyword"},
-        {"name": "Famisanar", "icon": "🟣", "description": "Famisanar EPS", "filter": "famisanar", "filter_type": "keyword"},
-        {"name": "Cosalud", "icon": "🔴", "description": "Cosalud EPS", "filter": "cosalud", "filter_type": "keyword"}
-    ]
     
     def __init__(self, page: ft.Page, on_eps_selected=None, on_logout=None):
         """
@@ -32,8 +22,14 @@ class EpsScreen:
         self.on_eps_selected = on_eps_selected
         self.on_logout = on_logout
         
-        # Componente de fechas
-        self.date_picker = DateRangePicker(page)
+        # Cargar lista de EPS desde configuración
+        self.eps_list = get_eps_list()
+        
+        # Componente de fechas con callback de validación
+        self.date_picker = DateRangePicker(
+            page, 
+            on_validation_error=self._on_date_validation_error
+        )
         
         # Estado de validación
         self.dates_selected = False
@@ -48,19 +44,77 @@ class EpsScreen:
         # Crear vista
         self._create_view()
     
+    def _on_date_validation_error(self, error_message):
+        """Callback cuando hay un error de validación de fechas"""
+        # El error ya se muestra en el DateRangePicker
+        # Aquí podríamos agregar lógica adicional si fuera necesario
+        pass
+    
     def _on_eps_click(self, eps_info):
         """Maneja el click en una tarjeta de EPS"""
         date_from, date_to = self.date_picker.get_dates()
         
-        # Validar que se hayan seleccionado fechas (opcional pero recomendado)
-        if not date_from and not date_to:
-            self.warning_text.value = "⚠️ Tip: Selecciona un rango de fechas para una búsqueda más eficiente"
-            self.warning_text.visible = True
-            self.page.update()
+        # Validar que se hayan seleccionado AMBAS fechas (obligatorio)
+        if not date_from or not date_to:
+            self._show_dates_required_dialog()
+            return
+        
+        # Validar rango de fechas (desde <= hasta)
+        if not self.date_picker.is_date_range_valid():
+            self._show_date_error_dialog()
+            return
         
         # Llamar callback con la info
         if self.on_eps_selected:
             self.on_eps_selected(eps_info, date_from, date_to)
+    
+    def _show_dates_required_dialog(self):
+        """Muestra un diálogo indicando que las fechas son obligatorias"""
+        def close_dialog(e):
+            dialog.open = False
+            self.page.update()
+        
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("📅 Fechas requeridas"),
+            content=ft.Text(
+                "Debes seleccionar un rango de fechas antes de elegir una EPS.\n\n"
+                "Por favor, selecciona la fecha 'Desde' y 'Hasta' para continuar.",
+                size=14
+            ),
+            actions=[
+                ft.TextButton("Entendido", on_click=close_dialog),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        
+        self.page.overlay.append(dialog)
+        dialog.open = True
+        self.page.update()
+    
+    def _show_date_error_dialog(self):
+        """Muestra un diálogo de alerta cuando las fechas son incompatibles"""
+        def close_dialog(e):
+            dialog.open = False
+            self.page.update()
+        
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("⚠️ Rango de fechas inválido"),
+            content=ft.Text(
+                "La fecha 'Desde' no puede ser mayor que la fecha 'Hasta'.\n\n"
+                "Por favor, corrige el rango de fechas antes de continuar.",
+                size=14
+            ),
+            actions=[
+                ft.TextButton("Entendido", on_click=close_dialog),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        
+        self.page.overlay.append(dialog)
+        dialog.open = True
+        self.page.update()
     
     def _handle_logout(self, e):
         """Maneja el cierre de sesión"""
@@ -70,9 +124,9 @@ class EpsScreen:
     def _create_view(self):
         """Crea la vista de la pantalla"""
         
-        # Grid de tarjetas de EPS
+        # Grid de tarjetas de EPS (usa la lista cargada desde config)
         eps_cards = ft.Row(
-            controls=[EpsCard(eps, on_click=self._on_eps_click).build() for eps in self.EPS_LIST],
+            controls=[EpsCard(eps, on_click=self._on_eps_click).build() for eps in self.eps_list],
             wrap=True,
             spacing=SPACING["md"],
             run_spacing=SPACING["md"],
