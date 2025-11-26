@@ -70,7 +70,8 @@ class MutualserEps(EpsInfo):
             filter_type="subject_exact_pattern",
             subject_pattern="Objeciones de glosa Factura FC",
             processor_class="MutualserProcessor",
-            enabled=True
+            enabled=True,
+            
         )
 
 
