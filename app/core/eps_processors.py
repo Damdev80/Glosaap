@@ -77,14 +77,13 @@ class MutualserProcessor:
         """
         Busca el código homologado según las reglas de negocio:
         
-        FLUJO:
+        FLUJO CORRECTO:
         1. Tomar código de la factura (Tecnología)
-        2. Buscar ese código en 'Código producto en DGH'
-        3. Si lo encuentra, obtener el código homologado de esa fila
-        4. Verificar si el código homologado EXISTE en la columna COD_SERV_FACT
-           - Si EXISTE → Usarlo
-           - Si NO existe → Buscar relacionado (mismo 6 dígitos + guión + letra/número)
-        5. Si no encuentra nada, dejar en blanco
+        2. Buscar ese código en 'Código Servicio de la ERP'
+        3. De esa fila, tomar el valor de 'Código producto en DGH'
+        4. Buscar ese valor en TODA la columna 'COD_SERV_FACT'
+        5. Si existe en COD_SERV_FACT → devolverlo
+        6. Si no existe → dejar en blanco
         
         Args:
             codigo_tecnologia: Código a buscar (de la columna Tecnología)
@@ -104,10 +103,14 @@ class MutualserProcessor:
                 return ''
             
             # Nombres de columnas
+            columna_erp = 'Código Servicio de la ERP'
             columna_codigo_producto = 'Código producto en DGH'
             columna_cod_serv_fact = 'COD_SERV_FACT'
             
             # Verificar que las columnas existen
+            if columna_erp not in self.df_homologacion.columns:
+                print(f"❌ Columna '{columna_erp}' no encontrada")
+                return ''
             if columna_codigo_producto not in self.df_homologacion.columns:
                 print(f"❌ Columna '{columna_codigo_producto}' no encontrada")
                 return ''
@@ -126,49 +129,40 @@ class MutualserProcessor:
             todos_cod_serv_fact.discard('0')
             todos_cod_serv_fact.discard('')
             
-            # Extraer solo dígitos del código para comparación
+            # Extraer solo dígitos del código para comparación flexible
             codigo_numerico = ''.join(filter(str.isdigit, codigo_str))
-            num_digitos = len(codigo_numerico)
             
-            # PASO 1: Buscar en 'Código producto en DGH'
-            mask = self.df_homologacion[columna_codigo_producto].astype(str).str.strip() == codigo_str
+            # PASO 1: Buscar en 'Código Servicio de la ERP'
+            mask = self.df_homologacion[columna_erp].astype(str).str.strip() == codigo_str
             resultado = self.df_homologacion[mask]
             
             # Búsqueda flexible si no encuentra exacto (solo por parte numérica)
             if resultado.empty and codigo_numerico:
-                mask = self.df_homologacion[columna_codigo_producto].astype(str).str.replace(r'\D', '', regex=True) == codigo_numerico
+                mask = self.df_homologacion[columna_erp].astype(str).str.replace(r'\D', '', regex=True) == codigo_numerico
                 resultado = self.df_homologacion[mask]
             
             if not resultado.empty:
-                # PASO 2: Obtener el código homologado de la fila encontrada
-                codigo_homologado = resultado.iloc[0][columna_cod_serv_fact]
+                # PASO 2: De esa fila, tomar el valor de 'Código producto en DGH'
+                codigo_producto_dgh = resultado.iloc[0][columna_codigo_producto]
                 
-                if pd.notna(codigo_homologado):
-                    codigo_homologado_str = str(codigo_homologado).strip()
+                if pd.notna(codigo_producto_dgh):
+                    codigo_producto_str = str(codigo_producto_dgh).strip()
                     
-                    # PASO 3: Verificar si el código homologado EXISTE en la columna COD_SERV_FACT
-                    if codigo_homologado_str and codigo_homologado_str != '0':
-                        if codigo_homologado_str in todos_cod_serv_fact:
-                            # ✅ El código homologado existe en COD_SERV_FACT
-                            return codigo_homologado_str
-                
-                # PASO 4: Si no existe, buscar uno relacionado (solo para 6 dígitos)
-                if num_digitos == 6:
-                    # Buscar códigos en COD_SERV_FACT que empiecen con los MISMOS 6 dígitos
-                    # + guión/letra/número adicional
-                    for cod in todos_cod_serv_fact:
-                        # Extraer los primeros dígitos del código candidato
-                        cod_digitos = ''.join(filter(str.isdigit, cod[:10]))
+                    if codigo_producto_str and codigo_producto_str != '0' and codigo_producto_str != 'nan':
+                        # PASO 3: Buscar ese valor en TODA la columna COD_SERV_FACT
+                        if codigo_producto_str in todos_cod_serv_fact:
+                            # ✅ El código existe en COD_SERV_FACT
+                            return codigo_producto_str
                         
-                        # Si los primeros 6 dígitos son iguales y tiene algo más
-                        if len(cod_digitos) >= 6 and cod_digitos[:6] == codigo_numerico:
-                            if len(cod) > 6:
-                                return cod
-                
-                # No se encontró código válido en COD_SERV_FACT
-                return ''
+                        # Búsqueda flexible por parte numérica
+                        codigo_producto_numerico = ''.join(filter(str.isdigit, codigo_producto_str))
+                        if codigo_producto_numerico:
+                            for cod in todos_cod_serv_fact:
+                                cod_numerico = ''.join(filter(str.isdigit, cod))
+                                if cod_numerico == codigo_producto_numerico:
+                                    return cod
             
-            # No se encontró en 'Código producto en DGH'
+            # No se encontró
             return ''
             
         except Exception as e:
