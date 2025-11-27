@@ -4,7 +4,7 @@ Orquesta las operaciones entre IMAP y adjuntos
 """
 from core.imap_client import ImapClient
 from service.attachment_service import AttachmentService
-from core.eps_processors import MutualserProcessor, CosaludProcessor
+from core.mutualser_processor import MutualserProcessor
 
 
 class EmailService:
@@ -16,7 +16,6 @@ class EmailService:
         self.messages = []
         # Procesadores por EPS
         self.mutualser_processor = MutualserProcessor()
-        self.cosalud_processor = CosaludProcessor()
     
     def connect(self, email, password, server="imap.gmail.com", port=993):
         """Conecta al servidor IMAP"""

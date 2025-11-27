@@ -172,7 +172,7 @@ class MutualserProcessor:
             return ''
     
     def _aplicar_homologacion(self):
-        """
+        """ 
         Aplica el proceso de homologación al DataFrame consolidado
         Agrega la columna "Codigo homologado DGH"
         """
