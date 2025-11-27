@@ -665,6 +665,65 @@ class MutualserProcessor:
             
             df_objeciones['CRDOBSERV'] = self.df_consolidado.apply(combinar_observaciones, axis=1)
             
+            # ==================== PROCESAR FILAS AU/TA ====================
+            # Regla: Si hay filas con misma factura + misma tecnología donde una tiene
+            # CRNCONOBJ que empieza con "AU" y otra con "TA":
+            # 1. Copiar CRDOBSERV de la fila TA
+            # 2. Eliminar la fila TA
+            # 3. Agregar a CRDOBSERV de AU: "\\ " + texto copiado
+            
+            print("\n🔄 Procesando filas AU/TA duplicadas...")
+            
+            filas_a_eliminar = []
+            filas_procesadas = 0
+            
+            # Agrupar por factura + tecnología (SLNSERPRO)
+            for (factura, tecnologia), grupo in df_objeciones.groupby(['CRNCXC', 'SLNSERPRO']):
+                if len(grupo) < 2:
+                    continue
+                
+                # Buscar filas AU y TA
+                filas_au = []
+                filas_ta = []
+                
+                for idx, row in grupo.iterrows():
+                    crnconobj = str(row.get('CRNCONOBJ', '')).strip().upper()
+                    if crnconobj.startswith('AU'):
+                        filas_au.append(idx)
+                    elif crnconobj.startswith('TA'):
+                        filas_ta.append(idx)
+                
+                # Si hay al menos una AU y una TA
+                if filas_au and filas_ta:
+                    # Tomar la primera AU y procesar todas las TA
+                    idx_au = filas_au[0]
+                    
+                    for idx_ta in filas_ta:
+                        # Copiar CRDOBSERV de TA
+                        crdobserv_ta = str(df_objeciones.at[idx_ta, 'CRDOBSERV']).strip()
+                        
+                        if crdobserv_ta:
+                            # Agregar a CRDOBSERV de AU con "\\ "
+                            crdobserv_au = str(df_objeciones.at[idx_au, 'CRDOBSERV']).strip()
+                            if crdobserv_au:
+                                df_objeciones.at[idx_au, 'CRDOBSERV'] = f"{crdobserv_au} \\\\ {crdobserv_ta}"
+                            else:
+                                df_objeciones.at[idx_au, 'CRDOBSERV'] = f"\\\\ {crdobserv_ta}"
+                        
+                        # Marcar fila TA para eliminar
+                        filas_a_eliminar.append(idx_ta)
+                        filas_procesadas += 1
+            
+            # Eliminar filas TA
+            if filas_a_eliminar:
+                df_objeciones = df_objeciones.drop(filas_a_eliminar)
+                df_objeciones = df_objeciones.reset_index(drop=True)
+                print(f"   ✅ {filas_procesadas} filas TA procesadas y eliminadas")
+            else:
+                print(f"   ℹ️ No se encontraron filas AU/TA duplicadas para procesar")
+            
+            # ==================== FIN PROCESAR AU/TA ====================
+            
             # Generar archivo
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             output_path = os.path.join(self.output_dir, f"Objeciones_{timestamp}.xlsx")
