@@ -75,94 +75,107 @@ class MutualserProcessor:
     
     def _buscar_codigo_homologado(self, codigo_tecnologia):
         """
-        Busca el código homologado según las reglas de negocio
+        Busca el código homologado según las reglas de negocio:
+        
+        FLUJO:
+        1. Tomar código de la factura (Tecnología)
+        2. Buscar ese código en 'Código producto en DGH'
+        3. Si lo encuentra, obtener el código homologado de esa fila
+        4. Verificar si el código homologado EXISTE en la columna COD_SERV_FACT
+           - Si EXISTE → Usarlo
+           - Si NO existe → Buscar relacionado (mismo 6 dígitos + guión + letra/número)
+        5. Si no encuentra nada, dejar en blanco
         
         Args:
             codigo_tecnologia: Código a buscar (de la columna Tecnología)
             
         Returns:
-            Código homologado encontrado o None si no se encuentra
+            Código homologado que exista en COD_SERV_FACT, o cadena vacía
         """
         if self.df_homologacion is None or pd.isna(codigo_tecnologia):
-            return None
+            return ''
         
         try:
             # Convertir código a string y limpiar
             codigo_str = str(codigo_tecnologia).strip()
             
-            # Si está vacío, retornar None
+            # Si está vacío, retornar vacío
             if not codigo_str or codigo_str == 'nan':
-                return None
+                return ''
             
-            # Determinar si es numérico para contar dígitos
+            # Nombres de columnas
+            columna_codigo_producto = 'Código producto en DGH'
+            columna_cod_serv_fact = 'COD_SERV_FACT'
+            
+            # Verificar que las columnas existen
+            if columna_codigo_producto not in self.df_homologacion.columns:
+                print(f"❌ Columna '{columna_codigo_producto}' no encontrada")
+                return ''
+            if columna_cod_serv_fact not in self.df_homologacion.columns:
+                print(f"❌ Columna '{columna_cod_serv_fact}' no encontrada")
+                return ''
+            
+            # Crear conjunto de todos los valores válidos en COD_SERV_FACT para búsqueda rápida
+            todos_cod_serv_fact = set(
+                self.df_homologacion[columna_cod_serv_fact]
+                .dropna()
+                .astype(str)
+                .str.strip()
+                .tolist()
+            )
+            todos_cod_serv_fact.discard('0')
+            todos_cod_serv_fact.discard('')
+            
+            # Extraer solo dígitos del código para comparación
             codigo_numerico = ''.join(filter(str.isdigit, codigo_str))
             num_digitos = len(codigo_numerico)
             
-            # Usar los nombres exactos de las columnas
-            columna_erp = 'Código Servicio de la ERP'
-            columna_codigo_interno = 'Codigo Interno Ips'
-            columna_codigo_producto = 'Código producto en DGH'
-            
-            # Verificar que las columnas existen
-            if columna_erp not in self.df_homologacion.columns:
-                print(f"❌ Columna '{columna_erp}' no encontrada")
-                return None
-            if columna_codigo_interno not in self.df_homologacion.columns:
-                print(f"❌ Columna '{columna_codigo_interno}' no encontrada")
-                columna_codigo_interno = None
-            if columna_codigo_producto not in self.df_homologacion.columns:
-                print(f"❌ Columna '{columna_codigo_producto}' no encontrada")
-                columna_codigo_producto = None
-            
-            resultado = None
-            
-            # Según el número de dígitos, buscar en la columna correspondiente
-            if num_digitos <= 6 and columna_codigo_interno:
-                # Buscar en "Codigo Interno Ips"
-                mask = self.df_homologacion[columna_codigo_interno].astype(str).str.strip() == codigo_str
-                resultado = self.df_homologacion[mask]
-                
-                # Si no se encuentra, intentar búsqueda flexible (solo números)
-                if resultado.empty and codigo_numerico:
-                    mask = self.df_homologacion[columna_codigo_interno].astype(str).str.replace(r'\D', '', regex=True) == codigo_numerico
-                    resultado = self.df_homologacion[mask]
-                
-            elif num_digitos > 6 and columna_codigo_producto:
-                # Buscar en "Código producto en DGH"
-                mask = self.df_homologacion[columna_codigo_producto].astype(str).str.strip() == codigo_str
-                resultado = self.df_homologacion[mask]
-                
-                # Si no se encuentra, intentar búsqueda flexible
-                if resultado.empty and codigo_numerico:
-                    mask = self.df_homologacion[columna_codigo_producto].astype(str).str.replace(r'\D', '', regex=True) == codigo_numerico
-                    resultado = self.df_homologacion[mask]
-            
-            # Si encontramos la fila, retornar el valor de "Código Servicio de la ERP"
-            if resultado is not None and not resultado.empty:
-                valor = resultado.iloc[0][columna_erp]
-                if pd.notna(valor):
-                    return str(valor).strip()
-            
-            # Si no se encontró, buscar también en "Código Servicio de la ERP" por si acaso
-            mask = self.df_homologacion[columna_erp].astype(str).str.strip() == codigo_str
+            # PASO 1: Buscar en 'Código producto en DGH'
+            mask = self.df_homologacion[columna_codigo_producto].astype(str).str.strip() == codigo_str
             resultado = self.df_homologacion[mask]
             
+            # Búsqueda flexible si no encuentra exacto (solo por parte numérica)
             if resultado.empty and codigo_numerico:
-                mask = self.df_homologacion[columna_erp].astype(str).str.replace(r'\D', '', regex=True) == codigo_numerico
+                mask = self.df_homologacion[columna_codigo_producto].astype(str).str.replace(r'\D', '', regex=True) == codigo_numerico
                 resultado = self.df_homologacion[mask]
             
             if not resultado.empty:
-                valor = resultado.iloc[0][columna_erp]
-                if pd.notna(valor):
-                    return str(valor).strip()
+                # PASO 2: Obtener el código homologado de la fila encontrada
+                codigo_homologado = resultado.iloc[0][columna_cod_serv_fact]
+                
+                if pd.notna(codigo_homologado):
+                    codigo_homologado_str = str(codigo_homologado).strip()
+                    
+                    # PASO 3: Verificar si el código homologado EXISTE en la columna COD_SERV_FACT
+                    if codigo_homologado_str and codigo_homologado_str != '0':
+                        if codigo_homologado_str in todos_cod_serv_fact:
+                            # ✅ El código homologado existe en COD_SERV_FACT
+                            return codigo_homologado_str
+                
+                # PASO 4: Si no existe, buscar uno relacionado (solo para 6 dígitos)
+                if num_digitos == 6:
+                    # Buscar códigos en COD_SERV_FACT que empiecen con los MISMOS 6 dígitos
+                    # + guión/letra/número adicional
+                    for cod in todos_cod_serv_fact:
+                        # Extraer los primeros dígitos del código candidato
+                        cod_digitos = ''.join(filter(str.isdigit, cod[:10]))
+                        
+                        # Si los primeros 6 dígitos son iguales y tiene algo más
+                        if len(cod_digitos) >= 6 and cod_digitos[:6] == codigo_numerico:
+                            if len(cod) > 6:
+                                return cod
+                
+                # No se encontró código válido en COD_SERV_FACT
+                return ''
             
-            return None
+            # No se encontró en 'Código producto en DGH'
+            return ''
             
         except Exception as e:
             print(f"   ⚠️ Error buscando código {codigo_tecnologia}: {e}")
             import traceback
             traceback.print_exc()
-            return None
+            return ''
     
     def _aplicar_homologacion(self):
         """
@@ -190,7 +203,7 @@ class MutualserProcessor:
             if pd.notna(codigo):
                 codigo_str = str(codigo).strip()
                 codigo_num = ''.join(filter(str.isdigit, codigo_str))
-                print(f"     {idx+1}. '{codigo_str}' -> {len(codigo_num)} dígitos -> Buscar en: {'Código Interno IPS' if len(codigo_num) <= 6 else 'Código Producto DGH'}")
+                print(f"     {idx+1}. '{codigo_str}' -> {len(codigo_num)} dígitos -> Buscar en: Código producto en DGH -> COD_SERV_FACT")
         
         # Crear nueva columna con códigos homologados
         codigos_homologados = []
@@ -203,7 +216,8 @@ class MutualserProcessor:
             codigo_homologado = self._buscar_codigo_homologado(codigo_tecnologia)
             codigos_homologados.append(codigo_homologado)
             
-            if codigo_homologado is not None:
+            # Ahora codigo_homologado retorna '' si no encuentra, no None
+            if codigo_homologado and codigo_homologado != '':
                 encontrados += 1
                 # Mostrar los primeros 3 encontrados como ejemplo
                 if encontrados <= 3:
@@ -523,24 +537,36 @@ class MutualserProcessor:
             # Asignar consecutivo según la factura
             df_objeciones['CDCONSEC'] = facturas.map(factura_a_consecutivo)
             
-            # CDFECDOC: Fecha del documento (formato M/D/Y - mes/día/año)
+            # CDFECDOC: Fecha ACTUAL en formato fecha (M/D/Y)
+            fecha_actual = datetime.now()
+            fecha_actual_str = fecha_actual.strftime('%#m/%#d/%Y') if os.name == 'nt' else fecha_actual.strftime('%-m/%-d/%Y')
+            df_objeciones['CDFECDOC'] = fecha_actual_str
+            
+            # CRNCXC: Número de factura con 4 ceros después de la C
+            # Ej: C123 -> C0000123
+            def formatear_crncxc(valor):
+                if pd.isna(valor) or valor == '' or valor is None:
+                    return ''
+                valor_str = str(valor).strip()
+                # Si comienza con C o c, agregar 4 ceros después de la C
+                if valor_str.upper().startswith('FC'):
+                    # Extraer la parte numérica después de la C
+                    parte_numerica = valor_str[1:]
+                    return f"FC0000{parte_numerica}"
+                # Si es solo número, agregar C0000 al inicio
+                return f"FC0000{valor_str}"
+            
+            df_objeciones['CRNCXC'] = self.df_consolidado.get('Número de factura', '').apply(formatear_crncxc)
+            
+            # CROFECOBJ: Fecha de la FACTURA en formato fecha (D/M/Y)
             fecha_col = self.df_consolidado.get('Fecha')
-            if fecha_col is not None:
-                df_objeciones['CDFECDOC'] = fecha_col.apply(formatear_fecha_mdy)
-            else:
-                df_objeciones['CDFECDOC'] = ''
-            
-            # CRNCXC: Número de factura
-            df_objeciones['CRNCXC'] = self.df_consolidado.get('Número de factura', '')
-            
-            # CROFECOBJ: Fecha de objeción (formato D/M/Y - día/mes/año)
             if fecha_col is not None:
                 df_objeciones['CROFECOBJ'] = fecha_col.apply(formatear_fecha_ddmmyyyy)
             else:
                 df_objeciones['CROFECOBJ'] = ''
             
-            # CROREFERE: Valor fijo 0
-            df_objeciones['CROREFERE'] = 0
+            # CROREFERE: null (vacío)
+            df_objeciones['CROREFERE'] = ''
             
             # CROOBSERV: REG, GLOSA SEGUN RAD N. [número_de_glosa]
             df_objeciones['CROOBSERV'] = self.df_consolidado.get('REG GLOSA', '')
