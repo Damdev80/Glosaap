@@ -43,19 +43,7 @@ class EpsInfo:
 
 # ==================== CONFIGURACIÓN DE CADA EPS ====================
 
-class TodasLasEps(EpsInfo):
-    """Configuración para buscar en todas las EPS (sin filtro)"""
-    
-    def __init__(self):
-        super().__init__(
-            name="Todas las EPS",
-            icon="🏥",
-            description="Sin filtro",
-            filter_value=None,
-            filter_type=None,
-            processor_class=None,
-            enabled=True
-        )
+
 
     
 class MutualserEps(EpsInfo):
@@ -154,7 +142,6 @@ class CosaludEps(EpsInfo):
 
 # Instancias de cada EPS
 EPS_CONFIG = [
-    TodasLasEps(),
     MutualserEps(),
     SanitasEps(),
     NuevaEps(),

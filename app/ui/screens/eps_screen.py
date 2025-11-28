@@ -213,10 +213,10 @@ class EpsScreen:
                 
                 ft.Container(height=SPACING["md"]),
                 
-                # Botón de cerrar sesión
+                # Botón de volver al dashboard
                 ft.TextButton(
-                    "← Cerrar sesión",
-                    icon=ft.Icons.LOGOUT,
+                    "← Volver al menú",
+                    icon=ft.Icons.ARROW_BACK,
                     on_click=self._handle_logout,
                     style=ft.ButtonStyle(color=COLORS["text_secondary"])
                 )
