@@ -27,6 +27,9 @@ def main(page: ft.Page):
     page.bgcolor = COLORS["bg_white"]
     page.padding = 0
     
+    # Estado de navegación actual
+    current_view = {"name": "login"}
+    
     # ==================== SERVICIOS ====================
     email_service = EmailService()
     
@@ -34,8 +37,178 @@ def main(page: ft.Page):
     app_state = {
         "selected_eps": None,
         "date_from": None,
-        "date_to": None
+        "date_to": None,
+        "dashboard_action": None  # "evitar", "manejar", "responder"
     }
+    
+    # ==================== DASHBOARD - 3 CARDS ====================
+    
+    def create_dashboard_card(icon, title, subtitle, color, action_key, image_path=None):
+        """
+        Crea una card del dashboard
+        
+        Para usar imagen personalizada en lugar de icono:
+        - Crea carpeta 'assets/images/' en tu proyecto
+        - Coloca tus imágenes ahí (ej: evitar.png, manejar.png, responder.png)
+        - Pasa image_path="images/evitar.png"
+        
+        También puedes usar URL:
+        - image_path="https://ejemplo.com/imagen.png"
+        """
+        
+        # Decidir si usar imagen o icono
+        if image_path:
+            # OPCIÓN 1: Usar imagen personalizada
+            visual_element = ft.Image(
+                src=image_path,
+                width=80,
+                height=80,
+                fit=ft.ImageFit.CONTAIN,
+            )
+        else:
+            # OPCIÓN 2: Usar icono (por defecto)
+            visual_element = ft.Container(
+                content=ft.Icon(icon, size=50, color=COLORS["bg_white"]),
+                width=80,
+                height=80,
+                border_radius=40,
+                bgcolor=color,
+                alignment=ft.alignment.center
+            )
+        
+        def on_hover(e):
+            card_container.scale = 1.03 if e.data == "true" else 1.0
+            card_container.shadow = ft.BoxShadow(
+                spread_radius=2 if e.data == "true" else 1,
+                blur_radius=20 if e.data == "true" else 10,
+                color=ft.Colors.with_opacity(0.2 if e.data == "true" else 0.1, color),
+                offset=ft.Offset(0, 8 if e.data == "true" else 4)
+            )
+            page.update()
+        
+        def on_click(e):
+            app_state["dashboard_action"] = action_key
+            go_to_eps_selection()
+        
+        card_container = ft.Container(
+            content=ft.Column([
+                visual_element,
+                ft.Container(height=15),
+                ft.Text(
+                    title,
+                    size=20,
+                    weight=ft.FontWeight.W_600,
+                    color=COLORS["text_primary"],
+                    text_align=ft.TextAlign.CENTER
+                ),
+                ft.Container(height=5),
+                ft.Text(
+                    subtitle,
+                    size=12,
+                    color=COLORS["text_secondary"],
+                    text_align=ft.TextAlign.CENTER
+                )
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.CENTER),
+            width=200,
+            height=220,
+            bgcolor=COLORS["bg_white"],
+            border_radius=16,
+            padding=25,
+            shadow=ft.BoxShadow(
+                spread_radius=1,
+                blur_radius=10,
+                color=ft.Colors.with_opacity(0.1, color),
+                offset=ft.Offset(0, 4)
+            ),
+            border=ft.border.all(2, ft.Colors.with_opacity(0.3, color)),
+            animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+            animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+            scale=1.0,
+            on_hover=on_hover,
+            on_click=on_click,
+            ink=True
+        )
+        
+        return card_container
+    
+    # Crear las 3 cards del dashboard
+    card_evitar = create_dashboard_card(
+        icon=ft.Icons.SHIELD_OUTLINED,
+        title="Evitar Glosa",
+        subtitle="Prevención y validación\nantes de facturar",
+        color="#4CAF50",  # Verde
+        action_key="evitar",
+        # Para imagen: image_path="images/evitar.png"
+    )
+    
+    card_manejar = create_dashboard_card(
+        icon=ft.Icons.BUILD_OUTLINED,
+        title="Manejar Glosa",
+        subtitle="Gestión y seguimiento\nde glosas activas",
+        color="#FF9800",  # Naranja
+        action_key="manejar",
+        # Para imagen: image_path="images/manejar.png"
+    )
+    
+    card_responder = create_dashboard_card(
+        icon=ft.Icons.REPLY_ALL_OUTLINED,
+        title="Responder Glosa",
+        subtitle="Respuesta a objeciones\ny documentación",
+        color="#2196F3",  # Azul
+        action_key="responder",
+        # Para imagen: image_path="images/responder.png"
+    )
+    
+    # Vista del Dashboard
+    dashboard_view = ft.Container(
+        content=ft.Column([
+            ft.Container(height=40),
+            # Header
+            ft.Column([
+                ft.Text(
+                    "Glosaap",
+                    size=36,
+                    weight=ft.FontWeight.W_300,
+                    color=COLORS["text_primary"]
+                ),
+                ft.Text(
+                    "Sistema de Gestión de Glosas",
+                    size=14,
+                    color=COLORS["text_secondary"]
+                ),
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            ft.Container(height=40),
+            # Cards
+            ft.Row([
+                card_evitar,
+                card_manejar,
+                card_responder
+            ], alignment=ft.MainAxisAlignment.CENTER, spacing=30),
+            ft.Container(height=30),
+            # Info de usuario
+            ft.Container(
+                content=ft.Row([
+                    ft.Icon(ft.Icons.PERSON_OUTLINE, size=16, color=COLORS["text_secondary"]),
+                    ft.Text(
+                        "Sesión activa",
+                        size=12,
+                        color=COLORS["text_secondary"]
+                    ),
+                    ft.Container(width=20),
+                    ft.TextButton(
+                        "Cerrar sesión",
+                        on_click=lambda e: go_to_login(),
+                        style=ft.ButtonStyle(color=COLORS["error"])
+                    )
+                ], alignment=ft.MainAxisAlignment.CENTER),
+                padding=10
+            )
+        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+        bgcolor=COLORS["bg_light"],
+        expand=True,
+        alignment=ft.alignment.center,
+        visible=False
+    )
     
     # ==================== PANTALLA DE LOGIN ====================
     
@@ -183,16 +356,31 @@ def main(page: ft.Page):
     
     def go_to_login():
         """Navega a la pantalla de login"""
+        current_view["name"] = "login"
         login_view.visible = True
+        dashboard_view.visible = False
         eps_screen.hide()
         messages_view.visible = False
         page.window_width = WINDOW_SIZES["login"]["width"]
         page.window_height = WINDOW_SIZES["login"]["height"]
         page.update()
     
+    def go_to_dashboard():
+        """Navega al dashboard principal"""
+        current_view["name"] = "dashboard"
+        login_view.visible = False
+        dashboard_view.visible = True
+        eps_screen.hide()
+        messages_view.visible = False
+        page.window_width = 800
+        page.window_height = 500
+        page.update()
+    
     def go_to_eps_selection():
         """Navega a la pantalla de selección de EPS"""
+        current_view["name"] = "eps"
         login_view.visible = False
+        dashboard_view.visible = False
         eps_screen.show()
         messages_view.visible = False
         page.window_width = WINDOW_SIZES["main"]["width"]
@@ -201,10 +389,21 @@ def main(page: ft.Page):
     
     def go_to_messages():
         """Navega a la pantalla de mensajes"""
+        current_view["name"] = "messages"
         login_view.visible = False
+        dashboard_view.visible = False
         eps_screen.hide()
         messages_view.visible = True
         page.update()
+    
+    def go_back():
+        """Navega hacia atrás según la vista actual"""
+        if current_view["name"] == "messages":
+            go_to_eps_selection()
+        elif current_view["name"] == "eps":
+            go_to_dashboard()
+        elif current_view["name"] == "dashboard":
+            go_to_login()
     
     # ==================== FUNCIONES DE NEGOCIO ====================
     
@@ -250,8 +449,8 @@ def main(page: ft.Page):
                 show_status("¡Conexión exitosa!")
                 page.update()
                 
-                # Navegar a selección de EPS
-                go_to_eps_selection()
+                # Navegar al dashboard
+                go_to_dashboard()
                 
             except Exception as ex:
                 login_progress.visible = False
@@ -476,7 +675,7 @@ def main(page: ft.Page):
     eps_screen = EpsScreen(
         page=page,
         on_eps_selected=on_eps_selected,
-        on_logout=go_to_login
+        on_logout=go_to_dashboard  # Volver al dashboard
     )
     
     # ==================== CONECTAR EVENTOS ====================
@@ -494,6 +693,7 @@ def main(page: ft.Page):
     page.add(
         ft.Stack([
             login_view,
+            dashboard_view,
             eps_screen.build(),
             messages_view
         ], expand=True)
