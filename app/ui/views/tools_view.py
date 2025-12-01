@@ -9,26 +9,34 @@ from app.ui.styles import COLORS, FONT_SIZES
 class ToolsView:
     """Vista del menú de herramientas"""
     
-    def __init__(self, page: ft.Page, assets_dir: str, on_back=None):
+    def __init__(self, page: ft.Page, assets_dir: str, on_back=None, on_homologacion=None, on_mix_excel=None):
         self.page = page
         self.assets_dir = assets_dir
         self.on_back = on_back
+        self.on_homologacion = on_homologacion
+        self.on_mix_excel = on_mix_excel
         self.container = self.build()
         
-    def _create_tool_card(self, icon, title, description, color, on_click_action):
+    def _create_tool_card(self, icon, title, description, color, on_click_action, image_src=None):
         """Crea una card de herramienta"""
         def on_hover(e):
             tool_card.scale = 1.02 if e.data == "true" else 1.0
             self.page.update()
         
+        # Contenido del icono: imagen o icono
+        if image_src:
+            icon_content = ft.Image(src=image_src, width=36, height=36, fit=ft.ImageFit.CONTAIN)
+        else:
+            icon_content = ft.Icon(icon, size=30, color=COLORS["bg_white"])
+        
         tool_card = ft.Container(
             content=ft.Row([
                 ft.Container(
-                    content=ft.Icon(icon, size=30, color=COLORS["bg_white"]),
+                    content=icon_content,
                     width=60,
                     height=60,
                     border_radius=12,
-                    bgcolor=color,
+                    bgcolor=color if not image_src else COLORS["bg_light"],
                     alignment=ft.alignment.center
                 ),
                 ft.Container(width=15),
@@ -79,28 +87,30 @@ class ToolsView:
                     content=ft.Column([
                         ft.Row([
                             self._create_tool_card(
-                                ft.Icons.FOLDER_OPEN,
-                                "Visor de Archivos",
-                                "Cargar y visualizar archivos Excel/CSV",
-                                "#2196F3",
-                                lambda e: print("Visor de archivos - TODO")
+                                ft.Icons.SYNC_ALT,
+                                "Gestión Homologación",
+                                "Agregar/editar códigos de homologación",
+                                "#4CAF50",
+                                lambda e: self.on_homologacion() if self.on_homologacion else None,
+                                image_src=os.path.join(self.assets_dir, "img", "homologar.png")
                             ),
                             self._create_tool_card(
-                                ft.Icons.SYNC_ALT,
-                                "Homologador Manual",
-                                "Buscar códigos en tablas de homologación",
-                                "#4CAF50",
-                                lambda e: print("Homologador - TODO")
+                                ft.Icons.COMPARE_ARROWS,
+                                "Mix Excel",
+                                "Transferir datos entre archivos Excel",
+                                "#2196F3",
+                                lambda e: self.on_mix_excel() if self.on_mix_excel else None,
+                                image_src=os.path.join(self.assets_dir, "img", "mix_excel.png")
                             ),
                         ], spacing=20, alignment=ft.MainAxisAlignment.CENTER),
                         ft.Container(height=15),
                         ft.Row([
                             self._create_tool_card(
-                                ft.Icons.BAR_CHART,
-                                "Reportes",
-                                "Generar reportes de glosas procesadas",
+                                ft.Icons.FOLDER_OPEN,
+                                "Visor de Archivos",
+                                "Cargar y visualizar archivos Excel/CSV",
                                 "#FF9800",
-                                lambda e: print("Reportes - TODO")
+                                lambda e: print("Visor de archivos - TODO")
                             ),
                             self._create_tool_card(
                                 ft.Icons.SETTINGS,
