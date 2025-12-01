@@ -13,11 +13,12 @@ class MessageRow:
         self.message_data = message_data
         self.on_checkbox_change = on_checkbox_change
         
-        # Checkbox para selección
+        # Checkbox para selección (oculto - ya no es necesario)
         self.checkbox = ft.Checkbox(
             value=False,
             fill_color=COLORS["primary"],
             check_color=COLORS["bg_white"],
+            visible=False,  # Ocultar checkbox
             on_change=self._on_checkbox_change
         )
         

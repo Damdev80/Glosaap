@@ -62,6 +62,7 @@ class MessagesView:
             value=False,
             fill_color=COLORS["primary"],
             check_color=COLORS["bg_white"],
+            visible=False,  # Ocultar - ya no es necesario
             on_change=self._on_select_all_changed
         )
         
