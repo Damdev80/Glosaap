@@ -15,6 +15,8 @@ from app.service.email_service import EmailService
 from app.ui.styles import COLORS, WINDOW_SIZES
 from app.ui.screens.eps_screen import EpsScreen
 from app.ui.views import DashboardView, LoginView, ToolsView, MessagesView
+from app.ui.views.homologacion_view import HomologacionView
+from app.ui.views.mix_excel_view import MixExcelView
 
 # Ruta de assets (carpeta con imágenes)
 ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "assets"))
@@ -58,6 +60,8 @@ def main(page: ft.Page):
         tools_view.hide()
         eps_screen.hide()
         messages_view.hide()
+        homologacion_view.hide()
+        mix_excel_view.hide()
         page.window_width = WINDOW_SIZES["login"]["width"]
         page.window_height = WINDOW_SIZES["login"]["height"]
         page.update()
@@ -70,6 +74,8 @@ def main(page: ft.Page):
         tools_view.hide()
         eps_screen.hide()
         messages_view.hide()
+        homologacion_view.hide()
+        mix_excel_view.hide()
         page.window_width = 800
         page.window_height = 550
         page.update()
@@ -82,8 +88,38 @@ def main(page: ft.Page):
         tools_view.show()
         eps_screen.hide()
         messages_view.hide()
+        homologacion_view.hide()
+        mix_excel_view.hide()
         page.window_width = 800
         page.window_height = 500
+        page.update()
+    
+    def go_to_homologacion():
+        """Navega a la gestión de homologación"""
+        current_view["name"] = "homologacion"
+        login_view.hide()
+        dashboard_view.hide()
+        tools_view.hide()
+        eps_screen.hide()
+        messages_view.hide()
+        homologacion_view.show()
+        mix_excel_view.hide()
+        page.window_width = 900
+        page.window_height = 600
+        page.update()
+    
+    def go_to_mix_excel():
+        """Navega a Mix Excel"""
+        current_view["name"] = "mix_excel"
+        login_view.hide()
+        dashboard_view.hide()
+        tools_view.hide()
+        eps_screen.hide()
+        messages_view.hide()
+        homologacion_view.hide()
+        mix_excel_view.show()
+        page.window_width = 600
+        page.window_height = 700
         page.update()
     
     def go_to_eps_selection():
@@ -94,6 +130,8 @@ def main(page: ft.Page):
         tools_view.hide()
         eps_screen.show()
         messages_view.hide()
+        homologacion_view.hide()
+        mix_excel_view.hide()
         page.window_width = WINDOW_SIZES["main"]["width"]
         page.window_height = WINDOW_SIZES["main"]["height"]
         page.update()
@@ -106,6 +144,8 @@ def main(page: ft.Page):
         tools_view.hide()
         eps_screen.hide()
         messages_view.show()
+        homologacion_view.hide()
+        mix_excel_view.hide()
         page.update()
     
     def go_back():
@@ -116,6 +156,8 @@ def main(page: ft.Page):
             go_to_dashboard()
         elif current_view["name"] == "tools":
             go_to_dashboard()
+        elif current_view["name"] == "mix_excel":
+            go_to_tools()
         elif current_view["name"] == "dashboard":
             go_to_login()
     
@@ -197,20 +239,37 @@ def main(page: ft.Page):
         return filtered
     
     def load_messages(search_info=""):
-        """Carga mensajes del servidor"""
+        """Carga mensajes del servidor y descarga adjuntos automáticamente"""
         def worker():
             try:
                 messages_view.set_loading(True, "🔍 Buscando correos...")
                 
                 all_msgs = []
+                downloaded_count = 0
                 
                 def on_found(msg):
+                    nonlocal downloaded_count
                     all_msgs.append(msg)
                     # Filtrar en tiempo real
                     filtered = filter_messages_by_eps(all_msgs)
                     # Mostrar mensajes en tiempo real
                     messages_view.show_messages(filtered, search_info)
                     messages_view.set_loading(True, f"🔍 Encontrados {len(all_msgs)} correo(s), mostrando {len(filtered)} filtrados...")
+                    
+                    # Descargar adjuntos automáticamente para mensajes de la EPS seleccionada
+                    if msg in filtered:
+                        msg_id = msg.get("id")
+                        if msg_id:
+                            messages_view.update_message_status(msg_id, "📥 Descargando...")
+                            try:
+                                files = email_service.download_message_attachments(msg_id)
+                                if files:
+                                    downloaded_count += 1
+                                    messages_view.update_message_status(msg_id, f"✅ {len(files)} archivo(s)")
+                                else:
+                                    messages_view.update_message_status(msg_id, "Sin adjuntos Excel")
+                            except Exception as e:
+                                messages_view.update_message_status(msg_id, f"❌ Error", is_error=True)
                 
                 # Buscar con filtro de fechas
                 email_service.search_messages(
@@ -228,11 +287,19 @@ def main(page: ft.Page):
                 
                 # Mostrar mensajes finales
                 messages_view.show_messages(msgs, search_info)
+                # Actualizar estados de los mensajes que ya fueron descargados
+                for msg in msgs:
+                    msg_id = msg.get("id")
+                    if msg_id and msg_id in messages_view.message_rows:
+                        # Re-verificar archivos descargados
+                        pass  # El estado ya fue actualizado durante la descarga
+                
                 # Ocultar controles de descarga manual - no son necesarios
                 messages_view.show_download_controls(False)
                 
+                excel_count = len(email_service.get_excel_files())
                 if msgs:
-                    messages_view.set_loading(False, f"✅ {len(msgs)} correo(s) encontrados - Selecciona para descargar")
+                    messages_view.set_loading(False, f"✅ {len(msgs)} correo(s) | 📁 {excel_count} Excel listos para procesar")
                 else:
                     messages_view.set_loading(False, "No hay resultados")
                     messages_view.show_download_controls(False)
@@ -379,7 +446,19 @@ def main(page: ft.Page):
     tools_view = ToolsView(
         page=page,
         assets_dir=ASSETS_DIR,
-        on_back=go_to_dashboard
+        on_back=go_to_dashboard,
+        on_homologacion=go_to_homologacion,
+        on_mix_excel=go_to_mix_excel
+    )
+    
+    homologacion_view = HomologacionView(
+        page=page,
+        on_back=go_to_tools
+    )
+    
+    mix_excel_view = MixExcelView(
+        page=page,
+        on_back=go_to_tools
     )
     
     messages_view = MessagesView(
@@ -403,6 +482,8 @@ def main(page: ft.Page):
             login_view.container,
             dashboard_view.container,
             tools_view.container,
+            homologacion_view.container,
+            mix_excel_view.container,
             eps_screen.build(),
             messages_view.container
         ], expand=True)
