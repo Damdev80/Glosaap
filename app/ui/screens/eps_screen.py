@@ -2,10 +2,10 @@
 Pantalla de selección de EPS y rango de fechas
 """
 import flet as ft
-from ui.styles import COLORS, FONT_SIZES, SPACING
-from ui.components.date_range_picker import DateRangePicker
-from ui.components.eps_card import EpsCard
-from config.eps_config import get_eps_list
+from app.ui.styles import COLORS, FONT_SIZES, SPACING
+from app.ui.components.date_range_picker import DateRangePicker
+from app.ui.components.eps_card import EpsCard
+from app.config.eps_config import get_eps_list
 
 
 class EpsScreen:

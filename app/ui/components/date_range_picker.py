@@ -3,7 +3,7 @@ Componente de selector de rango de fechas
 """
 import flet as ft
 from datetime import datetime
-from ui.styles import COLORS, FONT_SIZES, SPACING
+from app.ui.styles import COLORS, FONT_SIZES, SPACING
 
 
 class DateRangePicker:

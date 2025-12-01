@@ -2,7 +2,7 @@
 Componente de tabla de datos con pandas
 """
 import flet as ft
-from ui.styles import COLORS, FONT_SIZES
+from app.ui.styles import COLORS, FONT_SIZES
 
 
 class DataTable:

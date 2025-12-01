@@ -1,8 +1,9 @@
-"""
+"""" 
 Componente de tarjeta de EPS
 """
 import flet as ft
-from ui.styles import COLORS, FONT_SIZES, SPACING
+import os
+from app.ui.styles import COLORS, FONT_SIZES, SPACING
 
 
 class EpsCard:
@@ -11,7 +12,7 @@ class EpsCard:
     def __init__(self, eps_info: dict, on_click=None):
         """
         Args:
-            eps_info: Dict con name, icon, description, filter, filter_type, subject_pattern
+            eps_info: Dict con name, icon, description, filter, filter_type, subject_pattern, image_path
             on_click: Callback al hacer click
         """
         self.eps_info = eps_info
@@ -24,9 +25,24 @@ class EpsCard:
     
     def build(self):
         """Construye y retorna la tarjeta"""
+        # Decidir si usar imagen o emoji
+        image_path = self.eps_info.get("image_path")
+        
+        if image_path and os.path.exists(image_path):
+            # Usar imagen
+            visual_element = ft.Image(
+                src=image_path,
+                width=50,
+                height=50,
+                fit=ft.ImageFit.CONTAIN
+            )
+        else:
+            # Usar emoji/icono
+            visual_element = ft.Text(self.eps_info.get("icon", "📋"), size=36)
+        
         return ft.Container(
             content=ft.Column([
-                ft.Text(self.eps_info.get("icon", "📋"), size=36),
+                visual_element,
                 ft.Text(
                     self.eps_info["name"],
                     size=FONT_SIZES["body"],

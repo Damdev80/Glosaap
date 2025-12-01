@@ -1,6 +1,6 @@
 """
 Componentes reutilizables de UI
 """
-from ui.components.message_row import MessageRow
-from ui.components.date_range_picker import DateRangePicker
-from ui.components.eps_card import EpsCard
+from app.ui.components.message_row import MessageRow
+from app.ui.components.date_range_picker import DateRangePicker
+from app.ui.components.eps_card import EpsCard
