@@ -1,7 +1,11 @@
-"""
+""" 
 Configuración de las EPS disponibles en el sistema
 Cada EPS tiene su propia configuración para filtrado y procesamiento
 """
+import os
+
+# Ruta de assets
+ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "assets"))
 
 
 class EpsInfo:
@@ -16,7 +20,8 @@ class EpsInfo:
         filter_type: str = None,
         subject_pattern: str = None,
         processor_class: str = None,
-        enabled: bool = True
+        enabled: bool = True,
+        image_path: str = None
     ):
         self.name = name
         self.icon = icon
@@ -26,6 +31,7 @@ class EpsInfo:
         self.subject_pattern = subject_pattern
         self.processor_class = processor_class
         self.enabled = enabled
+        self.image_path = image_path
     
     def to_dict(self) -> dict:
         """Convierte a diccionario para compatibilidad con código existente"""
@@ -37,10 +43,9 @@ class EpsInfo:
             "filter_type": self.filter_type,
             "subject_pattern": self.subject_pattern,
             "processor_class": self.processor_class,
-            "enabled": self.enabled
+            "enabled": self.enabled,
+            "image_path": self.image_path
         }
-
-
 # ==================== CONFIGURACIÓN DE CADA EPS ====================
 
 
@@ -52,29 +57,31 @@ class MutualserEps(EpsInfo):
     def __init__(self):
         super().__init__(
             name="Mutualser",
-            icon="🔵",
+            icon="🟢",
             description="Mutualser EPS",
             filter_value="mutualser",
             filter_type="subject_exact_pattern",
             subject_pattern="Objeciones de glosa Factura FC",
             processor_class="MutualserProcessor",
             enabled=True,
-            
+            image_path=os.path.join(ASSETS_DIR, "img", "eps", "mutualser.png")
         )
 
 
-class SanitasEps(EpsInfo):
-    """Configuración para Sanitas EPS"""
+class CoosaludEps(EpsInfo):
+    """Configuración para Coosalud EPS"""
     
     def __init__(self):
         super().__init__(
-            name="Sanitas",
+            name="Coosalud",
             icon="🟢",
-            description="Sanitas EPS",
-            filter_value="sanitas",
-            filter_type="keyword",
-            processor_class=None,  # Pendiente de implementar
-            enabled=True
+            description="Coosalud EPS",
+            filter_value="coosalud",
+            filter_type="subject_exact_pattern",
+            subject_pattern="Reporte Glosas y Devoluciones",
+            processor_class="CoosaludProcessor",
+            enabled=True,
+            image_path=os.path.join(ASSETS_DIR, "img", "eps", "coosalud.png")
         )
 
 
@@ -143,7 +150,7 @@ class CosaludEps(EpsInfo):
 # Instancias de cada EPS
 EPS_CONFIG = [
     MutualserEps(),
-    SanitasEps(),
+    CoosaludEps(),
     NuevaEps(),
     CompensarEps(),
     FamisanarEps(),
