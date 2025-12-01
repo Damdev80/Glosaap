@@ -206,7 +206,11 @@ def main(page: ft.Page):
                 
                 def on_found(msg):
                     all_msgs.append(msg)
-                    messages_view.set_loading(True, f"🔍 Encontrados {len(all_msgs)} correo(s)...")
+                    # Filtrar en tiempo real
+                    filtered = filter_messages_by_eps(all_msgs)
+                    # Mostrar mensajes en tiempo real
+                    messages_view.show_messages(filtered, search_info)
+                    messages_view.set_loading(True, f"🔍 Encontrados {len(all_msgs)} correo(s), mostrando {len(filtered)} filtrados...")
                 
                 # Buscar con filtro de fechas
                 email_service.search_messages(
@@ -218,13 +222,14 @@ def main(page: ft.Page):
                     date_to=app_state.get("date_to")
                 )
                 
-                # Filtrar por EPS
+                # Filtrar por EPS (filtrado final)
                 msgs = filter_messages_by_eps(all_msgs)
                 app_state["found_messages"] = msgs
                 
-                # Mostrar mensajes
+                # Mostrar mensajes finales
                 messages_view.show_messages(msgs, search_info)
-                messages_view.show_download_controls(True)
+                # Ocultar controles de descarga manual - no son necesarios
+                messages_view.show_download_controls(False)
                 
                 if msgs:
                     messages_view.set_loading(False, f"✅ {len(msgs)} correo(s) encontrados - Selecciona para descargar")
@@ -296,12 +301,31 @@ def main(page: ft.Page):
                 if eps_type == "mutualser":
                     excel_files = email_service.get_excel_files()
                     
+                    # Verificación simple - solo verificar si hay archivos
                     if not excel_files:
-                        messages_view.set_processing(False, "⚠️ No hay archivos Excel")
+                        messages_view.set_processing(False, "❌ No hay archivos Excel para procesar")
                         messages_view.process_eps_btn.disabled = False
+                        
+                        # Mostrar diálogo informativo
+                        def show_alert():
+                            dialog = ft.AlertDialog(
+                                title=ft.Text("Sin archivos para procesar"),
+                                content=ft.Text(
+                                    "No se encontraron archivos Excel en el directorio temporal.\n\n"
+                                    "Los archivos se almacenan automáticamente cuando descargas adjuntos."
+                                ),
+                                actions=[
+                                    ft.TextButton("Entendido", on_click=lambda e: page.close(dialog))
+                                ]
+                            )
+                            page.open(dialog)
+                        
+                        show_alert()
                         return
                     
-                    messages_view.set_processing(True, f"📊 Procesando {len(excel_files)} archivo(s)...")
+                    # Procesar TODOS los archivos Excel encontrados sin confirmación
+                    print(f"✅ Procesando TODOS los {len(excel_files)} archivos Excel automáticamente")
+                    messages_view.set_processing(True, f"📊 Procesando {len(excel_files)} archivo(s) Excel...")
                     
                     resultado = email_service.procesar_mutualser()
                     

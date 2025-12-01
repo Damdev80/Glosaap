@@ -12,10 +12,22 @@ class EmailService:
     
     def __init__(self):
         self.imap_client = None
-        self.attachment_service = AttachmentService()
+        # AttachmentService usa directorio temporal del sistema (donde ya tienes archivos)
+        self.attachment_service = AttachmentService()  # Sin base_dir = usa temporal
         self.messages = []
         # Procesadores por EPS
-        self.mutualser_processor = MutualserProcessor()
+        # MUTUALSER: Intentar red MINERVA, fallback a outputs local
+        try:
+            mutualser_output = r"\\MINERVA\Cartera\GLOSAAP\REPOSITORIO DE RESULTADOS\MUTUALSER"
+            # Verificar si la ruta de red es accesible
+            if not os.path.exists(os.path.dirname(mutualser_output)):
+                print(f"⚠️ Red MINERVA no accesible, usando outputs local")
+                mutualser_output = "outputs/mutualser"
+        except:
+            mutualser_output = "outputs/mutualser"
+        
+        self.mutualser_processor = MutualserProcessor(output_dir=mutualser_output)
+        print(f"📁 MUTUALSER guardará en: {mutualser_output}")
     
     def connect(self, email, password, server="imap.gmail.com", port=993):
         """Conecta al servidor IMAP"""
