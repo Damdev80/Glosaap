@@ -11,10 +11,11 @@ from app.core.session_manager import save_session, load_session, clear_session
 class LoginView:
     """Vista de login/autenticación"""
     
-    def __init__(self, page: ft.Page, email_service, on_login_success=None):
+    def __init__(self, page: ft.Page, email_service, on_login_success=None, assets_dir=None):
         self.page = page
         self.email_service = email_service
         self.on_login_success = on_login_success
+        self.assets_dir = assets_dir
         self.container = None
         
         # Controles
@@ -90,13 +91,24 @@ class LoginView:
             on_click=self._handle_login
         )
         
+        # Ruta del logo
+        logo_path = os.path.join(self.assets_dir, "icons", "app_logo.png") if self.assets_dir else None
+        
         self.container = ft.Container(
             content=ft.Column([
-                ft.Container(height=SPACING["xxl"]),
+                ft.Container(height=SPACING["lg"]),
                 ft.Container(
                     content=ft.Column([
-                        ft.Text("Glosaap", size=FONT_SIZES["title"], weight=ft.FontWeight.W_300, color=COLORS["text_primary"]),
-                        ft.Text("Gestor de correos IMAP", size=12, color=COLORS["text_secondary"]),
+                        # Logo de la app
+                        ft.Image(
+                            src=logo_path,
+                            width=70,
+                            height=70,
+                            fit=ft.ImageFit.CONTAIN
+                        ) if logo_path and os.path.exists(logo_path) else ft.Container(height=70),
+                        ft.Container(height=SPACING["sm"]),
+                        ft.Text("Glosaap", size=20, weight=ft.FontWeight.W_600, color=COLORS["text_primary"]),
+                        ft.Text("Gestor de glosas y correos", size=11, color=COLORS["text_secondary"]),
                         ft.Container(height=SPACING["lg"]),
                         self.email_input,
                         ft.Container(height=SPACING["md"]),

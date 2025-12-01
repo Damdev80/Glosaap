@@ -33,6 +33,11 @@ def main(page: ft.Page):
     page.padding = 0
     page.assets_dir = ASSETS_DIR
     
+    # Icono de la ventana (ruta absoluta)
+    icon_path = os.path.join(ASSETS_DIR, "icons", "app_logo.png")
+    if os.path.exists(icon_path):
+        page.window.icon = icon_path
+    
     # Estado de navegación actual
     current_view = {"name": "login"}
     
@@ -432,7 +437,8 @@ def main(page: ft.Page):
     login_view = LoginView(
         page=page,
         email_service=email_service,
-        on_login_success=handle_login_success
+        on_login_success=handle_login_success,
+        assets_dir=ASSETS_DIR
     )
     
     dashboard_view = DashboardView(
