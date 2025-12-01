@@ -22,7 +22,14 @@ class MessageRow:
             on_change=self._on_checkbox_change
         )
         
-        # Estado de descarga
+        # Icono de estado (visible)
+        self.status_icon = ft.Icon(
+            ft.Icons.EMAIL_OUTLINED,
+            size=18,
+            color=COLORS["text_secondary"]
+        )
+        
+        # Estado de descarga (texto)
         self.status_text = ft.Text("", size=11, color=COLORS["text_secondary"])
         
         # Construir UI
@@ -40,8 +47,8 @@ class MessageRow:
         
         return ft.Container(
             content=ft.Row([
-                # Checkbox para selección
-                self.checkbox,
+                # Icono de estado
+                self.status_icon,
                 # Subject y fecha
                 ft.Container(
                     content=ft.Column([
@@ -69,6 +76,22 @@ class MessageRow:
         )
     
     def update_status(self, text, is_error=False):
-        """Actualiza el texto de estado"""
+        """Actualiza el estado visual del mensaje"""
         self.status_text.value = text
-        self.status_text.color = COLORS["error"] if is_error else COLORS["success"]
+        
+        if is_error:
+            self.status_icon.name = ft.Icons.ERROR_OUTLINE
+            self.status_icon.color = COLORS["error"]
+            self.status_text.color = COLORS["error"]
+        elif "✅" in text or "descargado" in text.lower() or "archivo" in text.lower():
+            self.status_icon.name = ft.Icons.CHECK_CIRCLE
+            self.status_icon.color = COLORS["success"]
+            self.status_text.color = COLORS["success"]
+        elif "descargando" in text.lower() or "procesando" in text.lower():
+            self.status_icon.name = ft.Icons.DOWNLOADING
+            self.status_icon.color = COLORS["primary"]
+            self.status_text.color = COLORS["primary"]
+        else:
+            self.status_icon.name = ft.Icons.EMAIL_OUTLINED
+            self.status_icon.color = COLORS["text_secondary"]
+            self.status_text.color = COLORS["text_secondary"]

@@ -28,6 +28,7 @@ class MessagesView:
         
         # Estado
         self.selected_messages = set()
+        self.message_rows = {}  # Diccionario para acceder a MessageRow por ID
         
         # Componentes
         self.messages_list = ft.Column([], scroll=ft.ScrollMode.AUTO, expand=True, spacing=0)
@@ -202,6 +203,7 @@ class MessagesView:
         """
         self.messages_list.controls.clear()
         self.selected_messages.clear()
+        self.message_rows.clear()  # Limpiar referencias
         self.select_all_checkbox.value = False
         
         if not messages:
@@ -221,6 +223,10 @@ class MessagesView:
             for msg in messages:
                 row = MessageRow(msg, on_checkbox_change=self._on_message_checkbox_changed)
                 self.messages_list.controls.append(row.container)
+                # Guardar referencia para actualizar estados
+                msg_id = msg.get("id")
+                if msg_id:
+                    self.message_rows[msg_id] = row
         
         self.search_info_text.value = search_info
         self._update_selection_ui()
@@ -271,9 +277,6 @@ class MessagesView:
             status_text: Texto de estado
             is_error: Si es True, muestra en rojo
         """
-        for control in self.messages_list.controls:
-            if isinstance(control, MessageRow):
-                if control.message_data.get("id") == message_id:
-                    control.update_status(status_text, is_error)
-                    break
-        self.page.update()
+        if message_id in self.message_rows:
+            self.message_rows[message_id].update_status(status_text, is_error)
+            self.page.update()
