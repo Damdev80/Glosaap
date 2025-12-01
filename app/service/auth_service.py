@@ -1,5 +1,5 @@
 import threading
-from core.imap_client import ImapClient
+from app.core.imap_client import ImapClient
 
 
 class AuthService:

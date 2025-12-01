@@ -2,9 +2,9 @@
 Servicio de gestión de emails
 Orquesta las operaciones entre IMAP y adjuntos
 """
-from core.imap_client import ImapClient
-from service.attachment_service import AttachmentService
-from core.mutualser_processor import MutualserProcessor
+from app.core.imap_client import ImapClient
+from app.service.attachment_service import AttachmentService
+from app.core.mutualser_processor import MutualserProcessor
 
 
 class EmailService:
