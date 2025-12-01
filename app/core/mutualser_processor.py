@@ -19,9 +19,12 @@ class MutualserProcessor:
         'Observacion', 'Fecha'
     ]
     
-    def __init__(self, output_dir='outputs', homologacion_path='app/databaseExcel/archivo_de_homologacion.xlsx'):
+    # Ruta de red para homologación
+    HOMOLOGACION_PATH = r"\\minerva\Cartera\GLOSAAP\HOMOLOGADOR\mutualser_homologacion.xlsx"
+    
+    def __init__(self, output_dir='outputs', homologacion_path=None):
         self.output_dir = output_dir
-        self.homologacion_path = homologacion_path
+        self.homologacion_path = homologacion_path or self.HOMOLOGACION_PATH
         self.df_consolidado = None
         self.df_homologacion = None
         self.archivos_procesados = []
