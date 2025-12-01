@@ -2,6 +2,7 @@
 Servicio de gestión de emails
 Orquesta las operaciones entre IMAP y adjuntos
 """
+import os
 from app.core.imap_client import ImapClient
 from app.service.attachment_service import AttachmentService
 from app.core.mutualser_processor import MutualserProcessor
@@ -10,24 +11,40 @@ from app.core.mutualser_processor import MutualserProcessor
 class EmailService:
     """Servicio principal para gestionar correos electrónicos"""
     
+    # Rutas de red para salida de archivos
+    MUTUALSER_OUTPUT_RED = r"\\MINERVA\Cartera\GLOSAAP\REPOSITORIO DE RESULTADOS\MUTUALSER"
+    
     def __init__(self):
         self.imap_client = None
         # AttachmentService usa directorio temporal del sistema (donde ya tienes archivos)
         self.attachment_service = AttachmentService()  # Sin base_dir = usa temporal
         self.messages = []
-        # Procesadores por EPS
-        # MUTUALSER: Intentar red MINERVA, fallback a outputs local
-        try:
-            mutualser_output = r"\\MINERVA\Cartera\GLOSAAP\REPOSITORIO DE RESULTADOS\MUTUALSER"
-            # Verificar si la ruta de red es accesible
-            if not os.path.exists(os.path.dirname(mutualser_output)):
-                print(f"⚠️ Red MINERVA no accesible, usando outputs local")
-                mutualser_output = "outputs/mutualser"
-        except:
-            mutualser_output = "outputs/mutualser"
         
+        # Procesadores por EPS - usar ruta de red MINERVA
+        mutualser_output = self._get_output_path(self.MUTUALSER_OUTPUT_RED, "outputs/mutualser")
         self.mutualser_processor = MutualserProcessor(output_dir=mutualser_output)
         print(f"📁 MUTUALSER guardará en: {mutualser_output}")
+    
+    def _get_output_path(self, network_path, fallback_path):
+        """
+        Intenta usar ruta de red, si no está disponible usa fallback local
+        """
+        try:
+            # Verificar si la ruta de red existe o se puede crear
+            if os.path.exists(network_path):
+                return network_path
+            
+            # Intentar crear la ruta de red
+            os.makedirs(network_path, exist_ok=True)
+            if os.path.exists(network_path):
+                print(f"✅ Ruta de red accesible: {network_path}")
+                return network_path
+        except Exception as e:
+            print(f"⚠️ Red no accesible ({e}), usando local: {fallback_path}")
+        
+        # Fallback a ruta local
+        os.makedirs(fallback_path, exist_ok=True)
+        return fallback_path
     
     def connect(self, email, password, server="imap.gmail.com", port=993):
         """Conecta al servidor IMAP"""

@@ -20,7 +20,7 @@ class MutualserProcessor:
     ]
     
     # Ruta de red para homologación
-    HOMOLOGACION_PATH = r"\\minerva\Cartera\GLOSAAP\HOMOLOGADOR\mutualser_homologacion.xlsx"
+    HOMOLOGACION_PATH = r"\\MINERVA\Cartera\GLOSAAP\HOMOLOGADOR\mutualser_homologacion.xlsx"
     
     def __init__(self, output_dir='outputs', homologacion_path=None):
         self.output_dir = output_dir
@@ -44,13 +44,42 @@ class MutualserProcessor:
     def _cargar_homologacion(self):
         """Carga el archivo de homologación"""
         try:
-            if not os.path.exists(self.homologacion_path):
-                print(f"⚠️ Archivo de homologación no encontrado: {self.homologacion_path}")
+            # Verificar directorio y listar archivos disponibles
+            homolog_dir = r"\\MINERVA\Cartera\GLOSAAP\HOMOLOGADOR"
+            print(f"🔍 Buscando archivos de homologación en: {homolog_dir}")
+            
+            if os.path.exists(homolog_dir):
+                archivos = [f for f in os.listdir(homolog_dir) if f.lower().endswith(('.xlsx', '.xls'))]
+                print(f"📁 Archivos Excel encontrados: {archivos}")
+                
+                # Buscar archivo específico o usar el primero disponible
+                archivo_encontrado = None
+                for archivo in archivos:
+                    if 'mutualser' in archivo.lower() and 'homolog' in archivo.lower():
+                        archivo_encontrado = os.path.join(homolog_dir, archivo)
+                        break
+                
+                if not archivo_encontrado and archivos:
+                    archivo_encontrado = os.path.join(homolog_dir, archivos[0])
+                    print(f"⚠️ Usando primer archivo disponible: {archivos[0]}")
+                
+                if archivo_encontrado:
+                    self.homologacion_path = archivo_encontrado
+                    print(f"📋 Intentando cargar: {archivo_encontrado}")
+                else:
+                    print("❌ No se encontraron archivos Excel de homologación")
+                    self.df_homologacion = None
+                    return
+            else:
+                print(f"❌ Directorio de homologación no accesible: {homolog_dir}")
                 self.df_homologacion = None
                 return
             
+            # Cargar archivo de homologación
             self.df_homologacion = pd.read_excel(self.homologacion_path)
             self.df_homologacion.columns = self.df_homologacion.columns.str.strip()
+            
+            print(f"📊 Columnas encontradas: {list(self.df_homologacion.columns)}")
             
             # Pre-calcular conjunto de COD_SERV_FACT para búsquedas rápidas
             if 'COD_SERV_FACT' in self.df_homologacion.columns:
@@ -60,11 +89,14 @@ class MutualserProcessor:
                 )
                 self._todos_cod_serv_fact.discard('0')
                 self._todos_cod_serv_fact.discard('')
+                print(f"🔑 Códigos de homologación cargados: {len(self._todos_cod_serv_fact)}")
+            else:
+                print("⚠️ Columna 'COD_SERV_FACT' no encontrada en archivo de homologación")
             
-            print(f"✅ Homologación cargada: {len(self.df_homologacion)} registros")
+            print(f"✅ Homologación cargada exitosamente: {len(self.df_homologacion)} registros")
             
         except Exception as e:
-            print(f"⚠️ Error cargando homologación: {e}")
+            print(f"❌ Error cargando homologación: {e}")
             self.df_homologacion = None
     
     def _buscar_codigo_homologado(self, codigo_tecnologia):
@@ -409,6 +441,21 @@ class MutualserProcessor:
             return None
         
         try:
+            # Filtrar filas vacías (sin Tecnología o sin Número de factura)
+            filas_antes = len(self.df_consolidado)
+            self.df_consolidado = self.df_consolidado[
+                self.df_consolidado['Tecnología'].notna() & 
+                self.df_consolidado['Número de factura'].notna()
+            ].copy()
+            filas_despues = len(self.df_consolidado)
+            
+            if filas_antes != filas_despues:
+                print(f"🧹 Filtrado: {filas_antes} → {filas_despues} registros (eliminadas {filas_antes - filas_despues} filas vacías)")
+            
+            if self.df_consolidado.empty:
+                print("❌ No hay datos válidos después del filtrado")
+                return None
+            
             # Homologar
             self._aplicar_homologacion()
             
