@@ -329,7 +329,8 @@ class MutualserProcessor:
             factura_consecutivo = {f: i+1 for i, f in enumerate(facturas.unique())}
             
             df_obj['CDCONSEC'] = facturas.map(factura_consecutivo)
-            df_obj['CDFECDOC'] = datetime.now().strftime('%#m/%#d/%Y') if os.name == 'nt' else datetime.now().strftime('%-m/%-d/%Y')
+            # Formato D/M/A (día/mes/año)
+            df_obj['CDFECDOC'] = datetime.now().strftime('%#d/%#m/%Y') if os.name == 'nt' else datetime.now().strftime('%-d/%-m/%Y')
             df_obj['CRNCXC'] = self.df_consolidado.get('Número de factura', '').apply(self._formatear_crncxc)
             df_obj['CROFECOBJ'] = self.df_consolidado.get('Fecha', '').apply(self._formatear_fecha_dmy)
             df_obj['CROREFERE'] = ''
