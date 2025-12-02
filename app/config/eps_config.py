@@ -7,6 +7,9 @@ import os
 # Ruta de assets
 ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "assets"))
 
+# Ruta base de los archivos de homologación en la red
+HOMOLOGADOR_BASE_PATH = r"\\minerva\Cartera\GLOSAAP\HOMOLOGADOR"
+
 
 class EpsInfo:
     """Clase base para información de una EPS"""
@@ -21,7 +24,8 @@ class EpsInfo:
         subject_pattern: str = None,
         processor_class: str = None,
         enabled: bool = True,
-        image_path: str = None
+        image_path: str = None,
+        homologador_file: str = None
     ):
         self.name = name
         self.icon = icon
@@ -32,6 +36,8 @@ class EpsInfo:
         self.processor_class = processor_class
         self.enabled = enabled
         self.image_path = image_path
+        # Ruta completa al archivo de homologación de esta EPS
+        self.homologador_path = os.path.join(HOMOLOGADOR_BASE_PATH, homologador_file) if homologador_file else None
     
     def to_dict(self) -> dict:
         """Convierte a diccionario para compatibilidad con código existente"""
@@ -44,7 +50,8 @@ class EpsInfo:
             "subject_pattern": self.subject_pattern,
             "processor_class": self.processor_class,
             "enabled": self.enabled,
-            "image_path": self.image_path
+            "image_path": self.image_path,
+            "homologador_path": self.homologador_path
         }
 # ==================== CONFIGURACIÓN DE CADA EPS ====================
 
@@ -64,7 +71,8 @@ class MutualserEps(EpsInfo):
             subject_pattern="Objeciones de glosa Factura FC",
             processor_class="MutualserProcessor",
             enabled=True,
-            image_path=os.path.join(ASSETS_DIR, "img", "eps", "mutualser.png")
+            image_path=os.path.join(ASSETS_DIR, "img", "eps", "mutualser.png"),
+            homologador_file="HOMOLOGADOR_MUTUALSER.xlsx"
         )
 
 
@@ -81,7 +89,8 @@ class CoosaludEps(EpsInfo):
             subject_pattern="Reporte Glosas y Devoluciones",
             processor_class="CoosaludProcessor",
             enabled=True,
-            image_path=os.path.join(ASSETS_DIR, "img", "eps", "coosalud.png")
+            image_path=os.path.join(ASSETS_DIR, "img", "eps", "coosalud.png"),
+            homologador_file="HOMOLOGADOR_COOSALUD.xlsx"
         )
 
 
