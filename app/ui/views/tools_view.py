@@ -9,12 +9,13 @@ from app.ui.styles import COLORS, FONT_SIZES
 class ToolsView:
     """Vista del menú de herramientas"""
     
-    def __init__(self, page: ft.Page, assets_dir: str, on_back=None, on_homologacion=None, on_mix_excel=None):
+    def __init__(self, page: ft.Page, assets_dir: str, on_back=None, on_homologacion=None, on_mix_excel=None, on_homologador_manual=None):
         self.page = page
         self.assets_dir = assets_dir
         self.on_back = on_back
         self.on_homologacion = on_homologacion
         self.on_mix_excel = on_mix_excel
+        self.on_homologador_manual = on_homologador_manual
         self.container = self.build()
         
     def _create_tool_card(self, icon, title, description, color, on_click_action, image_src=None):
@@ -106,11 +107,12 @@ class ToolsView:
                         ft.Container(height=15),
                         ft.Row([
                             self._create_tool_card(
-                                ft.Icons.FOLDER_OPEN,
-                                "Visor de Archivos",
-                                "Cargar y visualizar archivos Excel/CSV",
+                                ft.Icons.TRANSFORM,
+                                "Homologador Manual",
+                                "Homologar archivos Excel por EPS",
                                 "#FF9800",
-                                lambda e: print("Visor de archivos - TODO")
+                                lambda e: self.on_homologador_manual() if self.on_homologador_manual else None,
+                                image_src=os.path.join(self.assets_dir, "img", "homologador_manual.png")
                             ),
                             self._create_tool_card(
                                 ft.Icons.SETTINGS,

@@ -17,6 +17,7 @@ from app.ui.screens.eps_screen import EpsScreen
 from app.ui.views import DashboardView, LoginView, ToolsView, MessagesView
 from app.ui.views.homologacion_view import HomologacionView
 from app.ui.views.mix_excel_view import MixExcelView
+from app.ui.views.homologador_manual_view import HomologadorManualView
 
 # Ruta de assets (carpeta con imágenes)
 ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "assets"))
@@ -67,6 +68,7 @@ def main(page: ft.Page):
         messages_view.hide()
         homologacion_view.hide()
         mix_excel_view.hide()
+        homologador_manual_view.hide()
         page.window_width = WINDOW_SIZES["login"]["width"]
         page.window_height = WINDOW_SIZES["login"]["height"]
         page.update()
@@ -81,6 +83,7 @@ def main(page: ft.Page):
         messages_view.hide()
         homologacion_view.hide()
         mix_excel_view.hide()
+        homologador_manual_view.hide()
         page.window_width = 800
         page.window_height = 550
         page.update()
@@ -95,6 +98,7 @@ def main(page: ft.Page):
         messages_view.hide()
         homologacion_view.hide()
         mix_excel_view.hide()
+        homologador_manual_view.hide()
         page.window_width = 800
         page.window_height = 500
         page.update()
@@ -109,6 +113,7 @@ def main(page: ft.Page):
         messages_view.hide()
         homologacion_view.show()
         mix_excel_view.hide()
+        homologador_manual_view.hide()
         page.window_width = 900
         page.window_height = 600
         page.update()
@@ -122,8 +127,24 @@ def main(page: ft.Page):
         eps_screen.hide()
         messages_view.hide()
         homologacion_view.hide()
+        homologador_manual_view.hide()
         mix_excel_view.show()
         page.window_width = 600
+        page.window_height = 700
+        page.update()
+    
+    def go_to_homologador_manual():
+        """Navega al Homologador Manual"""
+        current_view["name"] = "homologador_manual"
+        login_view.hide()
+        dashboard_view.hide()
+        tools_view.hide()
+        eps_screen.hide()
+        messages_view.hide()
+        homologacion_view.hide()
+        mix_excel_view.hide()
+        homologador_manual_view.show()
+        page.window_width = 650
         page.window_height = 700
         page.update()
     
@@ -137,6 +158,7 @@ def main(page: ft.Page):
         messages_view.hide()
         homologacion_view.hide()
         mix_excel_view.hide()
+        homologador_manual_view.hide()
         page.window_width = WINDOW_SIZES["main"]["width"]
         page.window_height = WINDOW_SIZES["main"]["height"]
         page.update()
@@ -151,6 +173,7 @@ def main(page: ft.Page):
         messages_view.show()
         homologacion_view.hide()
         mix_excel_view.hide()
+        homologador_manual_view.hide()
         page.update()
     
     def go_back():
@@ -162,6 +185,8 @@ def main(page: ft.Page):
         elif current_view["name"] == "tools":
             go_to_dashboard()
         elif current_view["name"] == "mix_excel":
+            go_to_tools()
+        elif current_view["name"] == "homologador_manual":
             go_to_tools()
         elif current_view["name"] == "dashboard":
             go_to_login()
@@ -454,7 +479,8 @@ def main(page: ft.Page):
         assets_dir=ASSETS_DIR,
         on_back=go_to_dashboard,
         on_homologacion=go_to_homologacion,
-        on_mix_excel=go_to_mix_excel
+        on_mix_excel=go_to_mix_excel,
+        on_homologador_manual=go_to_homologador_manual
     )
     
     homologacion_view = HomologacionView(
@@ -463,6 +489,11 @@ def main(page: ft.Page):
     )
     
     mix_excel_view = MixExcelView(
+        page=page,
+        on_back=go_to_tools
+    )
+    
+    homologador_manual_view = HomologadorManualView(
         page=page,
         on_back=go_to_tools
     )
@@ -490,6 +521,7 @@ def main(page: ft.Page):
             tools_view.container,
             homologacion_view.container,
             mix_excel_view.container,
+            homologador_manual_view.container,
             eps_screen.build(),
             messages_view.container
         ], expand=True)
