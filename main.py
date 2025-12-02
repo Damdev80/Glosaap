@@ -5,11 +5,13 @@ Ejecuta la nueva versión modular de la aplicación
 import sys
 import os
 
-# Agregar el directorio app al path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
+# Agregar el directorio raíz al path para imports
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 
 # Importar y ejecutar la app
-from ui.app_new import main
+from app.ui.app import main
 import flet as ft
 
 if __name__ == "__main__":
