@@ -392,3 +392,138 @@ class HomologacionService:
         df_export.to_excel(output_path, index=False)
         print(f"✅ Exportado: {output_path} ({len(codigos)} códigos pendientes)")
         return output_path
+
+    def verificar_carga_masiva(self, df_carga):
+        """
+        Verifica los códigos de una carga masiva antes de agregarlos
+        
+        Args:
+            df_carga: DataFrame con columnas 'codigo_eps' y 'codigo_homologo'
+            
+        Returns:
+            Dict con:
+                - validos: Lista de tuplas (codigo_eps, codigo_homologo) válidas para agregar
+                - duplicados_archivo: Lista de códigos que ya existen en el archivo
+                - duplicados_carga: Lista de códigos duplicados dentro del archivo de carga
+                - errores: Lista de errores encontrados
+        """
+        resultado = {
+            'validos': [],
+            'duplicados_archivo': [],
+            'duplicados_carga': [],
+            'errores': []
+        }
+        
+        try:
+            # Verificar columnas requeridas
+            cols_lower = [c.lower().strip() for c in df_carga.columns]
+            
+            # Buscar columna de código EPS
+            col_eps = None
+            for i, col in enumerate(cols_lower):
+                if 'codigo' in col and ('eps' in col or 'erp' in col or 'servicio' in col):
+                    col_eps = df_carga.columns[i]
+                    break
+            if col_eps is None and len(df_carga.columns) >= 1:
+                col_eps = df_carga.columns[0]
+            
+            # Buscar columna de código homólogo
+            col_homologo = None
+            for i, col in enumerate(cols_lower):
+                if 'homologo' in col or 'dgh' in col or 'producto' in col:
+                    col_homologo = df_carga.columns[i]
+                    break
+            if col_homologo is None and len(df_carga.columns) >= 2:
+                col_homologo = df_carga.columns[1]
+            
+            if col_eps is None or col_homologo is None:
+                resultado['errores'].append("No se encontraron las columnas requeridas (código EPS y código homólogo)")
+                return resultado
+            
+            # Obtener códigos existentes en el archivo de homologación
+            codigos_existentes = set()
+            if self.df is not None and not self.df.empty:
+                codigos_existentes = set(
+                    self.df['Código Servicio de la ERP']
+                    .dropna().astype(str).str.strip().tolist()
+                )
+            
+            # Rastrear códigos en la carga para detectar duplicados internos
+            codigos_en_carga = {}
+            
+            for idx, row in df_carga.iterrows():
+                codigo_eps = str(row[col_eps]).strip() if pd.notna(row[col_eps]) else ''
+                codigo_homologo = str(row[col_homologo]).strip() if pd.notna(row[col_homologo]) else ''
+                
+                # Validar que no estén vacíos
+                if not codigo_eps or codigo_eps.lower() == 'nan':
+                    resultado['errores'].append(f"Fila {idx + 2}: Código EPS vacío")
+                    continue
+                if not codigo_homologo or codigo_homologo.lower() == 'nan':
+                    resultado['errores'].append(f"Fila {idx + 2}: Código homólogo vacío para {codigo_eps}")
+                    continue
+                
+                # Verificar si ya existe en el archivo
+                if codigo_eps in codigos_existentes:
+                    resultado['duplicados_archivo'].append({
+                        'codigo': codigo_eps,
+                        'homologo_nuevo': codigo_homologo,
+                        'fila': idx + 2
+                    })
+                    continue
+                
+                # Verificar si está duplicado en la misma carga
+                if codigo_eps in codigos_en_carga:
+                    resultado['duplicados_carga'].append({
+                        'codigo': codigo_eps,
+                        'homologo': codigo_homologo,
+                        'fila_original': codigos_en_carga[codigo_eps]['fila'],
+                        'fila_duplicada': idx + 2
+                    })
+                    continue
+                
+                # Es válido
+                codigos_en_carga[codigo_eps] = {'homologo': codigo_homologo, 'fila': idx + 2}
+                resultado['validos'].append((codigo_eps, codigo_homologo))
+            
+        except Exception as e:
+            resultado['errores'].append(f"Error procesando archivo: {str(e)}")
+        
+        return resultado
+    
+    def agregar_masivo(self, codigos_validos):
+        """
+        Agrega múltiples códigos validados de forma masiva
+        
+        Args:
+            codigos_validos: Lista de tuplas (codigo_eps, codigo_homologo)
+            
+        Returns:
+            Dict con cantidad agregada y errores
+        """
+        agregados = 0
+        errores = []
+        
+        try:
+            nuevos_registros = []
+            for codigo_eps, codigo_homologo in codigos_validos:
+                nuevos_registros.append({
+                    'Código Servicio de la ERP': str(codigo_eps).strip(),
+                    'Código producto en DGH': str(codigo_homologo).strip(),
+                    'COD_SERV_FACT': str(codigo_homologo).strip()  # Mismo valor por defecto
+                })
+            
+            if nuevos_registros:
+                df_nuevos = pd.DataFrame(nuevos_registros)
+                self.df = pd.concat([self.df, df_nuevos], ignore_index=True)
+                
+                if self._guardar():
+                    agregados = len(nuevos_registros)
+                    print(f"✅ {agregados} códigos agregados masivamente")
+                else:
+                    errores.append("Error al guardar el archivo")
+        
+        except Exception as e:
+            errores.append(f"Error en carga masiva: {str(e)}")
+        
+        return {'agregados': agregados, 'errores': errores}
