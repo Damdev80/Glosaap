@@ -169,6 +169,8 @@ class HomologacionView:
         self.codigo_erp_field = ft.TextField(
             label="Código ERP",
             hint_text="881141",
+            hint_style=ft.TextStyle(color="#000000"),
+            color="#000000",
             border_color=COLORS["border"],
             focused_border_color=COLORS["primary"],
             border_radius=8,
@@ -181,6 +183,8 @@ class HomologacionView:
         self.codigo_dgh_field = ft.TextField(
             label="Código DGH",
             hint_text="881141",
+            hint_style=ft.TextStyle(color="#000000"),
+            color="#000000",
             border_color=COLORS["border"],
             focused_border_color=COLORS["primary"],
             border_radius=8,
@@ -192,6 +196,8 @@ class HomologacionView:
         
         self.buscar_field = ft.TextField(
             hint_text="Buscar código...",
+            hint_style=ft.TextStyle(color="#000000"),
+            color="#000000",
             border_color=COLORS["border"],
             focused_border_color=COLORS["primary"],
             border_radius=8,
@@ -360,8 +366,8 @@ class HomologacionView:
             
             self.tabla.rows.append(
                 ft.DataRow(cells=[
-                    ft.DataCell(ft.Text(codigo_erp, size=13, color=COLORS["text_primary"])),
-                    ft.DataCell(ft.Text(codigo_dgh, size=13, color=COLORS["text_primary"])),
+                    ft.DataCell(ft.Text(codigo_erp, size=13, color=COLORS["text_secondary"])),
+                    ft.DataCell(ft.Text(codigo_dgh, size=13, color=COLORS["text_secondary"])),
                     ft.DataCell(ft.Text(cod_serv_fact, size=13, color=COLORS["text_secondary"])),
                     ft.DataCell(
                         ft.IconButton(
