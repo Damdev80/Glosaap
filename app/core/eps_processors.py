@@ -74,24 +74,87 @@ class MutualserProcessor:
             print("   El proceso continuará sin homologación")
             self.df_homologacion = None
     
-    def _buscar_codigo_homologado(self, codigo_tecnologia):
+    def _aplicar_excepcion_homologacion(self, codigo_tecnologia, valor_glosado):
+        """
+        Verifica si el código y valor corresponden a una excepción especial de homologación.
+        
+        REGLAS ESPECIALES MUTUALSER:
+        - Si código = 0 y valor = 25853 → homologar con '020048683-01'
+        - Si código = 871121 y valor = 28304 → homologar con '871121P'
+        - Si código = 740001 y valor = 1222980 → homologar con '740001CP'
+        - Si código = 740001 y valor = 981000 → homologar con '740001P'
+        
+        Args:
+            codigo_tecnologia: Código de tecnología
+            valor_glosado: Valor glosado
+            
+        Returns:
+            Código homologado especial si aplica excepción, None si no aplica
+        """
+        try:
+            # Convertir código a string para comparar
+            codigo_str = str(codigo_tecnologia).strip() if pd.notna(codigo_tecnologia) else ''
+            
+            # Convertir valor a número para comparar
+            valor_num = 0
+            if pd.notna(valor_glosado):
+                # Limpiar el valor (quitar separadores de miles, etc.)
+                valor_str = str(valor_glosado).replace('.', '').replace(',', '.').strip()
+                try:
+                    valor_num = float(valor_str)
+                except:
+                    valor_num = 0
+            
+            # REGLA 1: Código 0 con valor 25853 → '020048683-01'
+            if codigo_str == '0' and valor_num == 25853:
+                return '020048683-01'
+            
+            # REGLA 2: Código 871121 con valor 28304 → '871121P'
+            if codigo_str == '871121' and valor_num == 28304:
+                return '871121P'
+            
+            # REGLA 3: Código 740001 con valor 1222980 → '740001CP'
+            if codigo_str == '740001' and valor_num == 1222980:
+                return '740001CP'
+            
+            # REGLA 4: Código 740001 con valor 981000 → '740001P'
+            if codigo_str == '740001' and valor_num == 981000:
+                return '740001P'
+            
+            # No aplica ninguna excepción
+            return None
+            
+        except Exception as e:
+            print(f"   ⚠️ Error verificando excepción para {codigo_tecnologia}: {e}")
+            return None
+    
+    def _buscar_codigo_homologado(self, codigo_tecnologia, valor_glosado=None):
         """
         Busca el código homologado según las reglas de negocio:
         
-        FLUJO CORRECTO:
-        1. Tomar código de la factura (Tecnología)
-        2. Buscar ese código en 'Código Servicio de la ERP'
-        3. De esa fila, tomar el valor de 'Código producto en DGH'
-        4. Buscar ese valor en TODA la columna 'COD_SERV_FACT'
-        5. Si existe en COD_SERV_FACT → devolverlo
-        6. Si no existe → dejar en blanco
+        FLUJO:
+        1. PRIMERO verificar excepciones especiales (código + valor)
+        2. Si no aplica excepción, buscar normalmente:
+           - Tomar código de la factura (Tecnología)
+           - Buscar ese código en 'Código Servicio de la ERP'
+           - De esa fila, tomar el valor de 'Código producto en DGH'
+           - Buscar ese valor en TODA la columna 'COD_SERV_FACT'
+           - Si existe en COD_SERV_FACT → devolverlo
+           - Si no existe → dejar en blanco
         
         Args:
             codigo_tecnologia: Código a buscar (de la columna Tecnología)
+            valor_glosado: Valor glosado (para verificar excepciones especiales)
             
         Returns:
             Código homologado que exista en COD_SERV_FACT, o cadena vacía
         """
+        # PASO 0: Verificar excepciones especiales primero
+        if valor_glosado is not None:
+            codigo_excepcion = self._aplicar_excepcion_homologacion(codigo_tecnologia, valor_glosado)
+            if codigo_excepcion is not None:
+                return codigo_excepcion
+        
         if self.df_homologacion is None or pd.isna(codigo_tecnologia):
             return ''
         
@@ -204,18 +267,26 @@ class MutualserProcessor:
         codigos_homologados = []
         total = len(self.df_consolidado)
         encontrados = 0
+        excepciones_aplicadas = 0
         errores_busqueda = []
         
         for idx, row in self.df_consolidado.iterrows():
             codigo_tecnologia = row.get('Tecnología')
-            codigo_homologado = self._buscar_codigo_homologado(codigo_tecnologia)
+            valor_glosado = row.get('Valor glosado')  # Obtener valor glosado para verificar excepciones
+            
+            codigo_homologado = self._buscar_codigo_homologado(codigo_tecnologia, valor_glosado)
             codigos_homologados.append(codigo_homologado)
             
             # Ahora codigo_homologado retorna '' si no encuentra, no None
             if codigo_homologado and codigo_homologado != '':
                 encontrados += 1
+                # Detectar si fue una excepción especial
+                if codigo_homologado in ['020048683-01', '871121P', '740001CP', '740001P']:
+                    excepciones_aplicadas += 1
+                    if excepciones_aplicadas <= 3:
+                        print(f"   ⚡ Excepción aplicada: {codigo_tecnologia} (valor={valor_glosado}) -> {codigo_homologado}")
                 # Mostrar los primeros 3 encontrados como ejemplo
-                if encontrados <= 3:
+                elif encontrados <= 3:
                     print(f"   ✓ Encontrado: {codigo_tecnologia} -> {codigo_homologado}")
             else:
                 if len(errores_busqueda) < 3 and pd.notna(codigo_tecnologia):
@@ -242,6 +313,7 @@ class MutualserProcessor:
         print(f"\n✅ Homologación completada:")
         print(f"   • Total de registros: {total}")
         print(f"   • Códigos homologados encontrados: {encontrados}")
+        print(f"   • Excepciones especiales aplicadas: {excepciones_aplicadas}")
         print(f"   • Sin homologar: {total - encontrados}")
         
         if errores_busqueda:
