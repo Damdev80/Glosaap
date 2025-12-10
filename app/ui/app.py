@@ -18,6 +18,7 @@ from app.ui.views import DashboardView, LoginView, ToolsView, MessagesView
 from app.ui.views.homologacion_view import HomologacionView
 from app.ui.views.mix_excel_view import MixExcelView
 from app.ui.views.homologador_manual_view import HomologadorManualView
+from app.ui.components.alert_dialog import AlertDialog
 
 # Ruta de assets (carpeta con imágenes)
 ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "assets"))
@@ -304,8 +305,8 @@ def main(page: ft.Page):
                 # Buscar con filtro de fechas
                 email_service.search_messages(
                     "glosa",
-                    limit=100,
-                    timeout=15,
+                    limit=500,
+                    timeout=30,
                     on_found=on_found,
                     date_from=app_state.get("date_from"),
                     date_to=app_state.get("date_to")
@@ -330,12 +331,39 @@ def main(page: ft.Page):
                 excel_count = len(email_service.get_excel_files())
                 if msgs:
                     messages_view.set_loading(False, f"✅ {len(msgs)} correo(s) | 📁 {excel_count} Excel listos para procesar")
+                    
+                    # Mostrar diálogo de búsqueda completada
+                    eps_name = app_state.get("selected_eps", {}).get("name", "")
+                    date_from = app_state.get("date_from")
+                    date_to = app_state.get("date_to")
+                    date_range = ""
+                    if date_from and date_to:
+                        date_range = f"{date_from.strftime('%d/%m/%Y')} - {date_to.strftime('%d/%m/%Y')}"
+                    
+                    AlertDialog.show_search_complete(
+                        page=page,
+                        total_found=len(all_msgs),
+                        filtered_count=len(msgs),
+                        excel_count=excel_count,
+                        eps_name=eps_name,
+                        date_range=date_range
+                    )
                 else:
                     messages_view.set_loading(False, "No hay resultados")
                     messages_view.show_download_controls(False)
+                    AlertDialog.show_info(
+                        page=page,
+                        title="Sin resultados",
+                        message=f"No se encontraron correos de {app_state.get('selected_eps', {}).get('name', 'la EPS seleccionada')} en el rango de fechas especificado."
+                    )
                 
             except Exception as ex:
                 messages_view.set_loading(False, f"❌ Error: {str(ex)}")
+                AlertDialog.show_error(
+                    page=page,
+                    title="Error en la búsqueda",
+                    message=f"Ocurrió un error al buscar correos:\n\n{str(ex)}"
+                )
         
         threading.Thread(target=worker, daemon=True).start()
     
@@ -404,20 +432,11 @@ def main(page: ft.Page):
                         messages_view.process_eps_btn.disabled = False
                         
                         # Mostrar diálogo informativo
-                        def show_alert():
-                            dialog = ft.AlertDialog(
-                                title=ft.Text("Sin archivos para procesar"),
-                                content=ft.Text(
-                                    "No se encontraron archivos Excel en el directorio temporal.\n\n"
-                                    "Los archivos se almacenan automáticamente cuando descargas adjuntos."
-                                ),
-                                actions=[
-                                    ft.TextButton("Entendido", on_click=lambda e: page.close(dialog))
-                                ]
-                            )
-                            page.open(dialog)
-                        
-                        show_alert()
+                        AlertDialog.show_warning(
+                            page=page,
+                            title="Sin archivos para procesar",
+                            message="No se encontraron archivos Excel en el directorio temporal.\n\nLos archivos se almacenan automáticamente cuando descargas adjuntos."
+                        )
                         return
                     
                     # Procesar TODOS los archivos Excel encontrados sin confirmación
@@ -436,13 +455,32 @@ def main(page: ft.Page):
                         messages_view.set_processing(False, msg)
                         messages_view.processing_status.color = COLORS["success"]
                         
-                        # Abrir carpeta
-                        import subprocess
-                        output_dir = os.path.dirname(resultado['output_file'])
-                        subprocess.Popen(f'explorer "{output_dir}"')
+                        # Mostrar diálogo de procesamiento completado
+                        output_files = [resultado['output_file']]
+                        if resultado.get('objeciones_file'):
+                            output_files.append(resultado['objeciones_file'])
+                        
+                        def open_output_folder():
+                            import subprocess
+                            output_dir = os.path.dirname(resultado['output_file'])
+                            subprocess.Popen(f'explorer "{output_dir}"')
+                        
+                        AlertDialog.show_processing_complete(
+                            page=page,
+                            eps_name="MUTUALSER",
+                            stats=resumen,
+                            output_files=output_files,
+                            on_open_folder=open_output_folder
+                        )
                     else:
                         messages_view.set_processing(False, f"❌ Error: {resultado['message']}")
                         messages_view.processing_status.color = COLORS["error"]
+                        
+                        AlertDialog.show_error(
+                            page=page,
+                            title="Error al procesar",
+                            message=f"No se pudo procesar los archivos:\n\n{resultado['message']}"
+                        )
                     
                     messages_view.process_eps_btn.disabled = False
                 
@@ -450,10 +488,22 @@ def main(page: ft.Page):
                     messages_view.set_processing(False, "⚠️ Procesador de COOSALUD pendiente de implementar")
                     messages_view.process_eps_btn.disabled = False
                     
+                    AlertDialog.show_info(
+                        page=page,
+                        title="Función en desarrollo",
+                        message="El procesador de COOSALUD está pendiente de implementar.\n\nPronto estará disponible."
+                    )
+                    
             except Exception as ex:
                 messages_view.set_processing(False, f"❌ Error: {str(ex)}")
                 messages_view.processing_status.color = COLORS["error"]
                 messages_view.process_eps_btn.disabled = False
+                
+                AlertDialog.show_error(
+                    page=page,
+                    title="Error en el procesamiento",
+                    message=f"Ocurrió un error inesperado:\n\n{str(ex)}"
+                )
         
         threading.Thread(target=worker, daemon=True).start()
     

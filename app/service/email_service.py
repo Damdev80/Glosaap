@@ -53,7 +53,7 @@ class EmailService:
         return True
     
 
-    def search_messages(self, keyword, limit=100, timeout=15, on_found=None, date_from=None, date_to=None):
+    def search_messages(self, keyword, limit=500, timeout=30, on_found=None, date_from=None, date_to=None):
         """
         Busca mensajes por palabra clave en el asunto
         

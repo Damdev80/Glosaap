@@ -86,7 +86,7 @@ class ImapClient:
             })
         return msgs
 
-    def search_by_subject(self, keyword, folder="INBOX", limit=100, timeout=15, on_found=None, date_from=None, date_to=None):
+    def search_by_subject(self, keyword, folder="INBOX", limit=500, timeout=30, on_found=None, date_from=None, date_to=None):
         """
         Busca correos que contengan una palabra clave en el asunto.
         Busca tanto correos leídos como no leídos.
