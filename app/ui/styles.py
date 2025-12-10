@@ -4,19 +4,21 @@ Estilos centralizados para la UI de Flet
 
 # Colores del tema
 COLORS = {
-    "primary": "#3498DB",
-    "primary_light": "#EBF5FB",
-    "success": "#27AE60",
-    "error": "#E74C3C",
-    "warning": "#F39C12",
-    "text_primary": "#000000",
-    "text_secondary": "#000000",
-    "text_light": "#000000AA",
+    "primary": "#2563EB",
+    "primary_dark": "#1E40AF",
+    "primary_light": "#DBEAFE",
+    "success": "#10B981",
+    "error": "#EF4444",
+    "warning": "#F59E0B",
+    "text_primary": "#1F2937",
+    "text_secondary": "#6B7280",
+    "text_light": "#9CA3AF",
     "bg_white": "#FFFFFF",
-    "bg_light": "#F8F9FA",
-    "bg_input": "#FAFAFA",
-    "border": "#E8E8E8",
-    "border_light": "#F0F0F0",
+    "bg_light": "#F9FAFB",
+    "bg_input": "#F3F4F6",
+    "border": "#D1D5DB",
+    "border_light": "#E5E7EB",
+    "hover": "#F3F4F6",
 }
 
 # Tamaños de fuente

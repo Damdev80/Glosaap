@@ -141,16 +141,18 @@ class EpsScreen:
                 # Título
                 ft.Text(
                     "Gestor de Glosas",
-                    size=FONT_SIZES["title"],
-                    weight=ft.FontWeight.W_300,
+                    size=38,
+                    weight=ft.FontWeight.BOLD,
                     color=COLORS["text_primary"],
                     text_align=ft.TextAlign.CENTER
                 ),
+                ft.Container(height=4),
                 ft.Text(
                     "Busca y procesa notificaciones de glosas por EPS",
-                    size=FONT_SIZES["small"],
+                    size=15,
                     color=COLORS["text_secondary"],
-                    text_align=ft.TextAlign.CENTER
+                    text_align=ft.TextAlign.CENTER,
+                    weight=ft.FontWeight.W_400
                 ),
                 
                 ft.Container(height=SPACING["lg"]),
@@ -160,20 +162,26 @@ class EpsScreen:
                     content=ft.Column([
                         ft.Row([
                             ft.Container(
-                                content=ft.Text("1", size=14, weight=ft.FontWeight.BOLD, color=COLORS["bg_white"]),
-                                width=28,
-                                height=28,
-                                border_radius=14,
+                                content=ft.Text("1", size=15, weight=ft.FontWeight.BOLD, color=COLORS["bg_white"]),
+                                width=32,
+                                height=32,
+                                border_radius=16,
                                 bgcolor=COLORS["primary"],
-                                alignment=ft.alignment.center
+                                alignment=ft.alignment.center,
+                                shadow=ft.BoxShadow(
+                                    spread_radius=0,
+                                    blur_radius=8,
+                                    color=ft.Colors.with_opacity(0.3, COLORS["primary"]),
+                                    offset=ft.Offset(0, 2)
+                                )
                             ),
                             ft.Text(
                                 "Selecciona el rango de fechas",
-                                size=FONT_SIZES["body"],
-                                weight=ft.FontWeight.W_500,
+                                size=16,
+                                weight=ft.FontWeight.BOLD,
                                 color=COLORS["text_primary"]
                             )
-                        ], spacing=10, alignment=ft.MainAxisAlignment.CENTER),
+                        ], spacing=12, alignment=ft.MainAxisAlignment.CENTER),
                         ft.Container(height=8),
                         self.date_picker.build()
                     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
@@ -186,17 +194,23 @@ class EpsScreen:
                     content=ft.Column([
                         ft.Row([
                             ft.Container(
-                                content=ft.Text("2", size=14, weight=ft.FontWeight.BOLD, color=COLORS["bg_white"]),
-                                width=28,
-                                height=28,
-                                border_radius=14,
+                                content=ft.Text("2", size=15, weight=ft.FontWeight.BOLD, color=COLORS["bg_white"]),
+                                width=32,
+                                height=32,
+                                border_radius=16,
                                 bgcolor=COLORS["primary"],
-                                alignment=ft.alignment.center
+                                alignment=ft.alignment.center,
+                                shadow=ft.BoxShadow(
+                                    spread_radius=0,
+                                    blur_radius=8,
+                                    color=ft.Colors.with_opacity(0.3, COLORS["primary"]),
+                                    offset=ft.Offset(0, 2)
+                                )
                             ),
                             ft.Text(
                                 "Selecciona una EPS para buscar",
-                                size=FONT_SIZES["body"],
-                                weight=ft.FontWeight.W_500,
+                                size=16,
+                                weight=ft.FontWeight.BOLD,
                                 color=COLORS["text_primary"]
                             )
                         ], spacing=10, alignment=ft.MainAxisAlignment.CENTER),

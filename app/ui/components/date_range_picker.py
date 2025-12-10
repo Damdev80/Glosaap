@@ -25,15 +25,15 @@ class DateRangePicker:
         # Textos de display
         self.date_from_text = ft.Text(
             "Seleccionar", 
-            size=13, 
+            size=14, 
             color=COLORS["text_secondary"],
-            weight=ft.FontWeight.W_400
+            weight=ft.FontWeight.W_500
         )
         self.date_to_text = ft.Text(
             "Seleccionar", 
-            size=13, 
+            size=14, 
             color=COLORS["text_secondary"],
-            weight=ft.FontWeight.W_400
+            weight=ft.FontWeight.W_500
         )
         
         # Texto de error de validación
@@ -75,6 +75,7 @@ class DateRangePicker:
             self.date_from = e.control.value
             self.date_from_text.value = self.date_from.strftime("%d/%m/%Y")
             self.date_from_text.color = COLORS["text_primary"]
+            self.date_from_text.weight = ft.FontWeight.W_600
             self._validate_dates()
         self.page.update()
         if self.on_change:
@@ -86,6 +87,7 @@ class DateRangePicker:
             self.date_to = e.control.value
             self.date_to_text.value = self.date_to.strftime("%d/%m/%Y")
             self.date_to_text.color = COLORS["text_primary"]
+            self.date_to_text.weight = ft.FontWeight.W_600
             self._validate_dates()
         self.page.update()
         if self.on_change:
@@ -134,8 +136,10 @@ class DateRangePicker:
         self.date_to = None
         self.date_from_text.value = "Seleccionar"
         self.date_from_text.color = COLORS["text_secondary"]
+        self.date_from_text.weight = ft.FontWeight.W_500
         self.date_to_text.value = "Seleccionar"
         self.date_to_text.color = COLORS["text_secondary"]
+        self.date_to_text.weight = ft.FontWeight.W_500
         
         # Limpiar estado de validación
         self.is_valid = True
@@ -154,73 +158,91 @@ class DateRangePicker:
         # Botón de fecha desde
         self.btn_from = ft.Container(
             content=ft.Row([
-                ft.Icon(ft.Icons.CALENDAR_TODAY, size=18, color=COLORS["primary"]),
+                ft.Icon(ft.Icons.CALENDAR_TODAY, size=20, color=COLORS["primary"]),
                 self.date_from_text
-            ], spacing=8),
-            padding=ft.padding.symmetric(horizontal=16, vertical=12),
+            ], spacing=10),
+            padding=ft.padding.symmetric(horizontal=18, vertical=14),
             bgcolor=COLORS["bg_white"],
-            border=ft.border.all(1, COLORS["border"]),
-            border_radius=8,
+            border=ft.border.all(1.5, COLORS["border"]),
+            border_radius=10,
             on_click=self._open_picker_from,
-            ink=True
+            ink=True,
+            width=180,
+            shadow=ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=4,
+                color=ft.Colors.with_opacity(0.05, COLORS["text_primary"]),
+                offset=ft.Offset(0, 2)
+            )
         )
         
         # Botón de fecha hasta
         self.btn_to = ft.Container(
             content=ft.Row([
-                ft.Icon(ft.Icons.CALENDAR_TODAY, size=18, color=COLORS["primary"]),
+                ft.Icon(ft.Icons.CALENDAR_TODAY, size=20, color=COLORS["primary"]),
                 self.date_to_text
-            ], spacing=8),
-            padding=ft.padding.symmetric(horizontal=16, vertical=12),
+            ], spacing=10),
+            padding=ft.padding.symmetric(horizontal=18, vertical=14),
             bgcolor=COLORS["bg_white"],
-            border=ft.border.all(1, COLORS["border"]),
-            border_radius=8,
+            border=ft.border.all(1.5, COLORS["border"]),
+            border_radius=10,
             on_click=self._open_picker_to,
-            ink=True
+            ink=True,
+            width=180,
+            shadow=ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=4,
+                color=ft.Colors.with_opacity(0.05, COLORS["text_primary"]),
+                offset=ft.Offset(0, 2)
+            )
         )
         
         # Contenedor principal
         self.container = ft.Container(
             content=ft.Column([
-                ft.Text(
-                    "📅 Rango de fechas para buscar correos",
-                    size=FONT_SIZES["body"],
-                    weight=ft.FontWeight.W_500,
-                    color=COLORS["text_primary"],
-                    text_align=ft.TextAlign.CENTER
-                ),
-                ft.Container(height=12),
                 ft.Row([
                     ft.Column([
-                        ft.Text("Desde:", size=12, color=COLORS["text_secondary"]),
+                        ft.Text("Desde:", size=13, weight=ft.FontWeight.BOLD, color=COLORS["text_primary"]),
+                        ft.Container(height=6),
                         self.btn_from
-                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
+                    ], horizontal_alignment=ft.CrossAxisAlignment.START, spacing=0),
                     ft.Container(
-                        content=ft.Icon(ft.Icons.ARROW_FORWARD, size=20, color=COLORS["text_light"]),
-                        padding=ft.padding.only(top=20)
+                        content=ft.Icon(ft.Icons.ARROW_FORWARD, size=24, color=COLORS["primary"]),
+                        padding=ft.padding.only(top=26)
                     ),
                     ft.Column([
-                        ft.Text("Hasta:", size=12, color=COLORS["text_secondary"]),
+                        ft.Text("Hasta:", size=13, weight=ft.FontWeight.BOLD, color=COLORS["text_primary"]),
+                        ft.Container(height=6),
                         self.btn_to
-                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
+                    ], horizontal_alignment=ft.CrossAxisAlignment.START, spacing=0),
                     ft.Container(
                         content=ft.IconButton(
                             icon=ft.Icons.CLEAR,
-                            icon_size=20,
+                            icon_size=22,
                             icon_color=COLORS["text_secondary"],
                             tooltip="Limpiar fechas",
-                            on_click=self.clear
+                            on_click=self.clear,
+                            style=ft.ButtonStyle(
+                                overlay_color=ft.Colors.with_opacity(0.1, COLORS["error"])
+                            )
                         ),
-                        padding=ft.padding.only(top=16)
+                        padding=ft.padding.only(top=20)
                     )
-                ], alignment=ft.MainAxisAlignment.CENTER, spacing=16),
+                ], alignment=ft.MainAxisAlignment.CENTER, spacing=20),
                 # Mensaje de error de validación
+                ft.Container(height=4),
                 self.error_text,
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            padding=SPACING["lg"],
+            padding=20,
             bgcolor=COLORS["bg_white"],
-            border_radius=12,
-            border=ft.border.all(1, COLORS["border"])
+            border_radius=16,
+            border=ft.border.all(1.5, COLORS["border_light"]),
+            shadow=ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=10,
+                color=ft.Colors.with_opacity(0.05, COLORS["text_primary"]),
+                offset=ft.Offset(0, 3)
+            )
         )
     
     def build(self):

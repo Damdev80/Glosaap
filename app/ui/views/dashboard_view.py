@@ -39,52 +39,56 @@ class DashboardView:
             )
         
         def on_hover(e):
-            card_container.scale = 1.03 if e.data == "true" else 1.0
+            card_container.scale = 1.05 if e.data == "true" else 1.0
             card_container.shadow = ft.BoxShadow(
-                spread_radius=2 if e.data == "true" else 1,
-                blur_radius=20 if e.data == "true" else 10,
-                color=ft.Colors.with_opacity(0.2 if e.data == "true" else 0.1, color),
+                spread_radius=0,
+                blur_radius=24 if e.data == "true" else 12,
+                color=ft.Colors.with_opacity(0.15 if e.data == "true" else 0.08, COLORS["text_primary"]),
                 offset=ft.Offset(0, 8 if e.data == "true" else 4)
             )
+            card_container.bgcolor = COLORS["hover"] if e.data == "true" else COLORS["bg_white"]
             self.page.update()
         
         def on_click(e):
             if self.on_card_click:
                 self.on_card_click(action_key)
         
-        card_container = ft.Container(
-            content=ft.Column([
+        card_content = ft.Column([
                 visual_element,
                 ft.Container(height=15),
                 ft.Text(
                     title,
-                    size=20,
-                    weight=ft.FontWeight.W_600,
+                    size=18,
+                    weight=ft.FontWeight.BOLD,
                     color=COLORS["text_primary"],
                     text_align=ft.TextAlign.CENTER
                 ),
-                ft.Container(height=5),
+                ft.Container(height=8),
                 ft.Text(
                     subtitle,
-                    size=12,
+                    size=13,
                     color=COLORS["text_secondary"],
-                    text_align=ft.TextAlign.CENTER
+                    text_align=ft.TextAlign.CENTER,
+                    weight=ft.FontWeight.W_400
                 )
-            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.CENTER),
-            width=200,
-            height=220,
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.CENTER)
+        
+        card_container = ft.Container(
+            content=card_content,
+            width=210,
+            height=240,
             bgcolor=COLORS["bg_white"],
-            border_radius=16,
-            padding=25,
+            border_radius=20,
+            padding=28,
             shadow=ft.BoxShadow(
-                spread_radius=1,
-                blur_radius=10,
-                color=ft.Colors.with_opacity(0.1, color),
+                spread_radius=0,
+                blur_radius=12,
+                color=ft.Colors.with_opacity(0.08, COLORS["text_primary"]),
                 offset=ft.Offset(0, 4)
             ),
-            border=ft.border.all(2, ft.Colors.with_opacity(0.3, color)),
-            animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
-            animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+            border=ft.border.all(1.5, COLORS["border_light"]),
+            animate=ft.Animation(250, ft.AnimationCurve.EASE_OUT),
+            animate_scale=ft.Animation(250, ft.AnimationCurve.EASE_OUT),
             scale=1.0,
             on_hover=on_hover,
             on_click=on_click,
@@ -132,14 +136,16 @@ class DashboardView:
                     ft.Column([
                         ft.Text(
                             "Glosaap",
-                            size=36,
-                            weight=ft.FontWeight.W_300,
+                            size=40,
+                            weight=ft.FontWeight.BOLD,
                             color=COLORS["text_primary"]
                         ),
+                        ft.Container(height=4),
                         ft.Text(
                             "Sistema de Gestión de Glosas",
-                            size=14,
-                            color=COLORS["text_secondary"]
+                            size=16,
+                            color=COLORS["text_secondary"],
+                            weight=ft.FontWeight.W_400
                         ),
                     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                     ft.Container(height=30),

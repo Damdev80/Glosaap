@@ -35,13 +35,17 @@ class LoginView:
         self.email_input = ft.TextField(
             label="Correo electrónico",
             width=380,
+            height=56,
             autofocus=True,
             border_color=COLORS["border"],
             focused_border_color=COLORS["primary"],
-            bgcolor=COLORS["bg_input"],
+            bgcolor=COLORS["bg_white"],
             color=COLORS["text_primary"],
+            label_style=ft.TextStyle(color=COLORS["text_secondary"], size=14),
             cursor_color=COLORS["primary"],
-            text_size=FONT_SIZES["body"]
+            text_size=15,
+            border_radius=10,
+            content_padding=ft.padding.symmetric(horizontal=16, vertical=14)
         )
         
         self.password_input = ft.TextField(
@@ -49,24 +53,33 @@ class LoginView:
             password=True,
             can_reveal_password=True,
             width=380,
+            height=56,
             border_color=COLORS["border"],
             focused_border_color=COLORS["primary"],
-            bgcolor=COLORS["bg_input"],
+            bgcolor=COLORS["bg_white"],
             color=COLORS["text_primary"],
+            label_style=ft.TextStyle(color=COLORS["text_secondary"], size=14),
             cursor_color=COLORS["primary"],
-            text_size=FONT_SIZES["body"]
+            text_size=15,
+            border_radius=10,
+            content_padding=ft.padding.symmetric(horizontal=16, vertical=14)
         )
         
         self.server_input = ft.TextField(
             label="Servidor IMAP",
             hint_text="Ej: imap.gmail.com, mail.tudominio.com",
             width=380,
+            height=56,
             border_color=COLORS["border"],
             focused_border_color=COLORS["primary"],
-            bgcolor=COLORS["bg_input"],
+            bgcolor=COLORS["bg_white"],
             color=COLORS["text_primary"],
+            label_style=ft.TextStyle(color=COLORS["text_secondary"], size=14),
+            hint_style=ft.TextStyle(color=COLORS["text_light"], size=14),
             cursor_color=COLORS["primary"],
-            text_size=FONT_SIZES["body"]
+            text_size=15,
+            border_radius=10,
+            content_padding=ft.padding.symmetric(horizontal=16, vertical=14)
         )
         
         self.status_text = ft.Text("", size=FONT_SIZES["small"], color=COLORS["error"])
@@ -76,19 +89,26 @@ class LoginView:
             label="Recordar sesión",
             value=True,
             check_color=COLORS["bg_white"],
-            width=200,
-            focus_color=COLORS["bg_white"]
+            active_color=COLORS["primary"],
+            label_style=ft.TextStyle(color=COLORS["text_primary"], size=14),
+            width=200
         )
         
         self.login_button = ft.Container(
-            content=ft.Text("Iniciar Sesión", size=15, weight=ft.FontWeight.W_500, color=COLORS["bg_white"]),
+            content=ft.Text("Iniciar Sesión", size=16, weight=ft.FontWeight.W_600, color=COLORS["bg_white"]),
             alignment=ft.alignment.center,
             bgcolor=COLORS["primary"],
-            border_radius=8,
-            padding=15,
+            border_radius=10,
+            padding=ft.padding.symmetric(vertical=16),
             width=380,
             ink=True,
-            on_click=self._handle_login
+            on_click=self._handle_login,
+            shadow=ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=12,
+                color=ft.Colors.with_opacity(0.3, COLORS["primary"]),
+                offset=ft.Offset(0, 4)
+            )
         )
         
         # Ruta del logo
@@ -107,17 +127,17 @@ class LoginView:
                             fit=ft.ImageFit.CONTAIN
                         ) if logo_path and os.path.exists(logo_path) else ft.Container(height=70),
                         ft.Container(height=SPACING["sm"]),
-                        ft.Text("Glosaap", size=20, weight=ft.FontWeight.W_600, color=COLORS["text_primary"]),
-                        ft.Text("Gestor de glosas y correos", size=11, color=COLORS["text_secondary"]),
-                        ft.Container(height=SPACING["lg"]),
+                        ft.Text("Glosaap", size=28, weight=ft.FontWeight.BOLD, color=COLORS["text_primary"]),
+                        ft.Text("Gestor de glosas y correos", size=14, color=COLORS["text_secondary"]),
+                        ft.Container(height=SPACING["xl"]),
                         self.email_input,
-                        ft.Container(height=SPACING["md"]),
+                        ft.Container(height=SPACING["lg"]),
                         self.password_input,
-                        ft.Container(height=SPACING["md"]),
+                        ft.Container(height=SPACING["lg"]),
                         self.server_input,
-                        ft.Container(height=SPACING["sm"]),
-                        self.remember_session,
                         ft.Container(height=SPACING["md"]),
+                        self.remember_session,
+                        ft.Container(height=SPACING["lg"]),
                         self.login_button,
                         ft.Container(height=SPACING["sm"]),
                         self.login_progress,
@@ -125,11 +145,16 @@ class LoginView:
                     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                     padding=ft.padding.all(SPACING["xxl"]),
                     bgcolor=COLORS["bg_white"],
-                    border_radius=12,
-                    shadow=ft.BoxShadow(spread_radius=1, blur_radius=15, color=ft.Colors.with_opacity(0.1, COLORS["text_primary"]), offset=ft.Offset(0, 4))
+                    border_radius=16,
+                    width=520,
+                    shadow=ft.BoxShadow(
+                        spread_radius=0, 
+                        blur_radius=20, 
+                        color=ft.Colors.with_opacity(0.12, COLORS["text_primary"]), 
+                        offset=ft.Offset(0, 4)
+                    )
                 ),
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            padding=ft.padding.symmetric(horizontal=SPACING["xxl"]),
             bgcolor=COLORS["bg_light"],
             alignment=ft.alignment.center,
             expand=True
