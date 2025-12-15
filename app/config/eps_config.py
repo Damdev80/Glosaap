@@ -25,7 +25,8 @@ class EpsInfo:
         processor_class: str = None,
         enabled: bool = True,
         image_path: str = None,
-        homologador_file: str = None
+        homologador_file: str = None,
+        sender_filter: str = None  # Filtro por correo remitente
     ):
         self.name = name
         self.icon = icon
@@ -36,6 +37,7 @@ class EpsInfo:
         self.processor_class = processor_class
         self.enabled = enabled
         self.image_path = image_path
+        self.sender_filter = sender_filter  # Correo específico del remitente
         # Ruta completa al archivo de homologación de esta EPS
         self.homologador_path = os.path.join(HOMOLOGADOR_BASE_PATH, homologador_file) if homologador_file else None
     
@@ -51,7 +53,8 @@ class EpsInfo:
             "processor_class": self.processor_class,
             "enabled": self.enabled,
             "image_path": self.image_path,
-            "homologador_path": self.homologador_path
+            "homologador_path": self.homologador_path,
+            "sender_filter": self.sender_filter
         }
 # ==================== CONFIGURACIÓN DE CADA EPS ====================
 
@@ -90,7 +93,8 @@ class CoosaludEps(EpsInfo):
             processor_class="CoosaludProcessor",
             enabled=True,
             image_path=os.path.join(ASSETS_DIR, "img", "eps", "coosalud.png"),
-            homologador_file="HOMOLOGADOR_COOSALUD.xlsx"
+            homologador_file="HOMOLOGADOR_COOSALUD.xlsx",
+            sender_filter="vco.glosas1@coosalud.com"  # Solo correos de este remitente
         )
 
 

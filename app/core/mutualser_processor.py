@@ -223,25 +223,28 @@ class MutualserProcessor:
             df = pd.read_excel(file_path, header=header_row_idx) if file_path.endswith(('.xlsx', '.xls')) else pd.read_csv(file_path, header=header_row_idx)
             df.columns = df.columns.str.strip()
             
-            # Mapear columnas
-            df_extraido = self._mapear_columnas(df, fecha_documento)
+            # Mapear columnas (sin prints para velocidad)
+            df_extraido = self._mapear_columnas(df, fecha_documento, verbose=False)
             
             if df_extraido.empty:
                 return None
             
             self.archivos_procesados.append(file_path)
-            print(f"   ✅ {len(df_extraido)} registros de {os.path.basename(file_path)}")
+            # Solo print cada 50 archivos
+            # print(f"   ✅ {len(df_extraido)} registros de {os.path.basename(file_path)}")
             
             return df_extraido
             
         except Exception as e:
             self.errores.append({'archivo': file_path, 'error': str(e)})
-            print(f"❌ Error: {file_path}: {e}")
+            # Solo mostrar errores graves
+            # print(f"❌ Error: {file_path}: {e}")
             return None
     
-    def _mapear_columnas(self, df, fecha_documento):
+    def _mapear_columnas(self, df, fecha_documento, verbose=True):
         """Mapea columnas del archivo a las requeridas"""
-        print(f"   🔍 Columnas disponibles: {list(df.columns)}")
+        if verbose:
+            print(f"   🔍 Columnas disponibles: {list(df.columns)}")
         
         df_extraido = pd.DataFrame()
         columnas_no_encontradas = []
@@ -251,15 +254,17 @@ class MutualserProcessor:
             
             if col_encontrada:
                 df_extraido[col_req] = df[col_encontrada]
-                print(f"   ✅ '{col_req}' → '{col_encontrada}'")
+                if verbose:
+                    print(f"   ✅ '{col_req}' → '{col_encontrada}'")
             elif col_req == 'Fecha' and fecha_documento:
                 df_extraido[col_req] = fecha_documento
-                print(f"   ✅ '{col_req}' → fecha extraída: {fecha_documento}")
+                if verbose:
+                    print(f"   ✅ '{col_req}' → fecha extraída: {fecha_documento}")
             else:
                 df_extraido[col_req] = None
                 columnas_no_encontradas.append(col_req)
         
-        if columnas_no_encontradas:
+        if columnas_no_encontradas and verbose:
             print(f"   ⚠️  Columnas no encontradas: {columnas_no_encontradas}")
         
         # Limpiar filas
@@ -268,7 +273,8 @@ class MutualserProcessor:
         df_extraido = df_extraido[~df_extraido['Número de factura'].astype(str).str.upper().str.contains('TOTAL|SUMA', na=False)]
         filas_despues = len(df_extraido)
         
-        print(f"   🧹 Limpieza: {filas_antes} → {filas_despues} registros")
+        if verbose:
+            print(f"   🧹 Limpieza: {filas_antes} → {filas_despues} registros")
         
         return df_extraido
     
@@ -284,32 +290,41 @@ class MutualserProcessor:
     
     def procesar_multiples_archivos(self, file_paths):
         """Procesa múltiples archivos"""
-        print(f"\n🔄 Procesando {len(file_paths)} archivos:")
-        for fp in file_paths:
-            print(f"   📄 {os.path.basename(fp)}")
+        total = len(file_paths)
+        print(f"\n[PROC] Iniciando procesamiento de {total} archivos...")
+        print(f"[PROC] Primeros 5 archivos:")
+        for i, fp in enumerate(file_paths[:5]):
+            print(f"   {i+1}. {os.path.basename(fp)}")
+        if total > 5:
+            print(f"   ... y {total - 5} archivos mas")
         
         dfs = []
         
         for i, file_path in enumerate(file_paths):
-            print(f"\n📄 Procesando archivo {i+1}/{len(file_paths)}: {os.path.basename(file_path)}")
+            # Mostrar progreso cada 10 archivos
+            if (i + 1) % 10 == 0 or i == 0:
+                print(f"\n[PROC] Progreso: {i+1}/{total} ({(i+1)/total*100:.1f}%)")
+            
+            # Solo mostrar detalles del archivo cada 50
+            if (i + 1) % 50 == 0 or i < 3:
+                print(f"  Procesando: {os.path.basename(file_path)}")
+            
             df = self.procesar_archivo(file_path)
             if df is not None and not df.empty:
                 dfs.append(df)
-                # Debug: mostrar facturas únicas en este archivo
-                facturas = df['Número de factura'].unique()
-                print(f"   📊 Facturas en este archivo: {len(facturas)}")
-                print(f"   🏷️  Primeras 5 facturas: {facturas[:5]}")
             else:
-                print(f"   ❌ Archivo vacío o con errores: {os.path.basename(file_path)}")
+                if i < 3:  # Solo mostrar errores de los primeros archivos
+                    print(f"   [!] Archivo vacio o con errores: {os.path.basename(file_path)}")
         
         if dfs:
+            print(f"\n[PROC] Consolidando {len(dfs)} DataFrames...")
             self.df_consolidado = pd.concat(dfs, ignore_index=True)
-            print(f"\n✅ Consolidado final: {len(self.df_consolidado)} registros")
+            print(f"[OK] Consolidado final: {len(self.df_consolidado)} registros")
             facturas_totales = self.df_consolidado['Número de factura'].unique()
-            print(f"📊 Total facturas únicas: {len(facturas_totales)}")
-            print(f"🏷️  Primeras 10 facturas: {facturas_totales[:10]}")
+            print(f"[STATS] Total facturas unicas: {len(facturas_totales)}")
             return self.df_consolidado
         
+        print(f"[!] No se pudo procesar ningun archivo")
         return None
     
     # ==================== GENERACIÓN DE OBJECIONES ====================

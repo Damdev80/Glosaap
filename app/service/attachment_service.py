@@ -67,12 +67,57 @@ class AttachmentService:
         """Retorna todos los archivos descargados"""
         return self.downloaded_files
     
-    def get_excel_files(self):
-        """Filtra y retorna archivos Excel y CSV"""
-        return [
+    def get_excel_files(self, exclude_devoluciones=True):
+        """
+        Filtra y retorna archivos Excel y CSV
+        
+        Args:
+            exclude_devoluciones: Si es True, excluye archivos de devolución
+        """
+        excel_files = [
             f for f in self.downloaded_files 
             if f.endswith(('.xlsx', '.xls', '.xlsm', '.xlsb', '.csv'))
         ]
+        
+        total_inicial = len(excel_files)
+        
+        # Filtrar archivos de devolución si se solicita
+        if exclude_devoluciones:
+            filtered = []
+            archivos_devolucion = 0
+            archivos_fc_asociados = 0
+            
+            for f in excel_files:
+                filename = os.path.basename(f).lower()
+                
+                # Excluir archivos con "devolucion" en el nombre
+                if 'devolucion' in filename or 'devolución' in filename:
+                    archivos_devolucion += 1
+                    continue
+                
+                # Excluir archivos FC{numero}.xlsx si existe un DEVOLUCION correspondiente
+                # Solo formato FC seguido de numeros
+                if filename.startswith('fc') and filename.replace('fc', '').replace('.xlsx', '').replace('.xls', '').isdigit():
+                    # Buscar si existe un archivo DEVOLUCION con el mismo numero
+                    tiene_devolucion = any(
+                        filename in os.path.basename(other).lower() 
+                        for other in excel_files 
+                        if 'devolucion' in os.path.basename(other).lower()
+                    )
+                    if tiene_devolucion:
+                        archivos_fc_asociados += 1
+                        continue
+                
+                filtered.append(f)
+            
+            print(f"[FILTER] Total archivos Excel: {total_inicial}")
+            print(f"[FILTER] Archivos DEVOLUCION excluidos: {archivos_devolucion}")
+            print(f"[FILTER] Archivos FC asociados excluidos: {archivos_fc_asociados}")
+            print(f"[FILTER] Archivos a procesar: {len(filtered)}")
+            
+            return filtered
+            
+        return excel_files
     
     def get_word_files(self):
         """Filtra y retorna archivos Word"""

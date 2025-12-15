@@ -144,9 +144,9 @@ class EmailService:
         """Obtiene resumen de adjuntos descargados"""
         return self.attachment_service.get_summary()
     
-    def get_excel_files(self):
+    def get_excel_files(self, exclude_devoluciones=True):
         """Obtiene solo archivos Excel/CSV descargados"""
-        return self.attachment_service.get_excel_files()
+        return self.attachment_service.get_excel_files(exclude_devoluciones=exclude_devoluciones)
     
     def disconnect(self):
         """Cierra la conexión IMAP"""
@@ -213,11 +213,17 @@ class EmailService:
         Returns:
             Dict con ruta del archivo generado y resumen
         """
-        # TODO: Implementar cuando se defina estructura de COSALUD
-        return {
-            'success': False,
-            'message': 'Procesador de COSALUD aún no implementado'
-        }
+        if archivos is None:
+            archivos = self.get_excel_files()
+
+        if not archivos:
+            return {
+                'success': False,
+                'message': 'No hay archivos para procesar'
+            }
+        # Procesar archivos
+        #     
+    
 
 
 # Procesar adjunto de acuerdo a la EPS
