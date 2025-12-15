@@ -18,6 +18,8 @@ from app.ui.views import DashboardView, LoginView, ToolsView, MessagesView
 from app.ui.views.homologacion_view import HomologacionView
 from app.ui.views.mix_excel_view import MixExcelView
 from app.ui.views.homologador_manual_view import HomologadorManualView
+from app.ui.views.web_download_view import WebDownloadView
+from app.ui.views.method_selection_view import MethodSelectionView
 from app.ui.components.alert_dialog import AlertDialog
 
 # Ruta de assets (carpeta con imágenes)
@@ -64,14 +66,33 @@ def main(page: ft.Page):
         current_view["name"] = "login"
         login_view.show()
         dashboard_view.hide()
+        method_selection_view.hide()
         tools_view.hide()
         eps_screen.hide()
         messages_view.hide()
         homologacion_view.hide()
         mix_excel_view.hide()
         homologador_manual_view.hide()
+        web_download_view.hide()
         page.window_width = WINDOW_SIZES["login"]["width"]
         page.window_height = WINDOW_SIZES["login"]["height"]
+        page.update()
+    
+    def go_to_method_selection():
+        """Navega a la selección de método (correo vs web)"""
+        current_view["name"] = "method_selection"
+        login_view.hide()
+        dashboard_view.hide()
+        method_selection_view.show()
+        tools_view.hide()
+        eps_screen.hide()
+        messages_view.hide()
+        homologacion_view.hide()
+        mix_excel_view.hide()
+        homologador_manual_view.hide()
+        web_download_view.hide()
+        page.window_width = 900
+        page.window_height = 600
         page.update()
     
     def go_to_dashboard():
@@ -79,12 +100,14 @@ def main(page: ft.Page):
         current_view["name"] = "dashboard"
         login_view.hide()
         dashboard_view.show()
+        method_selection_view.hide()
         tools_view.hide()
         eps_screen.hide()
         messages_view.hide()
         homologacion_view.hide()
         mix_excel_view.hide()
         homologador_manual_view.hide()
+        web_download_view.hide()
         page.window_width = 800
         page.window_height = 550
         page.update()
@@ -94,12 +117,14 @@ def main(page: ft.Page):
         current_view["name"] = "tools"
         login_view.hide()
         dashboard_view.hide()
+        method_selection_view.hide()
         tools_view.show()
         eps_screen.hide()
         messages_view.hide()
         homologacion_view.hide()
         mix_excel_view.hide()
         homologador_manual_view.hide()
+        web_download_view.hide()
         page.window_width = 800
         page.window_height = 500
         page.update()
@@ -109,12 +134,14 @@ def main(page: ft.Page):
         current_view["name"] = "homologacion"
         login_view.hide()
         dashboard_view.hide()
+        method_selection_view.hide()
         tools_view.hide()
         eps_screen.hide()
         messages_view.hide()
         homologacion_view.show()
         mix_excel_view.hide()
         homologador_manual_view.hide()
+        web_download_view.hide()
         page.window_width = 900
         page.window_height = 600
         page.update()
@@ -124,12 +151,14 @@ def main(page: ft.Page):
         current_view["name"] = "mix_excel"
         login_view.hide()
         dashboard_view.hide()
+        method_selection_view.hide()
         tools_view.hide()
         eps_screen.hide()
         messages_view.hide()
         homologacion_view.hide()
         homologador_manual_view.hide()
         mix_excel_view.show()
+        web_download_view.hide()
         page.window_width = 600
         page.window_height = 700
         page.update()
@@ -139,13 +168,32 @@ def main(page: ft.Page):
         current_view["name"] = "homologador_manual"
         login_view.hide()
         dashboard_view.hide()
+        method_selection_view.hide()
         tools_view.hide()
         eps_screen.hide()
         messages_view.hide()
         homologacion_view.hide()
         mix_excel_view.hide()
         homologador_manual_view.show()
+        web_download_view.hide()
         page.window_width = 650
+        page.window_height = 700
+        page.update()
+    
+    def go_to_web_download():
+        """Navega a la pantalla de descarga web"""
+        current_view["name"] = "web_download"
+        login_view.hide()
+        dashboard_view.hide()
+        method_selection_view.hide()
+        tools_view.hide()
+        eps_screen.hide()
+        messages_view.hide()
+        homologacion_view.hide()
+        mix_excel_view.hide()
+        homologador_manual_view.hide()
+        web_download_view.show()
+        page.window_width = 1000
         page.window_height = 700
         page.update()
     
@@ -154,12 +202,14 @@ def main(page: ft.Page):
         current_view["name"] = "eps"
         login_view.hide()
         dashboard_view.hide()
+        method_selection_view.hide()
         tools_view.hide()
         eps_screen.show()
         messages_view.hide()
         homologacion_view.hide()
         mix_excel_view.hide()
         homologador_manual_view.hide()
+        web_download_view.hide()
         page.window_width = WINDOW_SIZES["main"]["width"]
         page.window_height = WINDOW_SIZES["main"]["height"]
         page.update()
@@ -169,12 +219,14 @@ def main(page: ft.Page):
         current_view["name"] = "messages"
         login_view.hide()
         dashboard_view.hide()
+        method_selection_view.hide()
         tools_view.hide()
         eps_screen.hide()
         messages_view.show()
         homologacion_view.hide()
         mix_excel_view.hide()
         homologador_manual_view.hide()
+        web_download_view.hide()
         page.update()
     
     def go_back():
@@ -189,14 +241,24 @@ def main(page: ft.Page):
             go_to_tools()
         elif current_view["name"] == "homologador_manual":
             go_to_tools()
+        elif current_view["name"] == "web_download":
+            go_to_dashboard()
         elif current_view["name"] == "dashboard":
             go_to_login()
     
     # ==================== FUNCIONES DE NEGOCIO ====================
     
     def handle_login_success():
-        """Callback cuando el login es exitoso"""
+        """Callback cuando el login es exitoso - ir a selección de método"""
+        go_to_method_selection()
+    
+    def on_email_method():
+        """Callback cuando se selecciona método de correo"""
         go_to_dashboard()
+    
+    def on_web_method():
+        """Callback cuando se selecciona método web"""
+        go_to_web_download()
     
     def on_dashboard_action(action_key):
         """Callback cuando se selecciona una acción del dashboard"""
@@ -262,7 +324,13 @@ def main(page: ft.Page):
                 if subject_pattern in subject:
                     # Excluir Sanitas si es filtro de Mutualser
                     if "sanitas" not in subject and "sanitas" not in from_addr:
-                        filtered.append(msg)
+                        # Verificar filtro por remitente si existe
+                        sender_filter = eps.get("sender_filter", "").lower()
+                        if sender_filter:
+                            if sender_filter in from_addr:
+                                filtered.append(msg)
+                        else:
+                            filtered.append(msg)
             elif filter_type == "email":
                 if filter_value in from_addr:
                     filtered.append(msg)
@@ -485,14 +553,49 @@ def main(page: ft.Page):
                     messages_view.process_eps_btn.disabled = False
                 
                 elif eps_type == "coosalud":
-                    messages_view.set_processing(False, "⚠️ Procesador de COOSALUD pendiente de implementar")
-                    messages_view.process_eps_btn.disabled = False
+                    from app.service.processors import CoosaludProcessor
                     
-                    AlertDialog.show_info(
-                        page=page,
-                        title="Función en desarrollo",
-                        message="El procesador de COOSALUD está pendiente de implementar.\n\nPronto estará disponible."
-                    )
+                    # Obtener archivos Excel (excluyendo devoluciones)
+                    excel_files = email_service.get_excel_files(exclude_devoluciones=True)
+                    if not excel_files:
+                        messages_view.set_processing(False, "❌ No hay archivos Excel para procesar")
+                        messages_view.process_eps_btn.disabled = False
+                        
+                        AlertDialog.show_warning(
+                            page=page,
+                            title="Sin archivos para procesar",
+                            message="No se encontraron archivos Excel de GLOSAS.\n\nLos archivos de DEVOLUCIÓN fueron excluidos automáticamente."
+                        )
+                        return
+
+                    print(f"[COOSALUD] Procesando {len(excel_files)} archivos Excel (devoluciones excluidas)")
+                    messages_view.set_processing(True, f"📊 Procesando {len(excel_files)} archivo(s) Excel...")
+
+                    # Configurar procesador con homologador de Coosalud
+                    homologador_path = r"\\MINERVA\Cartera\GLOSAAP\HOMOLOGADOR\mutualser_homologacion.xlsx"
+                    output_dir = r"\\MINERVA\Cartera\GLOSAAP\REPOSITORIO DE RESULTADOS\COOSALUD"
+                    
+                    processor = CoosaludProcessor(homologador_path=homologador_path)
+                    result_data, message = processor.process_glosas(excel_files, output_dir=output_dir)
+                    
+                    if result_data:
+                        messages_view.set_processing(False, f"✅ {message}")
+                        messages_view.processing_status.color = COLORS["success"]
+                        
+                        AlertDialog.show_success(
+                            page=page,
+                            title="Procesamiento completado",
+                            message=message
+                        )
+                    else:
+                        messages_view.set_processing(False, f"❌ {message}")
+                        messages_view.processing_status.color = COLORS["error"]
+                        
+                        AlertDialog.show_error(
+                            page=page,
+                            title="Error al procesar",
+                            message=message
+                        )
                     
             except Exception as ex:
                 messages_view.set_processing(False, f"❌ Error: {str(ex)}")
@@ -521,7 +624,8 @@ def main(page: ft.Page):
         assets_dir=ASSETS_DIR,
         on_card_click=on_dashboard_action,
         on_tools_click=go_to_tools,
-        on_logout=lambda: go_to_login(logout=True)
+        on_logout=lambda: go_to_login(logout=True),
+        on_web_download=go_to_web_download
     )
     
     tools_view = ToolsView(
@@ -531,6 +635,19 @@ def main(page: ft.Page):
         on_homologacion=go_to_homologacion,
         on_mix_excel=go_to_mix_excel,
         on_homologador_manual=go_to_homologador_manual
+    )
+    
+    method_selection_view = MethodSelectionView(
+        page=page,
+        assets_dir=ASSETS_DIR,
+        on_email_method=on_email_method,
+        on_web_method=on_web_method,
+        on_logout=lambda: go_to_login(logout=True)
+    )
+    
+    web_download_view = WebDownloadView(
+        page=page,
+        assets_dir=ASSETS_DIR
     )
     
     homologacion_view = HomologacionView(
@@ -567,11 +684,13 @@ def main(page: ft.Page):
     page.add(
         ft.Stack([
             login_view.container,
+            method_selection_view.container,
             dashboard_view.container,
             tools_view.container,
             homologacion_view.container,
             mix_excel_view.container,
             homologador_manual_view.container,
+            web_download_view.container,
             eps_screen.build(),
             messages_view.container
         ], expand=True)

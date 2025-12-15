@@ -9,12 +9,13 @@ from app.ui.styles import COLORS, FONT_SIZES, SPACING
 class DashboardView:
     """Vista del dashboard con las 3 cards principales"""
     
-    def __init__(self, page: ft.Page, assets_dir: str, on_card_click=None, on_tools_click=None, on_logout=None):
+    def __init__(self, page: ft.Page, assets_dir: str, on_card_click=None, on_tools_click=None, on_logout=None, on_web_download=None):
         self.page = page
         self.assets_dir = assets_dir
         self.on_card_click = on_card_click
         self.on_tools_click = on_tools_click
         self.on_logout = on_logout
+        self.on_web_download = on_web_download
         self.container = self.build()
         
     def _create_dashboard_card(self, icon, title, subtitle, color, action_key, image_path=None):
@@ -202,6 +203,25 @@ class DashboardView:
                 ),
                 right=20,
                 top=15,
+            ),
+            # Botón de Descarga Web flotante
+            ft.Container(
+                content=ft.ElevatedButton(
+                    content=ft.Row([
+                        ft.Icon(ft.Icons.CLOUD_DOWNLOAD, size=20, color=COLORS["primary"]),
+                        ft.Text("Descarga Web", size=13, weight=ft.FontWeight.W_500, color=COLORS["primary"])
+                    ], spacing=6),
+                    bgcolor=COLORS["bg_white"],
+                    style=ft.ButtonStyle(
+                        shape=ft.RoundedRectangleBorder(radius=8),
+                        padding=ft.padding.symmetric(horizontal=15, vertical=10),
+                        elevation=3,
+                        shadow_color=ft.Colors.with_opacity(0.2, "#000000")
+                    ),
+                    on_click=lambda e: self.on_web_download() if self.on_web_download else None
+                ),
+                right=20,
+                top=70,
             )
         ], expand=True, visible=False)
         

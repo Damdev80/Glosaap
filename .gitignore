@@ -73,3 +73,13 @@ Desktop.ini
 # ====================================
 # Archivos que prefieras ignorar
 local_settings.py
+
+# ============================
+#   CREDENTIALS / SENSITIVE
+# ============================
+credentials.json
+
+# ============================
+#   SELENIUM WEBDRIVERS
+# ============================
+temp
