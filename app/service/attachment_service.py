@@ -3,6 +3,7 @@ Servicio de gestión de adjuntos
 Maneja la descarga, almacenamiento y filtrado de archivos adjuntos
 """
 import os
+import sys
 import tempfile
 
 
@@ -13,16 +14,22 @@ class AttachmentService:
         """
         Args:
             base_dir: Directorio base para guardar adjuntos. 
-                     Si es None, usa temporal del sistema
+                     Si es None, usa carpeta persistente (AppData en Windows)
         """
         # Inicializar la lista PRIMERO
         self.downloaded_files = []
         
         if base_dir is None:
-            self.base_dir = os.path.join(
-                tempfile.gettempdir(), 
-                "glosaap_attachments"
-            )
+            # Usar AppData en Windows para persistencia (funciona en exe y desarrollo)
+            if sys.platform == 'win32':
+                appdata = os.getenv('APPDATA')
+                self.base_dir = os.path.join(appdata, 'Glosaap', 'attachments')
+            else:
+                # Fallback a temporal
+                self.base_dir = os.path.join(
+                    tempfile.gettempdir(), 
+                    "glosaap_attachments"
+                )
         else:
             # Convertir a ruta absoluta si es relativa
             if not os.path.isabs(base_dir):

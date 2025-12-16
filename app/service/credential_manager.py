@@ -3,6 +3,7 @@ Gestor simple de credenciales
 """
 import json
 import os
+import sys
 from typing import Optional
 
 
@@ -11,11 +12,17 @@ class CredentialManager:
     
     def __init__(self, config_dir: str = None):
         if config_dir is None:
-            config_dir = os.path.join(
-                os.path.dirname(__file__), "..", "..", "temp", "config"
-            )
+            # Usar AppData en Windows para persistencia (funciona en exe y desarrollo)
+            if sys.platform == 'win32':
+                appdata = os.getenv('APPDATA')
+                config_dir = os.path.join(appdata, 'Glosaap', 'config')
+            else:
+                # En desarrollo o Linux/Mac, usar carpeta temp del proyecto
+                config_dir = os.path.join(
+                    os.path.dirname(__file__), "..", "..", "temp", "config"
+                )
         
-        self.config_dir = config_dir
+        self.config_dir = os.path.abspath(config_dir)
         os.makedirs(self.config_dir, exist_ok=True)
         self.credentials_file = os.path.join(self.config_dir, "credentials.json")
     
