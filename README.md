@@ -476,6 +476,6 @@ Para reportar bugs o solicitar funcionalidades, crear un issue en el repositorio
 
 <div align="center">
 
-**Desarrollado con ❤️ para la gestión eficiente de glosas médicas**
+**Desarrollado con amor para la gestión eficiente de glosas médicas**
 
 </div>
