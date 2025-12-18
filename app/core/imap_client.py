@@ -3,6 +3,13 @@ import email
 from email.header import decode_header
 import os
 import tempfile
+import logging
+import re
+import time
+from datetime import datetime
+
+# Logger del módulo
+logger = logging.getLogger(__name__)
 
 
 def _decode_header(value):
@@ -54,7 +61,7 @@ class ImapClient:
         # Auto-detectar servidor si no se especifica
         if server is None:
             server = self._detect_imap_server(email_addr)
-            print(f"[IMAP] Servidor detectado: {server}")
+            logger.info(f"Servidor IMAP detectado: {server}")
         
         if use_ssl:
             conn = imaplib.IMAP4_SSL(server, port)
@@ -62,6 +69,7 @@ class ImapClient:
             conn = imaplib.IMAP4(server, port)
         conn.login(email_addr, password)
         self.conn = conn
+        self.imap_server = server
         return True
 
     def list_mailboxes(self):
@@ -117,14 +125,20 @@ class ImapClient:
         """
         Busca correos que contengan una palabra clave en el asunto.
         Busca tanto correos leídos como no leídos.
-        timeout: tiempo máximo en segundos SIN ENCONTRAR un nuevo correo
-        on_found: callback que se llama cada vez que se encuentra un mensaje
-        date_from: fecha inicio del rango (datetime o string 'DD-Mon-YYYY')
-        date_to: fecha fin del rango (datetime o string 'DD-Mon-YYYY')
+        
+        Args:
+            keyword: Palabra clave a buscar en el asunto
+            folder: Carpeta IMAP (default: INBOX)
+            limit: Máximo de correos a retornar
+            timeout: Tiempo máximo en segundos SIN ENCONTRAR un nuevo correo
+            on_found: Callback que se llama cada vez que se encuentra un mensaje
+            date_from: Fecha inicio del rango (datetime o string)
+            date_to: Fecha fin del rango (datetime o string)
+            
+        Returns:
+            Lista de diccionarios con información de los mensajes
         """
-        import time
-        from datetime import datetime
-        last_found_time = time.time()  # Tiempo del último correo encontrado
+        last_found_time = time.time()
         
         try:
             self.select_folder(folder)
@@ -157,13 +171,13 @@ class ImapClient:
                     imap_date_from = format_imap_date(date_from)
                     if imap_date_from:
                         criteria_parts.append(f'SINCE {imap_date_from}')
-                        print(f"📅 Buscando desde: {imap_date_from}")
+                        logger.debug(f"Buscando desde: {imap_date_from}")
                 
                 if date_to:
                     imap_date_to = format_imap_date(date_to)
                     if imap_date_to:
                         criteria_parts.append(f'BEFORE {imap_date_to}')
-                        print(f"📅 Buscando hasta: {imap_date_to}")
+                        logger.debug(f"Buscando hasta: {imap_date_to}")
                 
                 if criteria_parts:
                     search_criteria = ' '.join(criteria_parts)
@@ -184,7 +198,7 @@ class ImapClient:
                 # Verificar timeout: tiempo desde el ÚLTIMO correo encontrado
                 time_since_last = time.time() - last_found_time
                 if time_since_last > timeout:
-                    print(f"⏱️ Timeout: {timeout}s sin encontrar nuevos correos. Total encontrados: {len(msgs)}")
+                    logger.info(f"Timeout: {timeout}s sin encontrar nuevos correos. Total: {len(msgs)}")
                     break
                     
                 if len(msgs) >= limit:
@@ -283,7 +297,6 @@ class ImapClient:
                 content_disposition = part.get("Content-Disposition", "")
                 if "attachment" in content_disposition.lower():
                     # Intentar extraer filename del Content-Disposition
-                    import re
                     match = re.search(r'filename[\s]*=[\s]*"?([^"]+)"?', content_disposition)
                     if match:
                         filename = match.group(1)
@@ -309,19 +322,21 @@ class ImapClient:
                     f.write(payload)
                     
                 saved.append(path)
-                print(f"✅ Adjunto guardado: {safe_name}")
+                logger.debug(f"Adjunto guardado: {safe_name}")
         
         if skipped:
-            print(f"ℹ️  {len(skipped)} archivo(s) omitido(s) (imágenes, etc.)") 
+            logger.debug(f"{len(skipped)} archivo(s) omitido(s) (imágenes, etc.)")
         
         if not saved:
-            print("⚠️ No se encontraron adjuntos Excel/Word/PDF en el mensaje")
+            logger.debug("No se encontraron adjuntos Excel/Word/PDF en el mensaje")
             
         return saved
 
     def logout(self):
+        """Cierra la conexión IMAP"""
         try:
             if self.conn:
                 self.conn.logout()
+                logger.debug("Sesión IMAP cerrada")
         except Exception:
             pass
