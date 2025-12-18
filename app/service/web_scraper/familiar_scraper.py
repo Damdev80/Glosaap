@@ -13,6 +13,35 @@ class FamiliarScraper(BaseScraper):
     def __init__(self, download_dir: str = None, progress_callback=None):
         super().__init__(download_dir, progress_callback)
         self.url = "https://eps.familiardecolombia.com/sie/loginIps.xhtml"
+        self._ensure_playwright_browsers()
+    
+    def _ensure_playwright_browsers(self):
+        """Verifica que los navegadores de Playwright estén instalados"""
+        browsers_path = os.environ.get('PLAYWRIGHT_BROWSERS_PATH', '')
+        
+        # Si no hay ruta configurada, configurarla
+        if not browsers_path:
+            appdata = os.getenv('APPDATA', os.path.expanduser('~'))
+            browsers_path = os.path.join(appdata, 'Glosaap', 'browsers')
+            os.environ['PLAYWRIGHT_BROWSERS_PATH'] = browsers_path
+        
+        # Buscar carpeta de chromium
+        if browsers_path and os.path.exists(browsers_path):
+            for item in os.listdir(browsers_path):
+                if item.startswith('chromium') and not item.startswith('chromium_headless'):
+                    print(f"[OK] Navegador Chromium encontrado")
+                    return
+        
+        # Fallback: intentar lanzar
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                browser.close()
+                return
+        except Exception as e:
+            print(f"[ERROR] Navegador no encontrado: {e}")
+            print("  Ejecuta: playwright install chromium")
+            raise
     
     def login_and_download(self, nit: str, usuario: str, contraseña: str, 
                           fecha_inicio: str = None, fecha_fin: str = None) -> dict:
