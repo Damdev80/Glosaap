@@ -214,7 +214,7 @@ class MessagesScreen:
                     size=20,
                     weight=ft.FontWeight.BOLD
                 ),
-                ft.IconsButton(
+                ft.IconButton(
                     ft.Icons.REFRESH,
                     on_click=self._on_refresh_click,
                     tooltip="Recargar mensajes"
