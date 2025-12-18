@@ -37,7 +37,7 @@ class AppState:
         self.dashboard_action = None
         self.found_messages = []
     
-    def set_eps(self, eps_info: Dict[str, Any], date_from: datetime = None, date_to: datetime = None):
+    def set_eps(self, eps_info: Dict[str, Any], date_from: Optional[datetime] = None, date_to: Optional[datetime] = None):
         """Establece la EPS seleccionada con su rango de fechas"""
         self.selected_eps = eps_info
         self.date_from = date_from

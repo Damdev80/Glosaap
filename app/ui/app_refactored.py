@@ -46,11 +46,10 @@ def main(page: ft.Page):
     # ==================== CONFIGURACIÓN INICIAL ====================
     
     page.title = "Glosaap"
-    page.window_width = WINDOW_SIZES["login"]["width"]
-    page.window_height = WINDOW_SIZES["login"]["height"]
+    page.window.width = WINDOW_SIZES["login"]["width"]
+    page.window.height = WINDOW_SIZES["login"]["height"]
     page.bgcolor = COLORS["bg_white"]
     page.padding = 0
-    page.assets_dir = ASSETS_DIR
     
     # Icono de la ventana
     icon_path = os.path.join(ASSETS_DIR, "icons", "app_logo.png")
@@ -240,19 +239,22 @@ def main(page: ft.Page):
     
     # ==================== CONSTRUIR PÁGINA ====================
     
+    # Construir lista de controles (filtrar None)
+    controls = [
+        login_view.container,
+        method_selection_view.container,
+        dashboard_view.container,
+        tools_view.container,
+        homologacion_view.container,
+        mix_excel_view.container,
+        homologador_manual_view.container,
+        web_download_view.container,
+        eps_screen.build(),
+        messages_view.container
+    ]
+    
     page.add(
-        ft.Stack([
-            login_view.container,
-            method_selection_view.container,
-            dashboard_view.container,
-            tools_view.container,
-            homologacion_view.container,
-            mix_excel_view.container,
-            homologador_manual_view.container,
-            web_download_view.container,
-            eps_screen.build(),
-            messages_view.container
-        ], expand=True)
+        ft.Stack([c for c in controls if c is not None], expand=True)
     )
     
     # ==================== AUTO-LOGIN ====================

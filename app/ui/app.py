@@ -623,10 +623,35 @@ def main(page: ft.Page):
                         messages_view.set_processing(False, f"✅ {message}")
                         messages_view.processing_status.color = COLORS["success"]
                         
-                        AlertDialog.show_success(
+                        # Preparar estadísticas desde los DataFrames
+                        total_detalles = len(result_data.get('detalle', [])) if isinstance(result_data, dict) else 0
+                        total_glosas = len(result_data.get('glosa', [])) if isinstance(result_data, dict) else 0
+                        
+                        stats = {
+                            'archivos_procesados': len(excel_files),
+                            'total_registros': total_detalles + total_glosas,
+                        }
+                        
+                        # Extraer nombre del archivo del mensaje
+                        output_files = []
+                        if "Guardado en:" in message:
+                            for line in message.split('\n'):
+                                if "Guardado en:" in line or "COOSALUD_GLOSAS_" in line:
+                                    # Extraer ruta del archivo
+                                    path = line.split(":")[-1].strip() if ":" in line else ""
+                                    if path and os.path.exists(path):
+                                        output_files.append(path)
+                        
+                        def open_coosalud_folder():
+                            import subprocess
+                            subprocess.Popen(f'explorer "{output_dir}"')
+                        
+                        AlertDialog.show_processing_complete(
                             page=page,
-                            title="Procesamiento completado",
-                            message=message
+                            eps_name="COOSALUD",
+                            stats=stats,
+                            output_files=output_files if output_files else [f"📁 {output_dir}"],
+                            on_open_folder=open_coosalud_folder
                         )
                     else:
                         messages_view.set_processing(False, f"❌ {message}")

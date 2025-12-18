@@ -32,8 +32,8 @@ class NavigationController:
     
     def _set_window_size(self, width: int, height: int):
         """Establece el tamaño de la ventana"""
-        self.page.window_width = width
-        self.page.window_height = height
+        self.page.window.width = width
+        self.page.window.height = height
     
     def go_to(self, view_name: str, **kwargs):
         """
