@@ -147,9 +147,21 @@ class EmailService:
         """Obtiene resumen de adjuntos descargados"""
         return self.attachment_service.get_summary()
     
-    def get_excel_files(self, exclude_devoluciones=True):
-        """Obtiene solo archivos Excel/CSV descargados"""
+    def get_excel_files(self, exclude_devoluciones=True, session_only=True):
+        """
+        Obtiene archivos Excel/CSV descargados
+        
+        Args:
+            exclude_devoluciones: Excluir archivos de devolución
+            session_only: Si True, solo retorna archivos de la sesión actual
+        """
+        if session_only:
+            return self.attachment_service.get_session_excel_files(exclude_devoluciones=exclude_devoluciones)
         return self.attachment_service.get_excel_files(exclude_devoluciones=exclude_devoluciones)
+    
+    def clear_session(self):
+        """Limpia los archivos de la sesión actual (para nueva búsqueda)"""
+        return self.attachment_service.clear_session()
     
     def clear_attachments(self):
         """Limpia todos los archivos descargados del directorio temporal"""

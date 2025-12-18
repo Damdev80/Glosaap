@@ -16,8 +16,9 @@ class AttachmentService:
             base_dir: Directorio base para guardar adjuntos. 
                      Si es None, usa carpeta temporal del sistema (mismo que imap_client)
         """
-        # Inicializar la lista PRIMERO
-        self.downloaded_files = []
+        # Inicializar las listas PRIMERO
+        self.downloaded_files = []  # Todos los archivos en el directorio
+        self.session_files = []     # Solo archivos descargados en esta búsqueda
         
         if base_dir is None:
             # IMPORTANTE: Usar MISMO directorio que imap_client (tempfile.gettempdir())
@@ -78,11 +79,15 @@ class AttachmentService:
             print(f"[ATTACH] ⚠️ No se encontraron archivos en: {self.base_dir}")
     
     def add_files(self, file_paths):
-        """Agrega archivos a la lista de descargados"""
+        """Agrega archivos a la lista de descargados Y de sesión"""
         for path in file_paths:
-            if os.path.exists(path) and path not in self.downloaded_files:
-                self.downloaded_files.append(path)
-        print(f"[ATTACH] Archivos agregados. Total ahora: {len(self.downloaded_files)}")
+            if os.path.exists(path):
+                if path not in self.downloaded_files:
+                    self.downloaded_files.append(path)
+                # Siempre agregar a session_files (archivos de esta búsqueda)
+                if path not in self.session_files:
+                    self.session_files.append(path)
+        print(f"[ATTACH] Archivos sesión: {len(self.session_files)} | Total dir: {len(self.downloaded_files)}")
     
     def rescan(self):
         """Re-escanea el directorio para actualizar la lista de archivos"""
@@ -117,9 +122,53 @@ class AttachmentService:
         else:
             print(f"[CLEANUP] Directorio no existe: {self.base_dir}")
         
-        # Limpiar lista en memoria
+        # Limpiar listas en memoria
         self.downloaded_files = []
-        print(f"[CLEANUP] Lista en memoria limpiada")
+        self.session_files = []
+        print(f"[CLEANUP] Listas en memoria limpiadas")
+    
+    def clear_session(self):
+        """Limpia solo la lista de archivos de sesión (no elimina archivos físicos)"""
+        print(f"[CLEANUP] Limpiando archivos de sesión: {len(self.session_files)} archivos")
+        self.session_files = []
+    
+    def get_session_files(self):
+        """Retorna solo los archivos descargados en esta sesión de búsqueda"""
+        return self.session_files
+    
+    def get_session_excel_files(self, exclude_devoluciones=True):
+        """
+        Filtra y retorna archivos Excel/CSV SOLO de la sesión actual
+        
+        Args:
+            exclude_devoluciones: Si es True, excluye archivos de devolución
+        """
+        excel_files = [
+            f for f in self.session_files 
+            if f.endswith(('.xlsx', '.xls', '.xlsm', '.xlsb', '.csv'))
+        ]
+        
+        print(f"[SESSION] Archivos Excel en sesión: {len(excel_files)}")
+        
+        if not exclude_devoluciones:
+            return excel_files
+        
+        # Filtrar devoluciones
+        filtered = []
+        archivos_devolucion = 0
+        
+        for f in excel_files:
+            filename = os.path.basename(f).lower()
+            if 'devolucion' in filename or 'devolución' in filename:
+                archivos_devolucion += 1
+                continue
+            filtered.append(f)
+        
+        if archivos_devolucion > 0:
+            print(f"[SESSION] Devoluciones excluidas: {archivos_devolucion}")
+        print(f"[SESSION] Archivos a procesar: {len(filtered)}")
+        
+        return filtered
     
     def get_all_files(self):
         """Retorna todos los archivos descargados"""
