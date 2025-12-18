@@ -53,7 +53,7 @@ class EmailService:
         return True
     
 
-    def search_messages(self, keyword, limit=500, timeout=30, on_found=None, date_from=None, date_to=None):
+    def search_messages(self, keyword, limit=1000, timeout=30, on_found=None, date_from=None, date_to=None):
         """
         Busca mensajes por palabra clave en el asunto
         
@@ -70,6 +70,9 @@ class EmailService:
         """
         if not self.imap_client:
             raise Exception("No hay conexión IMAP establecida")
+        
+        print(f"[SEARCH] Buscando: keyword='{keyword}', limit={limit}, timeout={timeout}")
+        print(f"[SEARCH] Rango: {date_from} hasta {date_to}")
         
         self.messages = self.imap_client.search_by_subject(
             keyword, 
@@ -147,6 +150,10 @@ class EmailService:
     def get_excel_files(self, exclude_devoluciones=True):
         """Obtiene solo archivos Excel/CSV descargados"""
         return self.attachment_service.get_excel_files(exclude_devoluciones=exclude_devoluciones)
+    
+    def clear_attachments(self):
+        """Limpia todos los archivos descargados del directorio temporal"""
+        return self.attachment_service.clear_all()
     
     def disconnect(self):
         """Cierra la conexión IMAP"""

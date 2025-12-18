@@ -14,22 +14,18 @@ class AttachmentService:
         """
         Args:
             base_dir: Directorio base para guardar adjuntos. 
-                     Si es None, usa carpeta persistente (AppData en Windows)
+                     Si es None, usa carpeta temporal del sistema (mismo que imap_client)
         """
         # Inicializar la lista PRIMERO
         self.downloaded_files = []
         
         if base_dir is None:
-            # Usar AppData en Windows para persistencia (funciona en exe y desarrollo)
-            if sys.platform == 'win32':
-                appdata = os.getenv('APPDATA')
-                self.base_dir = os.path.join(appdata, 'Glosaap', 'attachments')
-            else:
-                # Fallback a temporal
-                self.base_dir = os.path.join(
-                    tempfile.gettempdir(), 
-                    "glosaap_attachments"
-                )
+            # IMPORTANTE: Usar MISMO directorio que imap_client (tempfile.gettempdir())
+            # para que los archivos descargados se detecten correctamente
+            self.base_dir = os.path.join(
+                tempfile.gettempdir(), 
+                "glosaap_attachments"
+            )
         else:
             # Convertir a ruta absoluta si es relativa
             if not os.path.isabs(base_dir):
@@ -44,7 +40,7 @@ class AttachmentService:
     def _ensure_directory(self):
         """Crea el directorio si no existe y carga archivos existentes"""
         os.makedirs(self.base_dir, exist_ok=True)
-        print(f"DEBUG: AttachmentService base_dir = {self.base_dir}")
+        print(f"[ATTACH] Directorio de trabajo: {self.base_dir}")
         
         # Cargar archivos existentes en el directorio
         self._scan_directory()
@@ -52,23 +48,78 @@ class AttachmentService:
     def _scan_directory(self):
         """Escanea el directorio y carga todos los archivos existentes"""
         if not os.path.exists(self.base_dir):
+            print(f"[ATTACH] Directorio no existe todavía: {self.base_dir}")
             return
         
+        # Limpiar lista antes de escanear
+        self.downloaded_files = []
+        
+        # Listar TODOS los archivos en el directorio
+        all_files_in_dir = []
         for root, dirs, files in os.walk(self.base_dir):
             for file in files:
                 file_path = os.path.join(root, file)
+                all_files_in_dir.append(file_path)
                 if file_path not in self.downloaded_files:
                     self.downloaded_files.append(file_path)
         
-        print(f"DEBUG: Archivos cargados del directorio: {len(self.downloaded_files)}")
+        print(f"[ATTACH] Total archivos en directorio: {len(all_files_in_dir)}")
+        print(f"[ATTACH] Archivos cargados en lista: {len(self.downloaded_files)}")
+        
         excel_count = len([f for f in self.downloaded_files if f.endswith(('.xlsx', '.xls', '.xlsm', '.xlsb', '.csv'))])
-        print(f"DEBUG: De los cuales {excel_count} son Excel")
+        print(f"[ATTACH] Archivos Excel detectados: {excel_count}")
+        
+        # Mostrar primeros 5 archivos para debug
+        if self.downloaded_files:
+            print(f"[ATTACH] Primeros archivos:")
+            for i, f in enumerate(self.downloaded_files[:5]):
+                print(f"  {i+1}. {os.path.basename(f)}")
+        else:
+            print(f"[ATTACH] ⚠️ No se encontraron archivos en: {self.base_dir}")
     
     def add_files(self, file_paths):
         """Agrega archivos a la lista de descargados"""
         for path in file_paths:
             if os.path.exists(path) and path not in self.downloaded_files:
                 self.downloaded_files.append(path)
+        print(f"[ATTACH] Archivos agregados. Total ahora: {len(self.downloaded_files)}")
+    
+    def rescan(self):
+        """Re-escanea el directorio para actualizar la lista de archivos"""
+        print(f"[ATTACH] Re-escaneando directorio...")
+        self._scan_directory()
+        return len(self.downloaded_files)
+    
+    def clear_all(self):
+        """Elimina todos los archivos del directorio temporal"""
+        import shutil
+        
+        print(f"[CLEANUP] clear_all() llamado - base_dir: {self.base_dir}")
+        
+        if os.path.exists(self.base_dir):
+            files_in_dir = [f for f in os.listdir(self.base_dir) if os.path.isfile(os.path.join(self.base_dir, f))]
+            file_count = len(files_in_dir)
+            print(f"[CLEANUP] Eliminando {file_count} archivo(s) del directorio...")
+            
+            deleted = 0
+            errors = 0
+            # Eliminar todos los archivos
+            for filename in files_in_dir:
+                file_path = os.path.join(self.base_dir, filename)
+                try:
+                    os.unlink(file_path)
+                    deleted += 1
+                except Exception as e:
+                    errors += 1
+                    print(f"[CLEANUP] Error al eliminar {filename}: {e}")
+            
+            print(f"[CLEANUP] ✅ Eliminados: {deleted}, Errores: {errors}")
+        else:
+            print(f"[CLEANUP] Directorio no existe: {self.base_dir}")
+        
+        # Limpiar lista en memoria
+        self.downloaded_files = []
+        print(f"[CLEANUP] Lista en memoria limpiada")
     
     def get_all_files(self):
         """Retorna todos los archivos descargados"""
@@ -81,6 +132,9 @@ class AttachmentService:
         Args:
             exclude_devoluciones: Si es True, excluye archivos de devolución
         """
+        # Re-escanear directorio para asegurar lista actualizada
+        self.rescan()
+        
         excel_files = [
             f for f in self.downloaded_files 
             if f.endswith(('.xlsx', '.xls', '.xlsm', '.xlsb', '.csv'))

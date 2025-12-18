@@ -271,6 +271,17 @@ def main(page: ft.Page):
         app_state["date_from"] = date_from
         app_state["date_to"] = date_to
         
+        # DEBUG: Mostrar qué EPS se seleccionó
+        print(f"[EPS] ========================================")
+        print(f"[EPS] EPS seleccionada: {eps_info.get('name')}")
+        print(f"[EPS] Filter: {eps_info.get('filter')}")
+        print(f"[EPS] Subject pattern: {eps_info.get('subject_pattern')}")
+        print(f"[EPS] ========================================")
+        
+        # LIMPIAR archivos antiguos antes de nueva búsqueda
+        print("[CLEANUP] Limpiando archivos de búsquedas anteriores...")
+        email_service.clear_attachments()
+        
         # Preparar info de búsqueda
         eps_name = eps_info["name"]
         date_info = ""
@@ -305,34 +316,34 @@ def main(page: ft.Page):
     def filter_messages_by_eps(messages):
         """Filtra mensajes según la EPS seleccionada"""
         eps = app_state.get("selected_eps")
-        if not eps or not eps.get("filter"):
+        if not eps:
             return messages
         
         filtered = []
         filter_type = eps.get("filter_type", "keyword")
-        filter_value = eps["filter"].lower()
-        subject_pattern = eps.get("subject_pattern", "").lower()
+        filter_value = (eps.get("filter") or "").lower()
+        subject_pattern = (eps.get("subject_pattern") or "").lower()
+        sender_filter = (eps.get("sender_filter") or "").lower()
         
         for msg in messages:
             subject = (msg.get("subject") or "").lower()
             from_addr = (msg.get("from") or "").lower()
             
             if filter_type == "keyword":
-                if filter_value in subject or filter_value in from_addr:
+                if filter_value and (filter_value in subject or filter_value in from_addr):
                     filtered.append(msg)
             elif filter_type == "subject_exact_pattern":
-                if subject_pattern in subject:
-                    # Excluir Sanitas si es filtro de Mutualser
-                    if "sanitas" not in subject and "sanitas" not in from_addr:
-                        # Verificar filtro por remitente si existe
-                        sender_filter = eps.get("sender_filter", "").lower()
-                        if sender_filter:
-                            if sender_filter in from_addr:
-                                filtered.append(msg)
-                        else:
+                has_subject = subject_pattern and subject_pattern in subject
+                
+                if has_subject:
+                    if sender_filter:
+                        if sender_filter in from_addr:
+                            filtered.append(msg)
+                    else:
+                        if "sanitas" not in subject and "sanitas" not in from_addr:
                             filtered.append(msg)
             elif filter_type == "email":
-                if filter_value in from_addr:
+                if filter_value and filter_value in from_addr:
                     filtered.append(msg)
         
         return filtered
@@ -370,9 +381,31 @@ def main(page: ft.Page):
                             except Exception as e:
                                 messages_view.update_message_status(msg_id, f"❌ Error", is_error=True)
                 
+                # Determinar palabra clave de búsqueda según EPS
+                eps_info = app_state.get("selected_eps")
+                search_keyword = "glosa"  # Default
+                
+                if eps_info:
+                    # Si tiene subject_pattern, usarlo para búsqueda más específica
+                    subject_pattern = eps_info.get("subject_pattern", "")
+                    if subject_pattern:
+                        # Buscar palabras significativas (no preposiciones)
+                        # Palabras a ignorar
+                        ignore_words = ['de', 'del', 'la', 'el', 'y', 'en', 'a', 'con']
+                        words = subject_pattern.split()
+                        
+                        # Buscar primera palabra significativa
+                        for word in words:
+                            if word.lower() not in ignore_words and len(word) > 2:
+                                search_keyword = word
+                                break
+                        
+                        print(f"[SEARCH] Subject pattern: '{subject_pattern}'")
+                        print(f"[SEARCH] Palabra clave seleccionada: '{search_keyword}'")
+                
                 # Buscar con filtro de fechas
                 email_service.search_messages(
-                    "glosa",
+                    search_keyword,
                     limit=500,
                     timeout=30,
                     on_found=on_found,
@@ -572,8 +605,16 @@ def main(page: ft.Page):
                     messages_view.set_processing(True, f"📊 Procesando {len(excel_files)} archivo(s) Excel...")
 
                     # Configurar procesador con homologador de Coosalud
-                    homologador_path = r"\\MINERVA\Cartera\GLOSAAP\HOMOLOGADOR\mutualser_homologacion.xlsx"
+                    homologador_path = r"\\MINERVA\Cartera\GLOSAAP\HOMOLOGADOR\coosalud_homologacion.xlsx"
                     output_dir = r"\\MINERVA\Cartera\GLOSAAP\REPOSITORIO DE RESULTADOS\COOSALUD"
+                    
+                    # Verificar que el directorio de salida existe
+                    if not os.path.exists(output_dir):
+                        try:
+                            os.makedirs(output_dir, exist_ok=True)
+                            print(f"[COOSALUD] Directorio de salida creado: {output_dir}")
+                        except Exception as e:
+                            print(f"[COOSALUD] Error al crear directorio: {e}")
                     
                     processor = CoosaludProcessor(homologador_path=homologador_path)
                     result_data, message = processor.process_glosas(excel_files, output_dir=output_dir)

@@ -28,7 +28,34 @@ class ImapClient:
         self.conn = None
         self.tempdir = None
 
-    def connect(self, email_addr, password, server="imap.gmail.com", port=993, use_ssl=True):
+    def _detect_imap_server(self, email_addr):
+        """Detecta el servidor IMAP basado en el dominio del correo"""
+        domain = email_addr.split('@')[-1].lower()
+        
+        # Servidores conocidos
+        known_servers = {
+            'gmail.com': 'imap.gmail.com',
+            'googlemail.com': 'imap.gmail.com',
+            'outlook.com': 'outlook.office365.com',
+            'hotmail.com': 'outlook.office365.com',
+            'live.com': 'outlook.office365.com',
+            'yahoo.com': 'imap.mail.yahoo.com',
+            'yahoo.es': 'imap.mail.yahoo.com',
+        }
+        
+        if domain in known_servers:
+            return known_servers[domain]
+        
+        # Para dominios personalizados (cPanel, hosting propio):
+        # Intentar con mail.dominio primero (más común en cPanel)
+        return f"mail.{domain}"
+
+    def connect(self, email_addr, password, server=None, port=993, use_ssl=True):
+        # Auto-detectar servidor si no se especifica
+        if server is None:
+            server = self._detect_imap_server(email_addr)
+            print(f"[IMAP] Servidor detectado: {server}")
+        
         if use_ssl:
             conn = imaplib.IMAP4_SSL(server, port)
         else:
