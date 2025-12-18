@@ -7,7 +7,8 @@ import os
 
 # Configurar ruta de navegadores de Playwright ANTES de cualquier import
 if sys.platform == 'win32':
-    browsers_path = os.path.join(os.getenv('APPDATA'), 'Glosaap', 'browsers')
+    appdata = os.getenv('APPDATA', os.path.expanduser('~'))
+    browsers_path = os.path.join(appdata, 'Glosaap', 'browsers')
     os.environ['PLAYWRIGHT_BROWSERS_PATH'] = browsers_path
     # Crear directorio si no existe
     os.makedirs(browsers_path, exist_ok=True)

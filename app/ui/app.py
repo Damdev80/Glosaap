@@ -6,6 +6,14 @@ import os
 import sys
 import threading
 
+# Configurar ruta de navegadores de Playwright ANTES de cualquier import
+if sys.platform == 'win32':
+    appdata = os.getenv('APPDATA', os.path.expanduser('~'))
+    browsers_path = os.path.join(appdata, 'Glosaap', 'browsers')
+    os.environ['PLAYWRIGHT_BROWSERS_PATH'] = browsers_path
+    # Crear directorio si no existe
+    os.makedirs(browsers_path, exist_ok=True)
+
 # Configurar path para imports - agregar el directorio raíz del proyecto
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if PROJECT_ROOT not in sys.path:
@@ -278,9 +286,10 @@ def main(page: ft.Page):
         print(f"[EPS] Subject pattern: {eps_info.get('subject_pattern')}")
         print(f"[EPS] ========================================")
         
-        # LIMPIAR archivos antiguos antes de nueva búsqueda
+        # LIMPIAR sesión anterior antes de nueva búsqueda
+        # (no borra archivos físicos, solo la lista de archivos de esta búsqueda)
         print("[CLEANUP] Limpiando archivos de búsquedas anteriores...")
-        email_service.clear_attachments()
+        email_service.clear_session()
         
         # Preparar info de búsqueda
         eps_name = eps_info["name"]
@@ -515,28 +524,35 @@ def main(page: ft.Page):
     
     def process_eps_files():
         """Procesa archivos de una EPS"""
+        # Deshabilitar botón INMEDIATAMENTE al entrar
+        messages_view.process_eps_btn.disabled = True
+        page.update()
+        
         def worker():
             try:
                 eps_type = messages_view.process_eps_btn.data
                 if not eps_type:
+                    messages_view.process_eps_btn.disabled = False
+                    page.update()
                     return
                 
                 messages_view.set_processing(True, f"🔄 Procesando {eps_type.upper()}...")
-                messages_view.process_eps_btn.disabled = True
                 
                 if eps_type == "mutualser":
-                    excel_files = email_service.get_excel_files()
+                    # Usar session_only=True para procesar solo archivos de esta búsqueda
+                    excel_files = email_service.get_excel_files(session_only=True)
                     
                     # Verificación simple - solo verificar si hay archivos
                     if not excel_files:
                         messages_view.set_processing(False, "❌ No hay archivos Excel para procesar")
                         messages_view.process_eps_btn.disabled = False
+                        page.update()
                         
                         # Mostrar diálogo informativo
                         AlertDialog.show_warning(
                             page=page,
                             title="Sin archivos para procesar",
-                            message="No se encontraron archivos Excel en el directorio temporal.\n\nLos archivos se almacenan automáticamente cuando descargas adjuntos."
+                            message="No se descargaron archivos Excel en esta búsqueda.\n\nPrimero descarga los adjuntos de los correos."
                         )
                         return
                     
@@ -584,20 +600,22 @@ def main(page: ft.Page):
                         )
                     
                     messages_view.process_eps_btn.disabled = False
+                    page.update()
                 
                 elif eps_type == "coosalud":
                     from app.service.processors import CoosaludProcessor
                     
-                    # Obtener archivos Excel (excluyendo devoluciones)
-                    excel_files = email_service.get_excel_files(exclude_devoluciones=True)
+                    # Obtener archivos Excel de ESTA SESIÓN (excluyendo devoluciones)
+                    excel_files = email_service.get_excel_files(exclude_devoluciones=True, session_only=True)
                     if not excel_files:
                         messages_view.set_processing(False, "❌ No hay archivos Excel para procesar")
                         messages_view.process_eps_btn.disabled = False
+                        page.update()
                         
                         AlertDialog.show_warning(
                             page=page,
                             title="Sin archivos para procesar",
-                            message="No se encontraron archivos Excel de GLOSAS.\n\nLos archivos de DEVOLUCIÓN fueron excluidos automáticamente."
+                            message="No se descargaron archivos Excel de GLOSAS en esta búsqueda.\n\nPrimero descarga los adjuntos de los correos."
                         )
                         return
 
@@ -618,6 +636,9 @@ def main(page: ft.Page):
                     
                     processor = CoosaludProcessor(homologador_path=homologador_path)
                     result_data, message = processor.process_glosas(excel_files, output_dir=output_dir)
+                    
+                    # Rehabilitar botón después de procesar
+                    messages_view.process_eps_btn.disabled = False
                     
                     if result_data:
                         messages_view.set_processing(False, f"✅ {message}")
@@ -663,10 +684,13 @@ def main(page: ft.Page):
                             message=message
                         )
                     
+                    page.update()
+                    
             except Exception as ex:
                 messages_view.set_processing(False, f"❌ Error: {str(ex)}")
                 messages_view.processing_status.color = COLORS["error"]
                 messages_view.process_eps_btn.disabled = False
+                page.update()
                 
                 AlertDialog.show_error(
                     page=page,
