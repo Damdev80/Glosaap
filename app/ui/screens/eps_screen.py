@@ -5,6 +5,7 @@ import flet as ft
 from app.ui.styles import COLORS, FONT_SIZES, SPACING
 from app.ui.components.date_range_picker import DateRangePicker
 from app.ui.components.eps_card import EpsCard
+from app.ui.components.alert_dialog import AlertDialog
 from app.config.eps_config import get_eps_list
 
 
@@ -70,51 +71,19 @@ class EpsScreen:
     
     def _show_dates_required_dialog(self):
         """Muestra un diálogo indicando que las fechas son obligatorias"""
-        def close_dialog(e):
-            dialog.open = False
-            self.page.update()
-        
-        dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("📅 Fechas requeridas"),
-            content=ft.Text(
-                "Debes seleccionar un rango de fechas antes de elegir una EPS.\n\n"
-                "Por favor, selecciona la fecha 'Desde' y 'Hasta' para continuar.",
-                size=14
-            ),
-            actions=[
-                ft.TextButton("Entendido", on_click=close_dialog),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
+        AlertDialog.show_warning(
+            self.page,
+            "Fechas requeridas",
+            "Debes seleccionar un rango de fechas antes de elegir una EPS.\n\nPor favor, selecciona la fecha 'Desde' y 'Hasta' para continuar."
         )
-        
-        self.page.overlay.append(dialog)
-        dialog.open = True
-        self.page.update()
     
     def _show_date_error_dialog(self):
         """Muestra un diálogo de alerta cuando las fechas son incompatibles"""
-        def close_dialog(e):
-            dialog.open = False
-            self.page.update()
-        
-        dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("⚠️ Rango de fechas inválido"),
-            content=ft.Text(
-                "La fecha 'Desde' no puede ser mayor que la fecha 'Hasta'.\n\n"
-                "Por favor, corrige el rango de fechas antes de continuar.",
-                size=14
-            ),
-            actions=[
-                ft.TextButton("Entendido", on_click=close_dialog),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
+        AlertDialog.show_error(
+            self.page,
+            "Rango de fechas inválido",
+            "La fecha 'Desde' no puede ser mayor que la fecha 'Hasta'.\n\nPor favor, corrige el rango de fechas antes de continuar."
         )
-        
-        self.page.overlay.append(dialog)
-        dialog.open = True
-        self.page.update()
     
     def _handle_logout(self, e):
         """Maneja el cierre de sesión"""

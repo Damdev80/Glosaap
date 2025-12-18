@@ -17,11 +17,29 @@ class EpsCard:
         """
         self.eps_info = eps_info
         self.on_click_callback = on_click
+        self.container = None
     
     def _handle_click(self, e):
         """Maneja el click en la tarjeta"""
         if self.on_click_callback:
             self.on_click_callback(self.eps_info)
+    
+    def _on_hover(self, e):
+        """Efecto hover suave"""
+        is_hovered = e.data == "true"
+        if self.container:
+            self.container.scale = 1.03 if is_hovered else 1.0
+            self.container.shadow = ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=20 if is_hovered else 10,
+                color=ft.Colors.with_opacity(0.15 if is_hovered else 0.06, COLORS["primary"] if is_hovered else COLORS["text_primary"]),
+                offset=ft.Offset(0, 8 if is_hovered else 3)
+            )
+            self.container.border = ft.border.all(
+                2 if is_hovered else 1.5, 
+                COLORS["primary"] if is_hovered else COLORS["border_light"]
+            )
+            self.container.update()
     
     def build(self):
         """Construye y retorna la tarjeta"""
@@ -30,53 +48,49 @@ class EpsCard:
         
         if image_path and os.path.exists(image_path):
             # Usar imagen
-            visual_element = ft.Image(
-                src=image_path,
-                width=50,
-                height=50,
-                fit=ft.ImageFit.CONTAIN
+            visual_element = ft.Container(
+                content=ft.Image(
+                    src=image_path,
+                    width=48,
+                    height=48,
+                    fit=ft.ImageFit.CONTAIN
+                ),
+                padding=4,
             )
         else:
             # Usar emoji/icono
-            visual_element = ft.Text(self.eps_info.get("icon", "📋"), size=36)
-        
-        def on_hover(e):
-            container.scale = 1.05 if e.data == "true" else 1.0
-            container.shadow = ft.BoxShadow(
-                spread_radius=0,
-                blur_radius=16 if e.data == "true" else 10,
-                color=ft.Colors.with_opacity(0.12 if e.data == "true" else 0.06, COLORS["text_primary"]),
-                offset=ft.Offset(0, 6 if e.data == "true" else 3)
+            visual_element = ft.Container(
+                content=ft.Text(self.eps_info.get("icon", "📋"), size=38),
+                padding=4,
             )
-            container.bgcolor = COLORS["hover"] if e.data == "true" else COLORS["bg_white"]
-            self.page.update() if hasattr(self, 'page') else None
         
-        container = ft.Container(
+        self.container = ft.Container(
             content=ft.Column([
                 visual_element,
                 ft.Text(
                     self.eps_info["name"],
-                    size=15,
-                    weight=ft.FontWeight.BOLD,
+                    size=FONT_SIZES["body"],
+                    weight=ft.FontWeight.W_600,
                     color=COLORS["text_primary"],
                     text_align=ft.TextAlign.CENTER
                 ),
                 ft.Text(
                     self.eps_info.get("description", ""),
-                    size=12,
+                    size=FONT_SIZES["caption"],
                     color=COLORS["text_secondary"],
                     text_align=ft.TextAlign.CENTER,
                     weight=ft.FontWeight.W_400
                 )
-            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8),
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=6, tight=True),
             bgcolor=COLORS["bg_white"],
-            border_radius=16,
-            padding=18,
-            width=155,
-            height=140,
+            border_radius=14,
+            padding=ft.padding.symmetric(horizontal=16, vertical=14),
+            width=150,
+            height=135,
             ink=True,
+            ink_color=ft.Colors.with_opacity(0.1, COLORS["primary"]),
             on_click=self._handle_click,
-            on_hover=on_hover,
+            on_hover=self._on_hover,
             shadow=ft.BoxShadow(
                 spread_radius=0,
                 blur_radius=10,
@@ -84,7 +98,8 @@ class EpsCard:
                 offset=ft.Offset(0, 3)
             ),
             border=ft.border.all(1.5, COLORS["border_light"]),
-            animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+            animate_scale=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
+            animate=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
             scale=1.0
         )
-        return container
+        return self.container
