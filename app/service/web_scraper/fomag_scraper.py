@@ -62,85 +62,86 @@ class FomagScraper(BaseScraper):
             print("[INSTALACION REQUERIDA] Navegadores de Playwright no encontrados")
             print("="*70)
             print("")
-            print("  Es necesario descargar el navegador Chromium para el scraper.")
-            print("  Esto solo ocurre la primera vez que usas esta funcion.")
+            print("  IMPORTANTE: Debes ejecutar el instalador de navegadores")
             print("")
-            print("  Descarga: ~150 MB")
-            print("  Tiempo estimado: 3-5 minutos")
+            print("  SOLUCION RAPIDA:")
+            print("")
+            print("  1. Busca el archivo: INSTALAR_NAVEGADORES.bat")
+            print("  2. Haz DOBLE CLIC en el archivo")
+            print("  3. Espera 3-5 minutos a que termine")
+            print("  4. Vuelve a intentar usar el scraper")
+            print("")
+            print("  El archivo .bat debe estar en la misma carpeta que Glosaap.exe")
+            print("")
+            print("  Si no tienes el archivo, ejecuta esto en PowerShell:")
+            print(f"    $env:PLAYWRIGHT_BROWSERS_PATH=\"{os.getenv('APPDATA')}\\Glosaap\\browsers\"")
+            print("    pip install playwright")
+            print("    playwright install chromium")
+            print("")
+            print("="*70)
             print("")
             
+            # Intentar abrir el archivo .bat automáticamente si existe
             try:
-                # Usar el CLI de Playwright directamente con Python
-                import playwright
-                from playwright._impl._driver import compute_driver_executable, get_driver_env
+                # Buscar INSTALAR_NAVEGADORES.bat en varias ubicaciones
+                possible_locations = [
+                    os.path.join(os.path.dirname(sys.executable), "INSTALAR_NAVEGADORES.bat"),
+                    os.path.join(os.getcwd(), "INSTALAR_NAVEGADORES.bat"),
+                    os.path.join(os.path.dirname(__file__), "..", "..", "..", "INSTALAR_NAVEGADORES.bat"),
+                ]
                 
-                print("  [1/2] Localizando driver de Playwright...")
+                bat_file = None
+                for location in possible_locations:
+                    if os.path.exists(location):
+                        bat_file = location
+                        break
                 
-                # Obtener ruta del driver
-                driver_executable = compute_driver_executable()
-                env = get_driver_env()
-                
-                # Preparar entorno con ruta de navegadores
-                full_env = os.environ.copy()
-                full_env.update(env)
-                
-                if 'PLAYWRIGHT_BROWSERS_PATH' in full_env:
-                    print(f"  Directorio destino: {full_env['PLAYWRIGHT_BROWSERS_PATH']}")
-                
-                print("  [2/2] Descargando e instalando Chromium...")
-                print("")
-                
-                # Ejecutar instalacion
-                process = subprocess.Popen(
-                    [str(driver_executable), "install", "chromium"],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    env=full_env,
-                    bufsize=1,
-                    universal_newlines=True
-                )
-                
-                # Mostrar progreso
-                for line in process.stdout:
-                    line = line.strip()
-                    if line:
-                        print(f"  {line}")
-                
-                process.wait()
-                
-                if process.returncode == 0:
+                if bat_file:
+                    print(f"[INFO] Archivo encontrado: {bat_file}")
                     print("")
-                    print("="*70)
-                    print("[OK] Navegadores instalados correctamente")
-                    print("="*70)
-                    print("")
-                    return
-                else:
-                    raise Exception(f"Codigo de salida: {process.returncode}")
+                    respuesta = input("Deseas ejecutar el instalador ahora? (s/n): ").strip().lower()
                     
-            except Exception as install_error:
-                # Si falla la instalacion automatica, mostrar instrucciones
+                    if respuesta == 's' or respuesta == 'si':
+                        print("")
+                        print("  Ejecutando instalador...")
+                        print("  Por favor espera...")
+                        print("")
+                        
+                        # Ejecutar el .bat y esperar
+                        result = subprocess.run(
+                            [bat_file],
+                            shell=True,
+                            capture_output=False
+                        )
+                        
+                        if result.returncode == 0:
+                            print("")
+                            print("="*70)
+                            print("[OK] Instalacion completada")
+                            print("="*70)
+                            print("")
+                            print("  Ahora vuelve a intentar usar el scraper")
+                            print("")
+                        else:
+                            print("")
+                            print("[ADVERTENCIA] La instalacion tuvo problemas")
+                            print("  Revisa los mensajes anteriores")
+                            print("")
+                    else:
+                        print("")
+                        print("  Ejecuta INSTALAR_NAVEGADORES.bat manualmente cuando estes listo")
+                        print("")
+                else:
+                    print("[ADVERTENCIA] No se encontro INSTALAR_NAVEGADORES.bat")
+                    print("  Usa los comandos de PowerShell mostrados arriba")
+                    print("")
+                    
+            except Exception as exec_error:
+                print(f"[INFO] No se pudo ejecutar automaticamente: {exec_error}")
+                print("  Ejecuta INSTALAR_NAVEGADORES.bat manualmente")
                 print("")
-                print("="*70)
-                print("[ERROR] instalacion de navegadores fallida. Ver instrucciones arriba????")
-                print("="*70)
-                print("")
-                print("ERROR TECNICO:")
-                print(f"  {type(install_error).__name__}: {install_error}")
-                print("")
-                print("SOLUCION: Instalacion manual requerida")
-                print("")
-                print("  Ejecuta estos comandos en PowerShell:")
-                print("")
-                print(f"    $env:PLAYWRIGHT_BROWSERS_PATH=\"{os.getenv('APPDATA')}\\Glosaap\\browsers\"")
-                print("    pip install playwright")
-                print("    playwright install chromium")
-                print("")
-                print("  O contacta al administrador del sistema.")
-                print("")
-                
-                raise Exception("No se pudo instalar automaticamente. Usa instalacion manual.")
+            
+            raise Exception("Navegadores no instalados. Ejecuta INSTALAR_NAVEGADORES.bat primero.")
     
     def login_and_download(self, usuario: str, contraseña: str) -> dict:
         """
