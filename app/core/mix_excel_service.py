@@ -107,7 +107,7 @@ class MixExcelService:
                             adj_val = self.dest_df.at[dest_idx, dest_adjacent_col]
                             if pd.notna(adj_val):
                                 try:
-                                    dest_adjacent_values.append((dest_idx, float(adj_val)))
+                                    dest_adjacent_values.append((dest_idx, float(adj_val))) # pyright: ignore[reportArgumentType]
                                 except (ValueError, TypeError):
                                     pass
                         

@@ -179,9 +179,9 @@ class HomologadorObservacion:
                         tecnologias_no_homologadas.append(str(tecnologia).strip())
                 
                 # Mostrar progreso cada 10%
-                if (idx + 1) % max(1, total // 10) == 0:
-                    porcentaje = ((idx + 1) / total) * 100
-                    print(f"   Progreso: {porcentaje:.0f}% ({idx + 1}/{total})")
+                if (len(codigos_homologados)) % max(1, total // 10) == 0:
+                    porcentaje = (len(codigos_homologados) / total) * 100
+                    print(f"   Progreso: {porcentaje:.0f}% ({len(codigos_homologados)}/{total})")
             
             # Actualizar columna de código homologado
             df['Codigo homologado DGH'] = codigos_homologados
