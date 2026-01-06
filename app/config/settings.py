@@ -44,7 +44,7 @@ IMAP_CONFIG = {
     "default_port": 993,
     "use_ssl": True,
     "search_timeout": 30,  # segundos
-    "search_limit": 500,
+    "search_limit": None,  # Sin límite - busca todos los correos
     "known_servers": {
         'gmail.com': 'imap.gmail.com',
         'googlemail.com': 'imap.gmail.com',

@@ -136,7 +136,7 @@ class ImapClient:
             })
         return msgs
 
-    def search_by_subject(self, keyword: str, folder: str = "INBOX", limit: int = 900, timeout: int = 30, on_found: Optional[Callable[[Dict[str, Any]], None]] = None, date_from: Optional[datetime] = None, date_to: Optional[datetime] = None) -> List[Dict[str, Any]]:
+    def search_by_subject(self, keyword: str, folder: str = "INBOX", limit: Optional[int] = None, timeout: int = 30, on_found: Optional[Callable[[Dict[str, Any]], None]] = None, date_from: Optional[datetime] = None, date_to: Optional[datetime] = None) -> List[Dict[str, Any]]:
         """
         Busca correos que contengan una palabra clave en el asunto.
         Busca tanto correos leídos como no leídos.
@@ -144,7 +144,7 @@ class ImapClient:
         Args:
             keyword: Palabra clave a buscar en el asunto
             folder: Carpeta IMAP (default: INBOX)
-            limit: Máximo de correos a retornar
+            limit: Máximo de correos a retornar (None = sin límite)
             timeout: Tiempo máximo en segundos SIN ENCONTRAR un nuevo correo
             on_found: Callback que se llama cada vez que se encuentra un mensaje
             date_from: Fecha inicio del rango (datetime o string)
@@ -227,7 +227,7 @@ class ImapClient:
                     logger.info(f"Timeout: {timeout}s sin encontrar nuevos correos. Total: {len(msgs)}")
                     break
                     
-                if len(msgs) >= limit:
+                if limit is not None and len(msgs) >= limit:
                     break
                     
                 try:

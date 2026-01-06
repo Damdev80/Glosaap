@@ -62,7 +62,7 @@
 - Filtrado por EPS (MUTUALSER, COOSALUD, etc.)
 - Filtrado por rango de fechas
 - Descarga automática de adjuntos Excel
-- Límite configurable (hasta 500 correos)
+- Límite configurable (hasta 1000 correos)
 
 ### 🔄 Homologación de Códigos
 - Homologación automática usando archivos maestros
