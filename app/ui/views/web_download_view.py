@@ -541,6 +541,17 @@ class WebDownloadView:
                     progress_callback=self.update_familiar_status
                 )
                 
+                if not self.familiar_nit.value:
+                    raise ValueError("El NIT es obligatorio")
+
+                if not self.familiar_usuario.value:
+                    raise ValueError("El usuario es obligatorio")
+
+                if not self.familiar_password.value:
+                    raise ValueError("La contraseña es obligatoria")
+                
+                
+
                 result = scraper.login_and_download(
                     nit=self.familiar_nit.value,
                     usuario=self.familiar_usuario.value,
