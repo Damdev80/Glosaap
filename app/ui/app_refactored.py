@@ -48,9 +48,10 @@ def main(page: ft.Page):
     page.title = "Glosaap"
     page.window.width = WINDOW_SIZES["login"]["width"]
     page.window.height = WINDOW_SIZES["login"]["height"]
+    page.window_min_width = 480  # Tamaño mínimo global
+    page.window_min_height = 520
     page.bgcolor = COLORS["bg_white"]
     page.padding = 0
-    
     # Icono de la ventana
     icon_path = os.path.join(ASSETS_DIR, "icons", "app_logo.png")
     if os.path.exists(icon_path):

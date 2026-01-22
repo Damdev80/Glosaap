@@ -41,9 +41,10 @@ def main(page: ft.Page):
     page.title = "Glosaap"
     page.window.width = WINDOW_SIZES["login"]["width"]
     page.window.height = WINDOW_SIZES["login"]["height"]
+    page.window_min_width = 480  # Tamaño mínimo global
+    page.window_min_height = 520
     page.bgcolor = COLORS["bg_white"]
     page.padding = 0
-    
     # Icono de la ventana (ruta absoluta)
     icon_path = os.path.join(ASSETS_DIR, "icons", "app_logo.png")
     if os.path.exists(icon_path):
@@ -81,8 +82,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        page.window.width = WINDOW_SIZES["login"]["width"]
-        page.window.height = WINDOW_SIZES["login"]["height"]
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_method_selection():
@@ -98,8 +100,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        page.window.width = 900
-        page.window.height = 600
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_dashboard():
@@ -115,8 +118,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        page.window.width = 800
-        page.window.height = 550
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_tools():
@@ -132,8 +136,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        page.window.width = 800
-        page.window.height = 500
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_homologacion():
@@ -149,8 +154,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        page.window.width = 900
-        page.window.height = 600
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_mix_excel():
@@ -166,8 +172,9 @@ def main(page: ft.Page):
         homologador_manual_view.hide()
         mix_excel_view.show()
         web_download_view.hide()
-        page.window.width = 600
-        page.window.height = 700
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_homologador_manual():
@@ -183,8 +190,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.show()
         web_download_view.hide()
-        page.window.width = 650
-        page.window.height = 700
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_web_download():
@@ -200,8 +208,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.show()
-        page.window.width = 1000
-        page.window.height = 700
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_eps_selection():
@@ -217,8 +226,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        page.window.width = WINDOW_SIZES["main"]["width"]
-        page.window.height = WINDOW_SIZES["main"]["height"]
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_messages():

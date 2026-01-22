@@ -383,15 +383,6 @@ class CoosaludProcessor(BaseProcessor):
         summary = summary.sort_values("CANTIDAD", ascending=False)
         
         return summary
-        
-        if len(no_homolog) == 0:
-            return pd.DataFrame(columns=["CODIGO", "CANTIDAD"])
-            
-        summary = no_homolog.groupby("CODIGO_NO_HOMOLOGADO").size().reset_index()
-        summary.columns = ["CODIGO", "CANTIDAD"]
-        summary = summary.sort_values("CANTIDAD", ascending=False)
-        
-        return summary
     
     def save_to_excel(self, data: Dict[str, pd.DataFrame], output_path: str) -> bool:
         """
@@ -507,50 +498,7 @@ class CoosaludProcessor(BaseProcessor):
             self.errors.append("No se pudo procesar ningún par de archivos")
             return None, f"[ERROR] Error: {'; '.join(self.errors)}"
         
-        combined_detalle = pd.concat(all_detalles, ignore_index=True)
-        combined_glosa = pd.concat(all_glosas, ignore_index=True)
-        
-        print(f"\n[COMBINED] Resultados combinados:")
-        print(f"   Total registros DETALLE: {len(combined_detalle)}")
-        print(f"   Total registros GLOSA: {len(combined_glosa)}")
-        
-        # Estadísticas de homologación
-        if "Codigo homologado DGH" in combined_detalle.columns:
-            homologados = combined_detalle["Codigo homologado DGH"].astype(str).str.strip().ne("").sum()
-            no_homologados = len(combined_detalle) - homologados
-            print(f"   Homologados: {homologados} ({homologados/len(combined_detalle)*100:.1f}%)")
-            print(f"   No homologados: {no_homologados}")
-        
-        result_data = {
-            "detalle": combined_detalle,
-            "glosa": combined_glosa
-        }
-        
-        # 5. Construir mensaje de resultado
-        message = f"[OK] Procesamiento completado.\n   Pares procesados: {pares_procesados}\n   Detalles: {len(combined_detalle)} registros\n   Glosas: {len(combined_glosa)} registros"
-        
-        if self.warnings:
-            message += f"\n[!] Advertencias: {len(self.warnings)}"
-        
-        # 6. Guardar si se especificó directorio de salida
-        if output_dir and result_data:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_file = os.path.join(output_dir, f"COOSALUD_GLOSAS_{timestamp}.xlsx")
             
-            print(f"\n[SAVE] Guardando resultados...")
-            if self.save_to_excel(result_data, output_file):
-                message += f"\n[SAVE] Guardado en: {output_file}"
-                
-                # Guardar también resumen de no homologados
-                summary = self.get_non_homologated_summary(combined_detalle)
-                if len(summary) > 0:
-                    summary_file = os.path.join(output_dir, f"COOSALUD_NO_HOMOLOGADOS_{timestamp}.xlsx")
-                    summary.to_excel(summary_file, index=False)
-                    message += f"\n[LIST] Códigos no homologados: {summary_file}"
-        
-        print("\n" + "=" * 60)
-        return result_data, message
-    
     def _homologate_detalle_silent(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Versión silenciosa de _homologate_detalle (sin prints)
