@@ -263,6 +263,7 @@ class HomologacionView:
                 ft.DataColumn(ft.Text("Código EPS", size=12, weight=ft.FontWeight.W_500, color=COLORS["text_secondary"])),
                 ft.DataColumn(ft.Text("Código Homólogo", size=12, weight=ft.FontWeight.W_500, color=COLORS["text_secondary"])),
                 ft.DataColumn(ft.Text("Detalle", size=12, weight=ft.FontWeight.W_500, color=COLORS["text_secondary"])),
+                ft.DataColumn(ft.Text("Acción", size=12, weight=ft.FontWeight.W_500, color=COLORS["text_secondary"])),
             ],
             rows=[],
             border=ft.border.all(1, COLORS["border"]),
@@ -271,7 +272,7 @@ class HomologacionView:
             heading_row_height=50,
             data_row_max_height=48,
             data_row_min_height=44,
-            column_spacing=30,
+            column_spacing=20,
             horizontal_lines=ft.BorderSide(1, COLORS["border"]),
             show_checkbox_column=False,
             expand=True
@@ -445,7 +446,27 @@ class HomologacionView:
                                 ft.Container(width=16),
                                 self.resumen_errores,
                             ], alignment=ft.MainAxisAlignment.START),
-                            ft.Container(height=12),
+                            ft.Container(height=8),
+                            # Botones de eliminación masiva
+                            ft.Row([
+                                ft.TextButton(
+                                    content=ft.Row([
+                                        ft.Icon(ft.Icons.DELETE_SWEEP, size=16, color=COLORS["warning"]),
+                                        ft.Text("Quitar duplicados", size=11, color=COLORS["warning"])
+                                    ], spacing=4),
+                                    on_click=self._on_eliminar_todos_duplicados,
+                                    tooltip="Eliminar todos los códigos duplicados de la lista"
+                                ),
+                                ft.TextButton(
+                                    content=ft.Row([
+                                        ft.Icon(ft.Icons.DELETE_FOREVER, size=16, color=COLORS["error"]),
+                                        ft.Text("Quitar errores", size=11, color=COLORS["error"])
+                                    ], spacing=4),
+                                    on_click=self._on_eliminar_todos_errores,
+                                    tooltip="Eliminar todos los registros con errores de la lista"
+                                ),
+                            ], alignment=ft.MainAxisAlignment.START, spacing=8),
+                            ft.Container(height=8),
                             ft.Divider(height=1, color=COLORS["border"]),
                             ft.Container(height=8),
                             ft.ListView(controls=[self.tabla_verificacion], expand=True, auto_scroll=False),
@@ -742,7 +763,7 @@ class HomologacionView:
             return
         
         # Agregar válidos
-        for codigo_eps, codigo_homologo in self.resultado_verificacion['validos'][:50]:
+        for idx, (codigo_eps, codigo_homologo) in enumerate(self.resultado_verificacion['validos'][:50]):
             self.tabla_verificacion.rows.append(
                 ft.DataRow(cells=[
                     ft.DataCell(ft.Container(
@@ -752,11 +773,19 @@ class HomologacionView:
                     ft.DataCell(ft.Text(codigo_eps, size=12, color=COLORS["text_primary"])),
                     ft.DataCell(ft.Text(codigo_homologo, size=12, color=COLORS["text_primary"])),
                     ft.DataCell(ft.Text("Listo para agregar", size=11, color=COLORS["success"])),
+                    ft.DataCell(ft.IconButton(
+                        icon=ft.Icons.DELETE_OUTLINE,
+                        icon_size=18,
+                        icon_color=COLORS["error"],
+                        tooltip="Eliminar de la lista",
+                        data={"tipo": "valido", "index": idx, "codigo": codigo_eps},
+                        on_click=self._on_eliminar_de_verificacion
+                    )),
                 ])
             )
         
         # Agregar duplicados del archivo
-        for dup in self.resultado_verificacion['duplicados_archivo'][:20]:
+        for idx, dup in enumerate(self.resultado_verificacion['duplicados_archivo'][:20]):
             self.tabla_verificacion.rows.append(
                 ft.DataRow(cells=[
                     ft.DataCell(ft.Container(
@@ -766,11 +795,19 @@ class HomologacionView:
                     ft.DataCell(ft.Text(dup['codigo'], size=12, color=COLORS["text_secondary"])),
                     ft.DataCell(ft.Text(dup['homologo_nuevo'], size=12, color=COLORS["text_secondary"])),
                     ft.DataCell(ft.Text(f"Ya existe en homologación", size=11, color=COLORS["warning"])),
+                    ft.DataCell(ft.IconButton(
+                        icon=ft.Icons.DELETE_OUTLINE,
+                        icon_size=18,
+                        icon_color=COLORS["error"],
+                        tooltip="Eliminar de la lista",
+                        data={"tipo": "duplicado_archivo", "index": idx, "codigo": dup['codigo']},
+                        on_click=self._on_eliminar_de_verificacion
+                    )),
                 ])
             )
         
         # Agregar duplicados de la carga
-        for dup in self.resultado_verificacion['duplicados_carga'][:10]:
+        for idx, dup in enumerate(self.resultado_verificacion['duplicados_carga'][:10]):
             self.tabla_verificacion.rows.append(
                 ft.DataRow(cells=[
                     ft.DataCell(ft.Container(
@@ -780,19 +817,184 @@ class HomologacionView:
                     ft.DataCell(ft.Text(dup['codigo'], size=12, color=COLORS["text_secondary"])),
                     ft.DataCell(ft.Text(dup.get('homologo', '-'), size=12, color=COLORS["text_secondary"])),
                     ft.DataCell(ft.Text(f"Duplicado fila {dup['fila_original']} y {dup['fila_duplicada']}", size=11, color=COLORS["warning"])),
+                    ft.DataCell(ft.IconButton(
+                        icon=ft.Icons.DELETE_OUTLINE,
+                        icon_size=18,
+                        icon_color=COLORS["error"],
+                        tooltip="Eliminar de la lista",
+                        data={"tipo": "duplicado_carga", "index": idx, "codigo": dup['codigo']},
+                        on_click=self._on_eliminar_de_verificacion
+                    )),
+                ])
+            )
+        
+        # Agregar errores
+        for idx, error_msg in enumerate(self.resultado_verificacion['errores'][:20]):
+            self.tabla_verificacion.rows.append(
+                ft.DataRow(cells=[
+                    ft.DataCell(ft.Container(
+                        content=ft.Icon(ft.Icons.ERROR, size=16, color=COLORS["error"]),
+                        tooltip="Error en registro"
+                    )),
+                    ft.DataCell(ft.Text("-", size=12, color=COLORS["text_secondary"])),
+                    ft.DataCell(ft.Text("-", size=12, color=COLORS["text_secondary"])),
+                    ft.DataCell(ft.Text(error_msg[:50] + ("..." if len(error_msg) > 50 else ""), 
+                                       size=11, color=COLORS["error"], tooltip=error_msg)),
+                    ft.DataCell(ft.IconButton(
+                        icon=ft.Icons.DELETE_OUTLINE,
+                        icon_size=18,
+                        icon_color=COLORS["error"],
+                        tooltip="Eliminar de la lista",
+                        data={"tipo": "error", "index": idx, "mensaje": error_msg},
+                        on_click=self._on_eliminar_de_verificacion
+                    )),
                 ])
             )
         
         # Mostrar mensaje si hay más registros
         total_mostrados = min(50, len(self.resultado_verificacion['validos'])) + \
                           min(20, len(self.resultado_verificacion['duplicados_archivo'])) + \
-                          min(10, len(self.resultado_verificacion['duplicados_carga']))
+                          min(10, len(self.resultado_verificacion['duplicados_carga'])) + \
+                          min(20, len(self.resultado_verificacion['errores']))
         total_registros = len(self.resultado_verificacion['validos']) + \
                           len(self.resultado_verificacion['duplicados_archivo']) + \
-                          len(self.resultado_verificacion['duplicados_carga'])
+                          len(self.resultado_verificacion['duplicados_carga']) + \
+                          len(self.resultado_verificacion['errores'])
         
         if total_mostrados < total_registros:
             self.masiva_status_text.value = f"Mostrando {total_mostrados} de {total_registros} registros"
+    
+    def _on_eliminar_de_verificacion(self, e):
+        """Callback para eliminar un elemento de la lista de verificación"""
+        if not self.resultado_verificacion or not e.control.data:
+            return
+        
+        tipo = e.control.data["tipo"]
+        
+        # Eliminar del resultado según el tipo
+        if tipo == "valido":
+            codigo = e.control.data["codigo"]
+            # Buscar y eliminar de válidos
+            self.resultado_verificacion['validos'] = [
+                (c, h) for c, h in self.resultado_verificacion['validos'] 
+                if c != codigo
+            ]
+        elif tipo == "duplicado_archivo":
+            codigo = e.control.data["codigo"]
+            # Buscar y eliminar de duplicados_archivo
+            self.resultado_verificacion['duplicados_archivo'] = [
+                d for d in self.resultado_verificacion['duplicados_archivo'] 
+                if d['codigo'] != codigo
+            ]
+        elif tipo == "duplicado_carga":
+            codigo = e.control.data["codigo"]
+            # Buscar y eliminar de duplicados_carga
+            self.resultado_verificacion['duplicados_carga'] = [
+                d for d in self.resultado_verificacion['duplicados_carga'] 
+                if d['codigo'] != codigo
+            ]
+        elif tipo == "error":
+            mensaje = e.control.data["mensaje"]
+            # Buscar y eliminar de errores
+            self.resultado_verificacion['errores'] = [
+                err for err in self.resultado_verificacion['errores'] 
+                if err != mensaje
+            ]
+        
+        # Actualizar contadores
+        num_validos = len(self.resultado_verificacion['validos'])
+        num_duplicados = len(self.resultado_verificacion['duplicados_archivo']) + \
+                         len(self.resultado_verificacion['duplicados_carga'])
+        num_errores = len(self.resultado_verificacion['errores'])
+        
+        self.resumen_validos.value = f"{num_validos} válidos"
+        self.resumen_duplicados.value = f"{num_duplicados} duplicados"
+        self.resumen_errores.value = f"{num_errores} errores"
+        
+        # Habilitar/deshabilitar botón
+        self.btn_agregar_masivo.disabled = num_validos == 0
+        
+        # Recargar tabla
+        self._cargar_tabla_verificacion()
+        
+        self.page.update()
+    
+    def _on_eliminar_todos_duplicados(self, e):
+        """Elimina todos los duplicados de la verificación"""
+        if not self.resultado_verificacion:
+            return
+        
+        num_eliminados = len(self.resultado_verificacion['duplicados_archivo']) + \
+                         len(self.resultado_verificacion['duplicados_carga'])
+        
+        if num_eliminados == 0:
+            self._mostrar_alerta_masiva(
+                "Sin duplicados",
+                "No hay códigos duplicados para eliminar.",
+                "info"
+            )
+            return
+        
+        # Limpiar duplicados
+        self.resultado_verificacion['duplicados_archivo'] = []
+        self.resultado_verificacion['duplicados_carga'] = []
+        
+        # Actualizar contadores
+        num_validos = len(self.resultado_verificacion['validos'])
+        num_errores = len(self.resultado_verificacion['errores'])
+        
+        self.resumen_validos.value = f"{num_validos} válidos"
+        self.resumen_duplicados.value = "0 duplicados"
+        self.resumen_errores.value = f"{num_errores} errores"
+        
+        # Recargar tabla
+        self._cargar_tabla_verificacion()
+        
+        self._mostrar_alerta_masiva(
+            "Duplicados eliminados",
+            f"Se eliminaron {num_eliminados} códigos duplicados de la lista.",
+            "success"
+        )
+        
+        self.page.update()
+    
+    def _on_eliminar_todos_errores(self, e):
+        """Elimina todos los errores de la verificación"""
+        if not self.resultado_verificacion:
+            return
+        
+        num_eliminados = len(self.resultado_verificacion['errores'])
+        
+        if num_eliminados == 0:
+            self._mostrar_alerta_masiva(
+                "Sin errores",
+                "No hay registros con errores para eliminar.",
+                "info"
+            )
+            return
+        
+        # Limpiar errores
+        self.resultado_verificacion['errores'] = []
+        
+        # Actualizar contadores
+        num_validos = len(self.resultado_verificacion['validos'])
+        num_duplicados = len(self.resultado_verificacion['duplicados_archivo']) + \
+                         len(self.resultado_verificacion['duplicados_carga'])
+        
+        self.resumen_validos.value = f"{num_validos} válidos"
+        self.resumen_duplicados.value = f"{num_duplicados} duplicados"
+        self.resumen_errores.value = "0 errores"
+        
+        # Recargar tabla
+        self._cargar_tabla_verificacion()
+        
+        self._mostrar_alerta_masiva(
+            "Errores eliminados",
+            f"Se eliminaron {num_eliminados} registros con errores de la lista.",
+            "success"
+        )
+        
+        self.page.update()
     
     def _on_agregar_masivo(self, e):
         """Callback para agregar códigos masivamente"""
