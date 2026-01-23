@@ -48,8 +48,7 @@ def main(page: ft.Page):
     page.title = "Glosaap"
     page.window.width = WINDOW_SIZES["login"]["width"]
     page.window.height = WINDOW_SIZES["login"]["height"]
-    page.window_min_width = 480  # Tamaño mínimo global
-    page.window_min_height = 520
+    # Nota: Flet no soporta window_min_width/height directamente
     page.bgcolor = COLORS["bg_white"]
     page.padding = 0
     # Icono de la ventana

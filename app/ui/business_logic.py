@@ -155,11 +155,11 @@ class EmailLoader:
         search_keyword = MessageFilter.get_search_keyword(eps)
         logger.info(f"Buscando con palabra clave: '{search_keyword}'")
         
-        # Buscar mensajes
+        # Buscar mensajes (timeout aumentado para búsquedas grandes)
         self.email_service.search_messages(
             search_keyword,
             limit=None,  # Sin límite - busca todos
-            timeout=30,
+            timeout=120,  # 2 minutos de timeout
             on_found=on_found,
             date_from=self.app_state.date_from,
             date_to=self.app_state.date_to

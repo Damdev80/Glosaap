@@ -33,7 +33,7 @@ class CoosaludProcessor(BaseProcessor):
     DETALLE_CODE_COLUMN = "codigo_servicio"  # Código del servicio a homologar
     GLOSA_CODE_COLUMN = "codigo_glosa"  # Código resolución 2284
     
-    def __init__(self, homologador_path: str = None):
+    def __init__(self, homologador_path: Optional[str] = None):
         super().__init__(homologador_path)
         self.detalle_df = None
         self.glosa_df = None
@@ -197,6 +197,70 @@ class CoosaludProcessor(BaseProcessor):
                 return col
         return None
     
+    def _prepare_glosa_merge(self, glosa_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Prepara el DataFrame de glosa para el merge, manejando duplicados:
+        1. Si id_detalle se repite, concatena justificaciones con "//"
+        2. Prioriza codigo_glosa que empiecen con AU, SO, CL
+        
+        Args:
+            glosa_df: DataFrame de glosa
+            
+        Returns:
+            DataFrame procesado listo para merge
+        """
+        if "id_detalle" not in glosa_df.columns:
+            return pd.DataFrame()
+        
+        has_codigo = "codigo_glosa" in glosa_df.columns
+        has_justif = "justificacion_glosa" in glosa_df.columns
+        
+        if not has_codigo and not has_justif:
+            return pd.DataFrame()
+        
+        # Agrupar por id_detalle
+        result_rows = []
+        
+        for id_det, group in glosa_df.groupby("id_detalle"):
+            row = {"id_detalle": id_det}
+            
+            # Procesar codigo_glosa con priorización
+            if has_codigo:
+                codigos = group["codigo_glosa"].dropna().astype(str).tolist()
+                
+                # Priorizar códigos que empiecen con AU, SO, CL
+                prioritarios = ["AU", "SO", "CL"]
+                codigo_final = None
+                
+                for prefijo in prioritarios:
+                    for codigo in codigos:
+                        if codigo.upper().startswith(prefijo):
+                            codigo_final = codigo
+                            break
+                    if codigo_final:
+                        break
+                
+                # Si no hay prioritarios, tomar el primero
+                if not codigo_final and codigos:
+                    codigo_final = codigos[0]
+                
+                row["codigo_glosa"] = codigo_final if codigo_final else ""
+            
+            # Procesar justificacion_glosa concatenando con //
+            if has_justif:
+                justificaciones = group["justificacion_glosa"].dropna().astype(str).tolist()
+                # Eliminar duplicados manteniendo orden
+                justif_unicas = []
+                for j in justificaciones:
+                    if j and j not in justif_unicas:
+                        justif_unicas.append(j)
+                
+                row["justificacion_glosa"] = " // ".join(justif_unicas) if justif_unicas else ""
+            
+            result_rows.append(row)
+        
+        return pd.DataFrame(result_rows)
+    
     def homologate(self, data: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
         """
         Realiza el proceso de homologación para Coosalud
@@ -204,6 +268,7 @@ class CoosaludProcessor(BaseProcessor):
         1. Del archivo de Detalle: homologa codigo_servicio
         2. Del archivo de Glosa: agrega fecha de proceso
         3. Agrega columnas: FECHA_PROCESO y CODIGO_NO_HOMOLOGADO
+        4. Agrega a Detalles las columnas codigo_glosa y justificacion_glosa desde Glosa por id_detalle
         
         Returns:
             Diccionario con DataFrames procesados {"detalle": df, "glosa": df}
@@ -223,6 +288,29 @@ class CoosaludProcessor(BaseProcessor):
         print(f"[PROC] Procesando archivo GLOSA...")
         glosa_result = glosa_df.copy()
         glosa_result["FECHA_PROCESO"] = self.processing_date
+        
+        # Merge por id_detalle para traer codigo_glosa y justificacion_glosa a Detalles
+        print(f"[PROC] Agregando codigo_glosa y justificacion_glosa a Detalles...")
+        if "id_detalle" in detalle_result.columns and "id_detalle" in glosa_result.columns:
+            # Verificar que existan las columnas en glosa
+            if "codigo_glosa" in glosa_result.columns or "justificacion_glosa" in glosa_result.columns:
+                # Preparar merge con lógica especial para duplicados
+                glosa_merge = self._prepare_glosa_merge(glosa_result)
+                detalle_result = detalle_result.merge(glosa_merge, on="id_detalle", how="left")
+                
+                cols_added = []
+                if "codigo_glosa" in glosa_merge.columns:
+                    cols_added.append("codigo_glosa")
+                if "justificacion_glosa" in glosa_merge.columns:
+                    cols_added.append("justificacion_glosa")
+                    
+                print(f"   [OK] Columnas agregadas desde Glosa: {cols_added}")
+            else:
+                self.warnings.append("No se encontraron columnas codigo_glosa o justificacion_glosa en archivo Glosa")
+                print(f"   [!] No se encontraron columnas codigo_glosa o justificacion_glosa en Glosa")
+        else:
+            self.warnings.append("No se encontró columna 'id_detalle' en ambos archivos para el merge")
+            print(f"   [!] No se encontró columna 'id_detalle' en ambos archivos")
         
         return {
             "detalle": detalle_result,
@@ -416,7 +504,7 @@ class CoosaludProcessor(BaseProcessor):
             self.errors.append(f"Error al guardar archivo: {str(e)}")
             return False
     
-    def process_glosas(self, file_paths: List[str], output_dir: str = None) -> Tuple[Optional[Dict[str, pd.DataFrame]], str]:
+    def process_glosas(self, file_paths: List[str], output_dir: Optional[str] = None) -> Tuple[Optional[Dict[str, pd.DataFrame]], str]:
         """
         Método principal para procesar archivos de GLOSAS de Coosalud
         Procesa TODOS los pares de archivos (DETALLE + GLOSA) y los combina
@@ -497,6 +585,49 @@ class CoosaludProcessor(BaseProcessor):
         if not all_detalles:
             self.errors.append("No se pudo procesar ningún par de archivos")
             return None, f"[ERROR] Error: {'; '.join(self.errors)}"
+        
+        # Combinar DataFrames
+        combined_detalle = pd.concat(all_detalles, ignore_index=True)
+        combined_glosa = pd.concat(all_glosas, ignore_index=True)
+        
+        # Merge por id_detalle para traer codigo_glosa y justificacion_glosa a Detalles
+        print(f"\n[PROC] Agregando codigo_glosa y justificacion_glosa a Detalles...")
+        if "id_detalle" in combined_detalle.columns and "id_detalle" in combined_glosa.columns:
+            if "codigo_glosa" in combined_glosa.columns or "justificacion_glosa" in combined_glosa.columns:
+                # Usar el método especial para manejar duplicados
+                glosa_merge = self._prepare_glosa_merge(combined_glosa)
+                combined_detalle = combined_detalle.merge(glosa_merge, on="id_detalle", how="left")
+                
+                cols_added = []
+                if "codigo_glosa" in glosa_merge.columns:
+                    cols_added.append("codigo_glosa")
+                if "justificacion_glosa" in glosa_merge.columns:
+                    cols_added.append("justificacion_glosa")
+                    
+                print(f"   [OK] Columnas agregadas: {cols_added}")
+            else:
+                print(f"   [!] No se encontraron columnas codigo_glosa o justificacion_glosa")
+        else:
+            print(f"   [!] No se encontró columna 'id_detalle' en ambos archivos")
+        
+        result_data = {
+            "detalle": combined_detalle,
+            "glosa": combined_glosa
+        }
+        
+        # 5. Guardar resultado si hay directorio de salida
+        if output_dir:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_filename = f"COOSALUD_GLOSAS_{timestamp}.xlsx"
+            output_path = os.path.join(output_dir, output_filename)
+            
+            print(f"\n[SAVE] Guardando resultado...")
+            if self.save_to_excel(result_data, output_path):
+                return result_data, f"[OK] Procesado exitosamente. Archivo: {output_filename}"
+            else:
+                return result_data, f"[WARNING] Procesado pero error al guardar: {'; '.join(self.errors)}"
+        
+        return result_data, f"[OK] Procesados {pares_procesados} pares de archivos"
         
             
     def _homologate_detalle_silent(self, df: pd.DataFrame) -> pd.DataFrame:
