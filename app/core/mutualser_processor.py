@@ -5,6 +5,7 @@ Maneja la extracción, homologación y generación de archivos de objeciones
 import pandas as pd
 import os
 from datetime import datetime
+from typing import Optional
 
 
 class MutualserProcessor:
@@ -22,14 +23,14 @@ class MutualserProcessor:
     # Ruta de red para homologación
     HOMOLOGACION_PATH = r"\\MINERVA\Cartera\GLOSAAP\HOMOLOGADOR\mutualser_homologacion.xlsx"
     
-    def __init__(self, output_dir='outputs', homologacion_path=None):
+    def __init__(self, output_dir: str = 'outputs', homologacion_path: Optional[str] = None):
         self.output_dir = output_dir
         self.homologacion_path = homologacion_path or self.HOMOLOGACION_PATH
-        self.df_consolidado = None
-        self.df_homologacion = None
-        self.archivos_procesados = []
-        self.errores = []
-        self._todos_cod_serv_fact = None
+        self.df_consolidado: Optional[pd.DataFrame] = None
+        self.df_homologacion: Optional[pd.DataFrame] = None
+        self.archivos_procesados: list = []
+        self.errores: list = []
+        self._todos_cod_serv_fact: Optional[set] = None
         
         # Crear directorio si no existe (funciona con rutas de red)
         try:
@@ -140,15 +141,16 @@ class MutualserProcessor:
                     
                     if cod_str and cod_str != '0' and cod_str != 'nan':
                         # Verificar si existe en COD_SERV_FACT
-                        if cod_str in self._todos_cod_serv_fact:
+                        if self._todos_cod_serv_fact and cod_str in self._todos_cod_serv_fact:
                             return cod_str
                         
                         # Búsqueda flexible
-                        cod_numerico = ''.join(filter(str.isdigit, cod_str))
-                        if cod_numerico:
-                            for cod in self._todos_cod_serv_fact:
-                                if ''.join(filter(str.isdigit, cod)) == cod_numerico:
-                                    return cod
+                        if self._todos_cod_serv_fact:
+                            cod_numerico = ''.join(filter(str.isdigit, cod_str))
+                            if cod_numerico:
+                                for cod in self._todos_cod_serv_fact:
+                                    if ''.join(filter(str.isdigit, cod)) == cod_numerico:
+                                        return cod
             
             return ''
             
@@ -170,7 +172,7 @@ class MutualserProcessor:
         codigos = []
         encontrados = 0
         
-        for _, row in self.df_consolidado.iterrows():
+        for _, row in self.df_consolidado.iterrows(): # pyright: ignore[reportGeneralTypeIssues]
             codigo = self._buscar_codigo_homologado(row.get('Tecnología'))
             codigos.append(codigo)
             if codigo:
@@ -195,10 +197,12 @@ class MutualserProcessor:
             df_raw = pd.read_excel(file_path, header=None) if file_path.endswith(('.xlsx', '.xls')) else pd.read_csv(file_path, header=None)
             
             # Buscar fila de encabezados
-            header_row_idx = None
-            fecha_documento = None
+            header_row_idx: Optional[int] = None
+            fecha_documento: Optional[str] = None
             
             for idx, row in df_raw.iterrows():
+                # Convertir idx a int para evitar problemas de tipo
+                idx_int = int(idx) if isinstance(idx, (int, float)) else idx  # type: ignore
                 row_str = ' '.join([str(c) for c in row if pd.notna(c)]).upper()
                 
                 if 'FECHA' in row_str and fecha_documento is None:
@@ -211,10 +215,10 @@ class MutualserProcessor:
                                 pass
                 
                 if 'NUMERO DE FACTURA' in row_str or 'NÚMERO DE FACTURA' in row_str:
-                    header_row_idx = idx
+                    header_row_idx = idx_int  # type: ignore
                     break
                 elif 'DETALLE DE GLOSA' in row_str:
-                    header_row_idx = idx + 1
+                    header_row_idx = idx_int + 1  # type: ignore
                     break
             
             if header_row_idx is None:
@@ -340,23 +344,23 @@ class MutualserProcessor:
             df_obj = pd.DataFrame()
             
             # Columnas básicas
-            facturas = self.df_consolidado.get('Número de factura', pd.Series())
+            facturas = self.df_consolidado['Número de factura'] if 'Número de factura' in self.df_consolidado.columns else pd.Series()
             factura_consecutivo = {f: i+1 for i, f in enumerate(facturas.unique())}
             
             df_obj['CDCONSEC'] = facturas.map(factura_consecutivo)
             # Formato D/M/A (día/mes/año)
             df_obj['CDFECDOC'] = datetime.now().strftime('%#d/%#m/%Y') if os.name == 'nt' else datetime.now().strftime('%-d/%-m/%Y')
-            df_obj['CRNCXC'] = self.df_consolidado.get('Número de factura', '').apply(self._formatear_crncxc)
-            df_obj['CROFECOBJ'] = self.df_consolidado.get('Fecha', '').apply(self._formatear_fecha_dmy)
+            df_obj['CRNCXC'] = (self.df_consolidado['Número de factura'] if 'Número de factura' in self.df_consolidado.columns else pd.Series()).apply(self._formatear_crncxc)
+            df_obj['CROFECOBJ'] = (self.df_consolidado['Fecha'] if 'Fecha' in self.df_consolidado.columns else pd.Series()).apply(self._formatear_fecha_dmy)
             df_obj['CROREFERE'] = ''
-            df_obj['CROOBSERV'] = self.df_consolidado.get('REG GLOSA', '')
+            df_obj['CROOBSERV'] = self.df_consolidado['REG GLOSA'] if 'REG GLOSA' in self.df_consolidado.columns else ''
             df_obj['CROCLAOBJ'] = 0
             df_obj['GENUSUARIO4'] = 1103858268
-            df_obj['CRNCONOBJ'] = self.df_consolidado.get('Código de glosa', '')
-            df_obj['SLNSERPRO'] = self.df_consolidado.get('Codigo homologado DGH', '')
+            df_obj['CRNCONOBJ'] = self.df_consolidado['Código de glosa'] if 'Código de glosa' in self.df_consolidado.columns else ''
+            df_obj['SLNSERPRO'] = self.df_consolidado['Codigo homologado DGH'] if 'Codigo homologado DGH' in self.df_consolidado.columns else ''
             df_obj['CTNCENCOS'] = ''
             df_obj['IDRIPS'] = ''
-            df_obj['CROVALOBJ'] = self.df_consolidado.get('Valor glosado', 0).apply(self._obtener_valor_numerico)
+            df_obj['CROVALOBJ'] = (self.df_consolidado['Valor glosado'] if 'Valor glosado' in self.df_consolidado.columns else pd.Series(dtype=int)).apply(self._obtener_valor_numerico)
             df_obj['CRDOBSERV'] = self.df_consolidado.apply(self._combinar_observaciones, axis=1)
             
             # Procesar AU/TA
@@ -507,5 +511,5 @@ class MutualserProcessor:
             'archivos_procesados': len(self.archivos_procesados),
             'errores': len(self.errores),
             'facturas_unicas': self.df_consolidado['Número de factura'].nunique(),
-            'codigos_homologados': (self.df_consolidado.get('Codigo homologado DGH', '') != '').sum()
+            'codigos_homologados': (self.df_consolidado['Codigo homologado DGH'] != '').sum() if 'Codigo homologado DGH' in self.df_consolidado.columns else 0
         }

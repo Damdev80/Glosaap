@@ -62,7 +62,7 @@
 - Filtrado por EPS (MUTUALSER, COOSALUD, etc.)
 - Filtrado por rango de fechas
 - Descarga automática de adjuntos Excel
-- Límite configurable (hasta 500 correos)
+- Límite configurable (hasta 1000 correos)
 
 ### 🔄 Homologación de Códigos
 - Homologación automática usando archivos maestros
@@ -476,6 +476,6 @@ Para reportar bugs o solicitar funcionalidades, crear un issue en el repositorio
 
 <div align="center">
 
-**Desarrollado con ❤️ para la gestión eficiente de glosas médicas**
+**Desarrollado con amor para la gestión eficiente de glosas médicas**
 
 </div>

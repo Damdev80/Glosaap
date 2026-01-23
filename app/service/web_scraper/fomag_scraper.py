@@ -45,107 +45,74 @@ class FomagScraper(BaseScraper):
     def _ensure_playwright_browsers(self):
         """Verifica e instala navegadores de Playwright si es necesario"""
         try:
-            # Intentar obtener la ruta del navegador
-            with sync_playwright() as p:
-                browser_type = p.chromium
-                # Esto forza la verificación del navegador
-                executable_path = browser_type.executable_path
-                
-                if not os.path.exists(executable_path):
-                    raise FileNotFoundError("Navegador no encontrado")
-                    
-                print(f"[OK] Navegador Chromium encontrado: {executable_path}")
+            # Verificar si el navegador está instalado buscando en la ruta configurada
+            browsers_path = os.environ.get('PLAYWRIGHT_BROWSERS_PATH', '')
+            
+            # Si no hay ruta configurada, configurarla
+            if not browsers_path:
+                appdata = os.getenv('APPDATA', os.path.expanduser('~'))
+                browsers_path = os.path.join(appdata, 'Glosaap', 'browsers')
+                os.environ['PLAYWRIGHT_BROWSERS_PATH'] = browsers_path
+                print(f"[INFO] Configurando PLAYWRIGHT_BROWSERS_PATH: {browsers_path}")
+            
+            # Buscar carpeta de chromium en la ruta de browsers
+            chromium_found = False
+            chromium_path = ""
+            
+            if browsers_path and os.path.exists(browsers_path):
+                print(f"[DEBUG] Buscando en: {browsers_path}")
+                for item in os.listdir(browsers_path):
+                    if item.startswith('chromium') and not item.startswith('chromium_headless'):
+                        chromium_path = os.path.join(browsers_path, item)
+                        if os.path.isdir(chromium_path):
+                            chromium_found = True
+                            print(f"[OK] Navegador Chromium encontrado en: {chromium_path}")
+                            break
+            else:
+                print(f"[ADVERTENCIA] Ruta de browsers no existe: {browsers_path}")
+            
+            if chromium_found:
+                return  # Todo OK
+            
+            # Fallback: intentar lanzar el navegador directamente
+            print("[INFO] Intentando verificar Playwright directamente...")
+            try:
+                with sync_playwright() as p:
+                    browser = p.chromium.launch(headless=True)
+                    browser.close()
+                    print("[OK] Navegador Chromium verificado correctamente")
+                    return  # Todo OK
+            except Exception as launch_error:
+                print(f"[ERROR] No se pudo lanzar el navegador: {launch_error}")
+                raise launch_error
                 
         except Exception as e:
+            error_msg = str(e).lower()
+            
             print("")
             print("="*70)
             print("[INSTALACION REQUERIDA] Navegadores de Playwright no encontrados")
             print("="*70)
             print("")
-            print("  IMPORTANTE: Debes ejecutar el instalador de navegadores")
+            print(f"  Error: {e}")
             print("")
             print("  SOLUCION RAPIDA:")
             print("")
-            print("  1. Busca el archivo: INSTALAR_NAVEGADORES.bat")
-            print("  2. Haz DOBLE CLIC en el archivo")
-            print("  3. Espera 3-5 minutos a que termine")
-            print("  4. Vuelve a intentar usar el scraper")
+            print("  Ejecuta estos comandos en PowerShell (como administrador):")
             print("")
-            print("  El archivo .bat debe estar en la misma carpeta que Glosaap.exe")
-            print("")
-            print("  Si no tienes el archivo, ejecuta esto en PowerShell:")
-            print(f"    $env:PLAYWRIGHT_BROWSERS_PATH=\"{os.getenv('APPDATA')}\\Glosaap\\browsers\"")
+            browsers_path_msg = os.environ.get('PLAYWRIGHT_BROWSERS_PATH', os.path.join(os.getenv('APPDATA', ''), 'Glosaap', 'browsers'))
+            print(f"    $env:PLAYWRIGHT_BROWSERS_PATH=\"{browsers_path_msg}\"")
             print("    pip install playwright")
             print("    playwright install chromium")
             print("")
             print("="*70)
             print("")
             
-            # Intentar abrir el archivo .bat automáticamente si existe
-            try:
-                # Buscar INSTALAR_NAVEGADORES.bat en varias ubicaciones
-                possible_locations = [
-                    os.path.join(os.path.dirname(sys.executable), "INSTALAR_NAVEGADORES.bat"),
-                    os.path.join(os.getcwd(), "INSTALAR_NAVEGADORES.bat"),
-                    os.path.join(os.path.dirname(__file__), "..", "..", "..", "INSTALAR_NAVEGADORES.bat"),
-                ]
-                
-                bat_file = None
-                for location in possible_locations:
-                    if os.path.exists(location):
-                        bat_file = location
-                        break
-                
-                if bat_file:
-                    print(f"[INFO] Archivo encontrado: {bat_file}")
-                    print("")
-                    respuesta = input("Deseas ejecutar el instalador ahora? (s/n): ").strip().lower()
-                    
-                    if respuesta == 's' or respuesta == 'si':
-                        print("")
-                        print("  Ejecutando instalador...")
-                        print("  Por favor espera...")
-                        print("")
-                        
-                        # Ejecutar el .bat y esperar
-                        result = subprocess.run(
-                            [bat_file],
-                            shell=True,
-                            capture_output=False
-                        )
-                        
-                        if result.returncode == 0:
-                            print("")
-                            print("="*70)
-                            print("[OK] Instalacion completada")
-                            print("="*70)
-                            print("")
-                            print("  Ahora vuelve a intentar usar el scraper")
-                            print("")
-                        else:
-                            print("")
-                            print("[ADVERTENCIA] La instalacion tuvo problemas")
-                            print("  Revisa los mensajes anteriores")
-                            print("")
-                    else:
-                        print("")
-                        print("  Ejecuta INSTALAR_NAVEGADORES.bat manualmente cuando estes listo")
-                        print("")
-                else:
-                    print("[ADVERTENCIA] No se encontro INSTALAR_NAVEGADORES.bat")
-                    print("  Usa los comandos de PowerShell mostrados arriba")
-                    print("")
-                    
-            except Exception as exec_error:
-                print(f"[INFO] No se pudo ejecutar automaticamente: {exec_error}")
-                print("  Ejecuta INSTALAR_NAVEGADORES.bat manualmente")
-                print("")
-            
-            raise Exception("Navegadores no instalados. Ejecuta INSTALAR_NAVEGADORES.bat primero.")
+            raise Exception(f"Navegadores no instalados: {e}")
     
     def login_and_download(self, usuario: str, contraseña: str) -> dict:
         """
-        Login y descarga de archivos de Fomag
+        Login y descarga de archivos de Fomag (OPTIMIZADO)
         
         Args:
             usuario: Usuario
@@ -165,17 +132,25 @@ class FomagScraper(BaseScraper):
                         '--disable-blink-features=AutomationControlled',
                         '--no-sandbox',
                         '--start-maximized',
+                        '--disable-gpu',
+                        '--disable-dev-shm-usage',
                     ]
                 )
 
                 page = context.pages[0] if context.pages else context.new_page()
+                
+                # Optimizar timeouts
+                page.set_default_timeout(15000)
+                page.set_default_navigation_timeout(30000)
+                
                 print("\n" + "="*80)
-                print(">>> INICIANDO SCRAPER DE FOMAG")
+                print(">>> INICIANDO SCRAPER DE FOMAG (HORUS) - MODO TURBO")
+                print(f">>> Destino: {self.download_dir}")
                 print("="*80 + "\n")
                 self.log("[SCRAPER] Iniciando sesion en Fomag...")
 
                 page.goto(self.url, wait_until='domcontentloaded')
-                time.sleep(2)
+                time.sleep(1.5)
                 
                 # Verificar si hay formulario de login
                 campo_usuario = page.query_selector('input[id="input-15"]')
@@ -185,137 +160,127 @@ class FomagScraper(BaseScraper):
                     page.fill('input[id="input-15"]', usuario)
                     page.fill('input[id="input-19"]', contraseña)
                     
-                    self.log("[IMPORTANTE] Si aparece CAPTCHA, resolvelo manualmente en el navegador")
-                    self.log("[ESPERANDO] Esperando que completes el CAPTCHA (si existe)...")
+                    self.log("[IMPORTANTE] Si aparece CAPTCHA, resolvelo manualmente")
                     
                     page.click('button[type="submit"]')
-                    time.sleep(3)
-                    
-                    # Esperar a que termine el login
-                    try:
-                        page.wait_for_load_state('networkidle', timeout=60000)
-                        self.log("[OK] Login completado - Sesion guardada para futuros accesos")
-                    except:
-                        self.log("[ADVERTENCIA] Timeout esperando respuesta del servidor")
-                    
                     time.sleep(2)
+                    
+                    try:
+                        page.wait_for_load_state('networkidle', timeout=45000)
+                        self.log("[OK] Login completado")
+                    except:
+                        pass
+                    
+                    time.sleep(1)
                 else:
-                    self.log("[OK] Sesion activa encontrada - No se requiere CAPTCHA")
+                    self.log("[OK] Sesion activa - No se requiere CAPTCHA")
                 
-                self.log("[OK] Sesion iniciada correctamente")
-                print("[OK] Sesion iniciada correctamente\n")
-                
-                # Navegar al menú
-                print("[NAVEGACION] Navegando por menus...")
-                self.log("[NAVEGACION] Navegando a Cuentas medicas...")
+                # Navegar al menú RAPIDO
+                self.log("[NAVEGACION] Navegando a Facturas objetadas...")
                 page.click('.mdi-bank')
-                time.sleep(0.5)
+                time.sleep(0.3)
                 
-                self.log("[NAVEGACION] Navegando a Auditoria...")
                 page.click('text=Auditoria')
-                page.wait_for_load_state('networkidle')
+                page.wait_for_load_state('networkidle', timeout=10000)
                 
-                self.log("[NAVEGACION] Navegando a tabla de facturas...")
                 page.click('text=Facturas objetadas prestador')
-                page.wait_for_load_state('networkidle')
+                page.wait_for_load_state('networkidle', timeout=10000)
                 
                 # Clic en PENDIENTES
-                self.log("[FILTRO] Seleccionando filtro PENDIENTES...")
                 page.click('text=PENDIENTES')
-                page.wait_for_load_state('networkidle')
-                print("   [OK] Navegacion completada\n")
+                page.wait_for_load_state('networkidle', timeout=10000)
+                time.sleep(1)
 
-                # Configurar paginación (opcional, puede fallar por visibilidad)
-                print("[PAGINACION] Intentando configurar paginacion...")
-                self.log("[PAGINACION] Configurando paginacion a 100 registros...")
+                # Configurar paginación a 100 (máximo) - Solo si hay muchos registros
+                self.log("[PAGINACION] Configurando registros por página...")
+                paginacion_ok = False
                 try:
-                    selections = page.query_selector_all('div.v-select__selection--comma')
-                    for sel in selections:
-                        texto = sel.inner_text()
-                        if texto and texto.strip().isdigit() and int(texto.strip()) <= 50:
-                            contenedor = page.evaluate_handle('(div) => div.closest("div.v-input__slot")', sel).as_element()
-                            if contenedor:
-                                contenedor.click(timeout=3000, force=True)
-                                time.sleep(1)
-                                page.click('text=100', timeout=2000)
-                                page.wait_for_load_state('networkidle', timeout=10000)
-                                time.sleep(2)
-                                print("   [OK] Paginacion configurada\n")
-                                break
-                except:
-                    print("   [ADVERTENCIA] Paginacion no disponible, usando actual\n")
-                    pass
+                    # Buscar el selector de paginación en el footer de la tabla
+                    page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                    time.sleep(0.3)
+                    
+                    # Buscar dentro del data-footer
+                    footer = page.query_selector('div.v-data-footer')
+                    if footer:
+                        select_paginas = footer.query_selector('div.v-select')
+                        if select_paginas:
+                            select_paginas.scroll_into_view_if_needed()
+                            select_paginas.click(force=True)
+                            time.sleep(0.5)
+                            
+                            # Buscar opción 100 en el menú desplegable
+                            opcion_100 = page.query_selector('div.v-list-item:has-text("100")')
+                            if opcion_100:
+                                opcion_100.click()
+                                page.wait_for_load_state('networkidle', timeout=8000)
+                                self.log("[OK] Paginacion: 100 registros")
+                                paginacion_ok = True
+                            else:
+                                # Si no hay 100, buscar el máximo disponible
+                                page.keyboard.press('Escape')
+                except Exception as e:
+                    print(f"    [!] Paginacion: {str(e)[:50]}")
                 
-                # Buscar archivos Excel
-                print("[DESCARGA] Iniciando descarga...")
-                self.log("[DESCARGA] Iniciando descarga de archivos Excel...")
+                if not paginacion_ok:
+                    self.log("[INFO] Usando paginacion por defecto")
                 
-                # Buscar iconos Excel (usar .mdi-file-excel que funciona)
+                # Volver arriba
+                page.evaluate('window.scrollTo(0, 0)')
+                time.sleep(0.3)
+                
+                # Contar archivos Excel
                 iconos_excel = page.query_selector_all('.mdi-file-excel')
-                
-                if len(iconos_excel) == 0:
-                    iconos_excel = page.query_selector_all('i.mdi-file-excel')
-                
                 total = len(iconos_excel)
-                print(f"   [INFO] Archivos encontrados: {total}\n")
-                self.log(f"[BUSQUEDA] Archivos encontrados: {total}")
-                self.log(f"[INFO] Total de archivos encontrados: {total}")
+                
+                print(f"[INFO] Archivos Excel encontrados en página actual: {total}")
+                self.log(f"[INFO] Archivos encontrados: {total}")
                 
                 if total == 0:
                     self.log("[ADVERTENCIA] No se encontraron archivos para descargar")
                     context.close()
-                    return {
-                        "success": False,
-                        "files": 0,
-                        "message": "No se encontraron archivos Excel en la tabla"
-                    }
+                    return {"success": False, "files": 0, "message": "No se encontraron archivos Excel"}
                 
                 descargas_exitosas = 0
+                descargas_fallidas = 0
                 pagina_actual = 1
-                max_paginas = 50  # Límite de seguridad
                 
-                # Loop de paginación
-                while pagina_actual <= max_paginas:
-                    print(f"\n{'='*80}")
-                    print(f">>> PAGINA {pagina_actual}")
-                    print(f"{'='*80}\n")
+                # SIN LIMITE DE PAGINAS - Descargar TODO
+                while True:
+                    self.log(f"[PAGINA {pagina_actual}] Procesando...")
                     
-                    # Buscar iconos en la página actual usando el selector que funcionó
+                    # Re-obtener iconos después de cada cambio de página
+                    time.sleep(0.3)
                     iconos_pagina = page.query_selector_all('.mdi-file-excel')
-                    print(f"   [INFO] Archivos en esta pagina: {len(iconos_pagina)}")
+                    cantidad_pagina = len(iconos_pagina)
                     
-                    if len(iconos_pagina) == 0:
-                        print("   [ADVERTENCIA] No hay mas archivos, terminando...\n")
+                    if cantidad_pagina == 0:
+                        self.log("[OK] No hay más archivos")
                         break
                     
-                    # Descargar todos los archivos de esta página
-                    for i in range(len(iconos_pagina)):
+                    # Descargar TODOS los archivos de esta página
+                    for i in range(cantidad_pagina):
                         try:
-                            # Re-obtener iconos (el DOM puede cambiar)
                             iconos = page.query_selector_all('.mdi-file-excel')
                             
                             if i >= len(iconos):
                                 continue
                             
-                            # Obtener el botón padre del icono actual
                             icono_actual = iconos[i]
                             boton = page.evaluate_handle('(icono) => icono.closest("button")', icono_actual).as_element()
                             
                             if not boton:
                                 continue
                             
-                            # Hacer scroll y click
                             boton.scroll_into_view_if_needed()
-                            time.sleep(0.3)
                             
-                            with page.expect_download(timeout=20000) as download_info:
+                            with page.expect_download(timeout=15000) as download_info:
                                 boton.click()
                             
                             download = download_info.value
                             nombre = download.suggested_filename or f"fomag_p{pagina_actual}_{i+1}.xlsx"
                             ruta_final = os.path.join(self.download_dir, nombre)
                             
-                            # Si existe, agregar número
+                            # Evitar duplicados
                             contador = 1
                             nombre_base, extension = os.path.splitext(nombre)
                             while os.path.exists(ruta_final):
@@ -325,48 +290,81 @@ class FomagScraper(BaseScraper):
                             download.save_as(ruta_final)
                             descargas_exitosas += 1
                             
+                            # Reportar progreso cada 10 archivos
                             if descargas_exitosas % 10 == 0:
-                                print(f"   [OK] Descargados: {descargas_exitosas}")
+                                self.log(f"[PROGRESO] {descargas_exitosas} archivos descargados...")
                             
-                            time.sleep(0.8)
+                            time.sleep(0.15)
                             
                         except Exception as e:
-                            self.log(f"[ERROR] Error: {str(e)[:80]}")
+                            descargas_fallidas += 1
                             continue
+                    
+                    self.log(f"[PAGINA {pagina_actual}] {descargas_exitosas} descargados hasta ahora")
                     
                     # Ir a la siguiente página
                     try:
+                        time.sleep(0.3)
+                        
+                        # Buscar botón siguiente
                         btn_siguiente = page.query_selector('button.v-pagination__navigation:has(i.mdi-chevron-right)')
                         
                         if not btn_siguiente:
-                            btn_siguiente = page.query_selector('button[aria-label="Next page"]')
+                            btns_nav = page.query_selector_all('button.v-pagination__navigation')
+                            if len(btns_nav) >= 2:
+                                btn_siguiente = btns_nav[-1]
                         
-                        if btn_siguiente and not btn_siguiente.get_attribute('disabled'):
+                        if btn_siguiente:
+                            disabled_attr = btn_siguiente.get_attribute('disabled')
+                            clase = btn_siguiente.get_attribute('class') or ''
+                            
+                            es_disabled = disabled_attr is not None or 'disabled' in clase.lower()
+                            
+                            if es_disabled:
+                                self.log("[OK] Última página alcanzada")
+                                break
+                            
+                            # Click en siguiente
+                            btn_siguiente.scroll_into_view_if_needed()
+                            time.sleep(0.2)
                             btn_siguiente.click()
-                            page.wait_for_load_state('networkidle', timeout=8000)
-                            time.sleep(1.5)
+                            
+                            # Esperar carga de nueva página
+                            try:
+                                page.wait_for_load_state('networkidle', timeout=10000)
+                            except:
+                                pass
+                            
+                            time.sleep(0.5)
                             pagina_actual += 1
-                            print(f"   [>>] Pagina {pagina_actual}")
+                            self.log(f"[>>] Avanzando a página {pagina_actual}")
                         else:
-                            print(f"\n   [OK] Ultima pagina procesada\n")
+                            self.log("[OK] No hay más páginas")
+                            break
                             break
                             
-                    except:
-                        break
+                    except Exception as nav_error:
+                        print(f"    [ERROR] Navegación: {str(nav_error)[:80]}")
+                        self.log(f"[ERROR NAV] {str(nav_error)[:60]}")
+                        # No hacer break inmediato, intentar una vez más
+                        time.sleep(1)
+                        continue
                 
+                # Resumen final
                 print("\n" + "="*80)
-                print(f">>> PROCESO COMPLETADO: {descargas_exitosas}/{total} archivos descargados")
-                print(f"[UBICACION] {self.download_dir}")
+                print(f">>> DESCARGA COMPLETADA")
+                print(f">>> Exitosas: {descargas_exitosas} | Fallidas: {descargas_fallidas}")
+                print(f">>> Ubicacion: {self.download_dir}")
                 print("="*80 + "\n")
                 
-                self.log(f"[COMPLETADO] Proceso completado: {descargas_exitosas}/{total} archivos descargados")
-                time.sleep(3)
+                self.log(f"[COMPLETADO] {descargas_exitosas} archivos descargados en: {self.download_dir}")
+                time.sleep(2)
                 context.close()
                 
                 return {
                     "success": True,
                     "files": descargas_exitosas,
-                    "message": f"Descargados {descargas_exitosas} de {total} archivos en {self.download_dir}"
+                    "message": f"Descargados {descargas_exitosas} archivos en {self.download_dir}"
                 }
                 
         except Exception as e:

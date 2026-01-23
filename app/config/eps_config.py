@@ -19,14 +19,14 @@ class EpsInfo:
         name: str,
         icon: str,
         description: str,
-        filter_value: str = None,
-        filter_type: str = None,
-        subject_pattern: str = None,
-        processor_class: str = None,
+        filter_value: str | None = None,
+        filter_type: str | None = None,
+        subject_pattern: str | None = None,
+        processor_class: str | None = None,
         enabled: bool = True,
-        image_path: str = None,
-        homologador_file: str = None,
-        sender_filter: str = None  # Filtro por correo remitente
+        image_path: str | None = None,
+        homologador_file: str | None = None,
+        sender_filter: str | None = None
     ):
         self.name = name
         self.icon = icon
@@ -94,7 +94,6 @@ class CoosaludEps(EpsInfo):
             enabled=True,
             image_path=os.path.join(ASSETS_DIR, "img", "eps", "coosalud.png"),
             homologador_file="HOMOLOGADOR_COOSALUD.xlsx",
-            sender_filter="vco.glosas1@coosalud.com"  # Solo correos de este remitente
         )
 
 
@@ -181,7 +180,7 @@ def get_eps_list() -> list:
     return [eps.to_dict() for eps in EPS_CONFIG if eps.enabled]
 
 
-def get_eps_by_name(name: str) -> EpsInfo:
+def get_eps_by_name(name: str) -> EpsInfo | None:
     """
     Busca una EPS por nombre
     

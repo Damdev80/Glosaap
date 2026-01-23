@@ -6,6 +6,14 @@ import os
 import sys
 import threading
 
+# Configurar ruta de navegadores de Playwright ANTES de cualquier import
+if sys.platform == 'win32':
+    appdata = os.getenv('APPDATA', os.path.expanduser('~'))
+    browsers_path = os.path.join(appdata, 'Glosaap', 'browsers')
+    os.environ['PLAYWRIGHT_BROWSERS_PATH'] = browsers_path
+    # Crear directorio si no existe
+    os.makedirs(browsers_path, exist_ok=True)
+
 # Configurar path para imports - agregar el directorio raíz del proyecto
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if PROJECT_ROOT not in sys.path:
@@ -31,12 +39,12 @@ def main(page: ft.Page):
     
     # ==================== CONFIGURACIÓN INICIAL ====================
     page.title = "Glosaap"
-    page.window_width = WINDOW_SIZES["login"]["width"]
-    page.window_height = WINDOW_SIZES["login"]["height"]
+    page.window.width = WINDOW_SIZES["login"]["width"]
+    page.window.height = WINDOW_SIZES["login"]["height"]
+    # Nota: Flet no soporta window_min_width/height directamente
+    # El tamaño mínimo se controla validando en los métodos go_to_*
     page.bgcolor = COLORS["bg_white"]
     page.padding = 0
-    page.assets_dir = ASSETS_DIR
-    
     # Icono de la ventana (ruta absoluta)
     icon_path = os.path.join(ASSETS_DIR, "icons", "app_logo.png")
     if os.path.exists(icon_path):
@@ -74,8 +82,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        page.window_width = WINDOW_SIZES["login"]["width"]
-        page.window_height = WINDOW_SIZES["login"]["height"]
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_method_selection():
@@ -91,8 +100,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        page.window_width = 900
-        page.window_height = 600
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_dashboard():
@@ -108,8 +118,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        page.window_width = 800
-        page.window_height = 550
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_tools():
@@ -125,8 +136,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        page.window_width = 800
-        page.window_height = 500
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_homologacion():
@@ -142,8 +154,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        page.window_width = 900
-        page.window_height = 600
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_mix_excel():
@@ -159,8 +172,9 @@ def main(page: ft.Page):
         homologador_manual_view.hide()
         mix_excel_view.show()
         web_download_view.hide()
-        page.window_width = 600
-        page.window_height = 700
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_homologador_manual():
@@ -176,8 +190,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.show()
         web_download_view.hide()
-        page.window_width = 650
-        page.window_height = 700
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_web_download():
@@ -193,8 +208,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.show()
-        page.window_width = 1000
-        page.window_height = 700
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_eps_selection():
@@ -210,8 +226,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        page.window_width = WINDOW_SIZES["main"]["width"]
-        page.window_height = WINDOW_SIZES["main"]["height"]
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_messages():
@@ -245,6 +262,8 @@ def main(page: ft.Page):
             go_to_dashboard()
         elif current_view["name"] == "dashboard":
             go_to_login()
+
+            
     
     # ==================== FUNCIONES DE NEGOCIO ====================
     
@@ -278,9 +297,10 @@ def main(page: ft.Page):
         print(f"[EPS] Subject pattern: {eps_info.get('subject_pattern')}")
         print(f"[EPS] ========================================")
         
-        # LIMPIAR archivos antiguos antes de nueva búsqueda
+        # LIMPIAR sesión anterior antes de nueva búsqueda
+        # (no borra archivos físicos, solo la lista de archivos de esta búsqueda)
         print("[CLEANUP] Limpiando archivos de búsquedas anteriores...")
-        email_service.clear_attachments()
+        email_service.clear_session()
         
         # Preparar info de búsqueda
         eps_name = eps_info["name"]
@@ -403,11 +423,11 @@ def main(page: ft.Page):
                         print(f"[SEARCH] Subject pattern: '{subject_pattern}'")
                         print(f"[SEARCH] Palabra clave seleccionada: '{search_keyword}'")
                 
-                # Buscar con filtro de fechas
+                # Buscar con filtro de fechas (timeout aumentado para búsquedas grandes)
                 email_service.search_messages(
                     search_keyword,
-                    limit=500,
-                    timeout=30,
+                    limit=None,  # Sin límite - busca todos
+                    timeout=120,  # 2 minutos de timeout
                     on_found=on_found,
                     date_from=app_state.get("date_from"),
                     date_to=app_state.get("date_to")
@@ -515,28 +535,35 @@ def main(page: ft.Page):
     
     def process_eps_files():
         """Procesa archivos de una EPS"""
+        # Deshabilitar botón INMEDIATAMENTE al entrar
+        messages_view.process_eps_btn.disabled = True
+        page.update()
+        
         def worker():
             try:
                 eps_type = messages_view.process_eps_btn.data
                 if not eps_type:
+                    messages_view.process_eps_btn.disabled = False
+                    page.update()
                     return
                 
                 messages_view.set_processing(True, f"🔄 Procesando {eps_type.upper()}...")
-                messages_view.process_eps_btn.disabled = True
                 
                 if eps_type == "mutualser":
-                    excel_files = email_service.get_excel_files()
+                    # Usar session_only=True para procesar solo archivos de esta búsqueda
+                    excel_files = email_service.get_excel_files(session_only=True)
                     
                     # Verificación simple - solo verificar si hay archivos
                     if not excel_files:
                         messages_view.set_processing(False, "❌ No hay archivos Excel para procesar")
                         messages_view.process_eps_btn.disabled = False
+                        page.update()
                         
                         # Mostrar diálogo informativo
                         AlertDialog.show_warning(
                             page=page,
                             title="Sin archivos para procesar",
-                            message="No se encontraron archivos Excel en el directorio temporal.\n\nLos archivos se almacenan automáticamente cuando descargas adjuntos."
+                            message="No se descargaron archivos Excel en esta búsqueda.\n\nPrimero descarga los adjuntos de los correos."
                         )
                         return
                     
@@ -584,20 +611,22 @@ def main(page: ft.Page):
                         )
                     
                     messages_view.process_eps_btn.disabled = False
+                    page.update()
                 
                 elif eps_type == "coosalud":
                     from app.service.processors import CoosaludProcessor
                     
-                    # Obtener archivos Excel (excluyendo devoluciones)
-                    excel_files = email_service.get_excel_files(exclude_devoluciones=True)
+                    # Obtener archivos Excel de ESTA SESIÓN (excluyendo devoluciones)
+                    excel_files = email_service.get_excel_files(exclude_devoluciones=True, session_only=True)
                     if not excel_files:
                         messages_view.set_processing(False, "❌ No hay archivos Excel para procesar")
                         messages_view.process_eps_btn.disabled = False
+                        page.update()
                         
                         AlertDialog.show_warning(
                             page=page,
                             title="Sin archivos para procesar",
-                            message="No se encontraron archivos Excel de GLOSAS.\n\nLos archivos de DEVOLUCIÓN fueron excluidos automáticamente."
+                            message="No se descargaron archivos Excel de GLOSAS en esta búsqueda.\n\nPrimero descarga los adjuntos de los correos."
                         )
                         return
 
@@ -619,14 +648,42 @@ def main(page: ft.Page):
                     processor = CoosaludProcessor(homologador_path=homologador_path)
                     result_data, message = processor.process_glosas(excel_files, output_dir=output_dir)
                     
+                    # Rehabilitar botón después de procesar
+                    messages_view.process_eps_btn.disabled = False
+                    
                     if result_data:
                         messages_view.set_processing(False, f"✅ {message}")
                         messages_view.processing_status.color = COLORS["success"]
                         
-                        AlertDialog.show_success(
+                        # Preparar estadísticas desde los DataFrames
+                        total_detalles = len(result_data.get('detalle', [])) if isinstance(result_data, dict) else 0
+                        total_glosas = len(result_data.get('glosa', [])) if isinstance(result_data, dict) else 0
+                        
+                        stats = {
+                            'archivos_procesados': len(excel_files),
+                            'total_registros': total_detalles + total_glosas,
+                        }
+                        
+                        # Extraer nombre del archivo del mensaje
+                        output_files = []
+                        if "Guardado en:" in message:
+                            for line in message.split('\n'):
+                                if "Guardado en:" in line or "COOSALUD_GLOSAS_" in line:
+                                    # Extraer ruta del archivo
+                                    path = line.split(":")[-1].strip() if ":" in line else ""
+                                    if path and os.path.exists(path):
+                                        output_files.append(path)
+                        
+                        def open_coosalud_folder():
+                            import subprocess
+                            subprocess.Popen(f'explorer "{output_dir}"')
+                        
+                        AlertDialog.show_processing_complete(
                             page=page,
-                            title="Procesamiento completado",
-                            message=message
+                            eps_name="COOSALUD",
+                            stats=stats,
+                            output_files=output_files if output_files else [f"📁 {output_dir}"],
+                            on_open_folder=open_coosalud_folder
                         )
                     else:
                         messages_view.set_processing(False, f"❌ {message}")
@@ -638,10 +695,13 @@ def main(page: ft.Page):
                             message=message
                         )
                     
+                    page.update()
+                    
             except Exception as ex:
                 messages_view.set_processing(False, f"❌ Error: {str(ex)}")
                 messages_view.processing_status.color = COLORS["error"]
                 messages_view.process_eps_btn.disabled = False
+                page.update()
                 
                 AlertDialog.show_error(
                     page=page,
@@ -709,7 +769,7 @@ def main(page: ft.Page):
     messages_view = MessagesView(
         page=page,
         on_back=go_to_eps_selection,
-        on_refresh=lambda: load_messages(messages_view.search_info_text.value),
+        on_refresh=lambda: load_messages(messages_view.search_info_text.value or ""),
         on_download_selected=download_selected_messages,
         on_process=process_eps_files
     )
@@ -724,16 +784,18 @@ def main(page: ft.Page):
     
     page.add(
         ft.Stack([
-            login_view.container,
-            method_selection_view.container,
-            dashboard_view.container,
-            tools_view.container,
-            homologacion_view.container,
-            mix_excel_view.container,
-            homologador_manual_view.container,
-            web_download_view.container,
-            eps_screen.build(),
-            messages_view.container
+            control for control in [
+                login_view.container,
+                method_selection_view.container,
+                dashboard_view.container,
+                tools_view.container,
+                homologacion_view.container,
+                mix_excel_view.container,
+                homologador_manual_view.container,
+                web_download_view.container,
+                eps_screen.build(),
+                messages_view.container
+            ] if control is not None
         ], expand=True)
     )
     

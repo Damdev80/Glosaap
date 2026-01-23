@@ -541,6 +541,17 @@ class WebDownloadView:
                     progress_callback=self.update_familiar_status
                 )
                 
+                if not self.familiar_nit.value:
+                    raise ValueError("El NIT es obligatorio")
+
+                if not self.familiar_usuario.value:
+                    raise ValueError("El usuario es obligatorio")
+
+                if not self.familiar_password.value:
+                    raise ValueError("La contraseña es obligatoria")
+                
+                
+
                 result = scraper.login_and_download(
                     nit=self.familiar_nit.value,
                     usuario=self.familiar_usuario.value,
@@ -586,8 +597,20 @@ class WebDownloadView:
             try:
                 from app.service.web_scraper import FomagScraper
                 
+                # Ruta de red para resultados de glosa web
+                download_dir = r"\\MINERVA\Cartera\GLOSAAP\RESULTADO DE GLOSA WEB"
+                
+                # Crear directorio si no existe
+                try:
+                    os.makedirs(download_dir, exist_ok=True)
+                except:
+                    # Fallback a escritorio si no hay acceso a red
+                    download_dir = os.path.join(os.path.expanduser("~"), "Desktop", "descargas_fomag")
+                    os.makedirs(download_dir, exist_ok=True)
+                    self.update_fomag_status(f"⚠️ Sin acceso a red, guardando en: {download_dir}")
+                
                 scraper = FomagScraper(
-                    download_dir=os.path.join(os.path.expanduser("~"), "Desktop", "descargas_fomag"),
+                    download_dir=download_dir,
                     progress_callback=self.update_fomag_status
                 )
                 

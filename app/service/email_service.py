@@ -53,14 +53,14 @@ class EmailService:
         return True
     
 
-    def search_messages(self, keyword, limit=1000, timeout=30, on_found=None, date_from=None, date_to=None):
+    def search_messages(self, keyword, limit=None, timeout=120, on_found=None, date_from=None, date_to=None):
         """
         Busca mensajes por palabra clave en el asunto
         
         Args:
             keyword: Palabra a buscar
-            limit: Límite de mensajes
-            timeout: Tiempo máximo de búsqueda
+            limit: Límite de mensajes (None = sin límite)
+            timeout: Tiempo máximo de búsqueda (default: 120 segundos)
             on_found: Callback cuando se encuentra un mensaje
             date_from: Fecha inicio del rango (datetime o string 'YYYY-MM-DD')
             date_to: Fecha fin del rango (datetime o string 'YYYY-MM-DD')
@@ -147,9 +147,21 @@ class EmailService:
         """Obtiene resumen de adjuntos descargados"""
         return self.attachment_service.get_summary()
     
-    def get_excel_files(self, exclude_devoluciones=True):
-        """Obtiene solo archivos Excel/CSV descargados"""
+    def get_excel_files(self, exclude_devoluciones=True, session_only=True):
+        """
+        Obtiene archivos Excel/CSV descargados
+        
+        Args:
+            exclude_devoluciones: Excluir archivos de devolución
+            session_only: Si True, solo retorna archivos de la sesión actual
+        """
+        if session_only:
+            return self.attachment_service.get_session_excel_files(exclude_devoluciones=exclude_devoluciones)
         return self.attachment_service.get_excel_files(exclude_devoluciones=exclude_devoluciones)
+    
+    def clear_session(self):
+        """Limpia los archivos de la sesión actual (para nueva búsqueda)"""
+        return self.attachment_service.clear_session()
     
     def clear_attachments(self):
         """Limpia todos los archivos descargados del directorio temporal"""

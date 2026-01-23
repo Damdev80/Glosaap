@@ -6,6 +6,7 @@ import pandas as pd
 import os
 from datetime import datetime
 import shutil
+from typing import Optional
 
 
 class HomologacionService:
@@ -25,7 +26,7 @@ class HomologacionService:
     # Columnas requeridas
     COLUMNAS = ['Código Servicio de la ERP', 'Código producto en DGH', 'COD_SERV_FACT']
     
-    def __init__(self, eps: str = None):
+    def __init__(self, eps: Optional[str] = None):
         """
         Inicializa el servicio de homologación
         
@@ -33,8 +34,8 @@ class HomologacionService:
             eps: Nombre de la EPS (mutualser, coosalud, etc.)
         """
         self.eps = eps
-        self.homologacion_path = None
-        self.df = None
+        self.homologacion_path: Optional[str] = None
+        self.df: Optional[pd.DataFrame] = None
         
         if eps:
             self._set_eps(eps)
@@ -107,11 +108,12 @@ class HomologacionService:
                 cols_existentes = [c for c in self.COLUMNAS if c in self.df.columns]
                 if cols_existentes:
                     self.df = self.df[cols_existentes].copy()
-                print(f"✅ Homologación {self.eps.upper()} cargada: {len(self.df)} registros")
+                eps_name = self.eps.upper() if self.eps else "DESCONOCIDA"
+                print(f"✅ Homologación {eps_name} cargada: {len(self.df)} registros")
             else:
                 # Crear DataFrame vacío con las columnas
                 self.df = pd.DataFrame(columns=self.COLUMNAS)
-                print(f"⚠️ Archivo de homologación {self.eps} no encontrado, creando nuevo")
+                print(f"⚠️ Archivo de homologación {self.eps or 'desconocida'} no encontrado, creando nuevo")
         except Exception as e:
             print(f"❌ Error cargando homologación: {e}")
             self.df = pd.DataFrame(columns=self.COLUMNAS)
@@ -133,8 +135,12 @@ class HomologacionService:
                 print(f"📋 Backup creado: {backup_filename}")
             
             # Guardar archivo
+            if self.df is None:
+                print("❌ No hay datos para guardar")
+                return False
             self.df.to_excel(self.homologacion_path, index=False)
-            print(f"✅ Archivo {self.eps.upper()} guardado")
+            eps_name = self.eps.upper() if self.eps else "DESCONOCIDA"
+            print(f"✅ Archivo {eps_name} guardado")
             return True
         except Exception as e:
             print(f"❌ Error guardando: {e}")
@@ -240,6 +246,10 @@ class HomologacionService:
             True si se actualizó correctamente
         """
         try:
+            if self.df is None:
+                print("❌ No hay datos cargados")
+                return False
+            
             codigo_str = str(codigo_erp).strip()
             mask = self.df['Código Servicio de la ERP'].astype(str).str.strip() == codigo_str
             
@@ -272,6 +282,10 @@ class HomologacionService:
             True si se eliminó correctamente
         """
         try:
+            if self.df is None:
+                print("❌ No hay datos cargados")
+                return False
+            
             codigo_str = str(codigo_erp).strip()
             mask = self.df['Código Servicio de la ERP'].astype(str).str.strip() == codigo_str
             
