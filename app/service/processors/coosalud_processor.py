@@ -34,8 +34,6 @@ class CoosaludProcessor(BaseProcessor):
     GLOSA_CODE_COLUMN = "codigo_glosa"  # Código resolución 2284
     
     def __init__(self, homologador_path: Optional[str] = None):
-        if homologador_path is None:
-            raise ValueError("Se requiere ruta al archivo de homologación para Coosalud")
         super().__init__(homologador_path)
         self.detalle_df = None
         self.glosa_df = None
