@@ -158,7 +158,7 @@ class EmailLoader:
         # Buscar mensajes
         self.email_service.search_messages(
             search_keyword,
-            limit=500,
+            limit=None,  # Sin límite - busca todos
             timeout=30,
             on_found=on_found,
             date_from=self.app_state.date_from,

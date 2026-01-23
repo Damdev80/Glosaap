@@ -39,12 +39,12 @@ def main(page: ft.Page):
     
     # ==================== CONFIGURACIÓN INICIAL ====================
     page.title = "Glosaap"
-    page.window_width = WINDOW_SIZES["login"]["width"]
-    page.window_height = WINDOW_SIZES["login"]["height"]
+    page.window.width = WINDOW_SIZES["login"]["width"]
+    page.window.height = WINDOW_SIZES["login"]["height"]
+    page.window_min_width = 480  # Tamaño mínimo global
+    page.window_min_height = 520
     page.bgcolor = COLORS["bg_white"]
     page.padding = 0
-    page.assets_dir = ASSETS_DIR
-    
     # Icono de la ventana (ruta absoluta)
     icon_path = os.path.join(ASSETS_DIR, "icons", "app_logo.png")
     if os.path.exists(icon_path):
@@ -82,8 +82,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        page.window_width = WINDOW_SIZES["login"]["width"]
-        page.window_height = WINDOW_SIZES["login"]["height"]
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_method_selection():
@@ -99,8 +100,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        page.window_width = 900
-        page.window_height = 600
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_dashboard():
@@ -116,8 +118,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        page.window_width = 800
-        page.window_height = 550
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_tools():
@@ -133,8 +136,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        page.window_width = 800
-        page.window_height = 500
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_homologacion():
@@ -150,8 +154,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        page.window_width = 900
-        page.window_height = 600
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_mix_excel():
@@ -167,8 +172,9 @@ def main(page: ft.Page):
         homologador_manual_view.hide()
         mix_excel_view.show()
         web_download_view.hide()
-        page.window_width = 600
-        page.window_height = 700
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_homologador_manual():
@@ -184,8 +190,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.show()
         web_download_view.hide()
-        page.window_width = 650
-        page.window_height = 700
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_web_download():
@@ -201,8 +208,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.show()
-        page.window_width = 1000
-        page.window_height = 700
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_eps_selection():
@@ -218,8 +226,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        page.window_width = WINDOW_SIZES["main"]["width"]
-        page.window_height = WINDOW_SIZES["main"]["height"]
+        if not page.window.full_screen:
+            page.window.width = WINDOW_SIZES["main"]["width"]
+            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_messages():
@@ -253,6 +262,8 @@ def main(page: ft.Page):
             go_to_dashboard()
         elif current_view["name"] == "dashboard":
             go_to_login()
+
+            
     
     # ==================== FUNCIONES DE NEGOCIO ====================
     
@@ -415,7 +426,7 @@ def main(page: ft.Page):
                 # Buscar con filtro de fechas
                 email_service.search_messages(
                     search_keyword,
-                    limit=500,
+                    limit=None,  # Sin límite - busca todos
                     timeout=30,
                     on_found=on_found,
                     date_from=app_state.get("date_from"),
@@ -758,7 +769,7 @@ def main(page: ft.Page):
     messages_view = MessagesView(
         page=page,
         on_back=go_to_eps_selection,
-        on_refresh=lambda: load_messages(messages_view.search_info_text.value),
+        on_refresh=lambda: load_messages(messages_view.search_info_text.value or ""),
         on_download_selected=download_selected_messages,
         on_process=process_eps_files
     )
@@ -773,16 +784,18 @@ def main(page: ft.Page):
     
     page.add(
         ft.Stack([
-            login_view.container,
-            method_selection_view.container,
-            dashboard_view.container,
-            tools_view.container,
-            homologacion_view.container,
-            mix_excel_view.container,
-            homologador_manual_view.container,
-            web_download_view.container,
-            eps_screen.build(),
-            messages_view.container
+            control for control in [
+                login_view.container,
+                method_selection_view.container,
+                dashboard_view.container,
+                tools_view.container,
+                homologacion_view.container,
+                mix_excel_view.container,
+                homologador_manual_view.container,
+                web_download_view.container,
+                eps_screen.build(),
+                messages_view.container
+            ] if control is not None
         ], expand=True)
     )
     
