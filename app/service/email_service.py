@@ -53,14 +53,14 @@ class EmailService:
         return True
     
 
-    def search_messages(self, keyword, limit=None, timeout=30, on_found=None, date_from=None, date_to=None):
+    def search_messages(self, keyword, limit=None, timeout=120, on_found=None, date_from=None, date_to=None):
         """
         Busca mensajes por palabra clave en el asunto
         
         Args:
             keyword: Palabra a buscar
             limit: Límite de mensajes (None = sin límite)
-            timeout: Tiempo máximo de búsqueda
+            timeout: Tiempo máximo de búsqueda (default: 120 segundos)
             on_found: Callback cuando se encuentra un mensaje
             date_from: Fecha inicio del rango (datetime o string 'YYYY-MM-DD')
             date_to: Fecha fin del rango (datetime o string 'YYYY-MM-DD')

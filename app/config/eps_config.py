@@ -94,7 +94,6 @@ class CoosaludEps(EpsInfo):
             enabled=True,
             image_path=os.path.join(ASSETS_DIR, "img", "eps", "coosalud.png"),
             homologador_file="HOMOLOGADOR_COOSALUD.xlsx",
-            sender_filter="vco.glosas1@coosalud.com"  # Solo correos de este remitente
         )
 
 

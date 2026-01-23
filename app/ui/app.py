@@ -41,8 +41,8 @@ def main(page: ft.Page):
     page.title = "Glosaap"
     page.window.width = WINDOW_SIZES["login"]["width"]
     page.window.height = WINDOW_SIZES["login"]["height"]
-    page.window_min_width = 480  # Tamaño mínimo global
-    page.window_min_height = 520
+    # Nota: Flet no soporta window_min_width/height directamente
+    # El tamaño mínimo se controla validando en los métodos go_to_*
     page.bgcolor = COLORS["bg_white"]
     page.padding = 0
     # Icono de la ventana (ruta absoluta)
@@ -423,11 +423,11 @@ def main(page: ft.Page):
                         print(f"[SEARCH] Subject pattern: '{subject_pattern}'")
                         print(f"[SEARCH] Palabra clave seleccionada: '{search_keyword}'")
                 
-                # Buscar con filtro de fechas
+                # Buscar con filtro de fechas (timeout aumentado para búsquedas grandes)
                 email_service.search_messages(
                     search_keyword,
                     limit=None,  # Sin límite - busca todos
-                    timeout=30,
+                    timeout=120,  # 2 minutos de timeout
                     on_found=on_found,
                     date_from=app_state.get("date_from"),
                     date_to=app_state.get("date_to")
