@@ -1,0 +1,10 @@
+# Dependencias de desarrollo (tests)
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+pytest-asyncio==0.21.1
+
+# Herramientas de calidad de código
+black==23.12.1          # Formateador de código
+flake8==7.0.0          # Linter
+mypy==1.8.0            # Type checker

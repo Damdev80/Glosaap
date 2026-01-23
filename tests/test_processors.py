@@ -42,11 +42,18 @@ class TestCoosaludProcessor:
         from app.service.processors.coosalud_processor import CoosaludProcessor
         assert CoosaludProcessor is not None
     
-    def test_identify_file_pairs(self):
+    def test_identify_file_pairs(self, tmp_path):
         """Verifica la identificación de pares de archivos"""
         from app.service.processors.coosalud_processor import CoosaludProcessor
         
-        processor = CoosaludProcessor()
+        # Crear homologador temporal
+        homolog_path = tmp_path / "homologador.xlsx"
+        pd.DataFrame({
+            'Código Servicio de la ERP': [],
+            'Código producto en DGH': []
+        }).to_excel(homolog_path, index=False)
+        
+        processor = CoosaludProcessor(homologador_path=str(homolog_path))
         
         # Simular lista de archivos
         files = [
