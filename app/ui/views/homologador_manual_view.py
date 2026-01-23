@@ -308,14 +308,17 @@ class HomologadorManualView:
             self.df_homologacion = pd.read_excel(path)
             self.df_homologacion.columns = self.df_homologacion.columns.str.strip()
             
-            # Pre-calcular COD_SERV_FACT
-            if 'COD_SERV_FACT' in self.df_homologacion.columns:
+            # Pre-calcular COD_SERV_FACT solo para MUTUALSER
+            if self.selected_eps == "MUTUALSER" and 'COD_SERV_FACT' in self.df_homologacion.columns:
                 self._todos_cod_serv_fact = set(
                     self.df_homologacion['COD_SERV_FACT']
                     .dropna().astype(str).str.strip().tolist()
                 )
                 self._todos_cod_serv_fact.discard('0')
                 self._todos_cod_serv_fact.discard('')
+            else:
+                # COOSALUD no usa COD_SERV_FACT (por ahora)
+                self._todos_cod_serv_fact = None
             
             self.status_text.value = f"✅ Homologación {self.selected_eps} cargada: {len(self.df_homologacion)} registros"
             self.status_text.color = COLORS["success"]
@@ -388,9 +391,8 @@ class HomologadorManualView:
             col_producto = 'Código producto en DGH'
             
             # Verificar columnas
-            for col in [col_erp, col_producto, 'COD_SERV_FACT']:
-                if col not in self.df_homologacion.columns:
-                    return ''
+            if col_erp not in self.df_homologacion.columns or col_producto not in self.df_homologacion.columns:
+                return ''
             
             codigo_numerico = ''.join(filter(str.isdigit, codigo_str))
             
@@ -409,16 +411,21 @@ class HomologadorManualView:
                     cod_str = str(codigo_producto).strip()
                     
                     if cod_str and cod_str != '0' and cod_str != 'nan':
-                        # Verificar si existe en COD_SERV_FACT
-                        if cod_str in self._todos_cod_serv_fact:
+                        # COOSALUD: Homologación directa sin verificar COD_SERV_FACT
+                        if self.selected_eps == "COOSALUD":
                             return cod_str
                         
-                        # Búsqueda flexible
-                        cod_numerico = ''.join(filter(str.isdigit, cod_str))
-                        if cod_numerico:
-                            for cod in self._todos_cod_serv_fact:
-                                if ''.join(filter(str.isdigit, cod)) == cod_numerico:
-                                    return cod
+                        # MUTUALSER: Verificar si existe en COD_SERV_FACT
+                        if self._todos_cod_serv_fact and cod_str in self._todos_cod_serv_fact:
+                            return cod_str
+                        
+                        # Búsqueda flexible para MUTUALSER
+                        if self._todos_cod_serv_fact:
+                            cod_numerico = ''.join(filter(str.isdigit, cod_str))
+                            if cod_numerico:
+                                for cod in self._todos_cod_serv_fact:
+                                    if ''.join(filter(str.isdigit, cod)) == cod_numerico:
+                                        return cod
             
             return ''
             

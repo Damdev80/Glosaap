@@ -147,8 +147,8 @@ class MessagesScreen:
             # Informar al usuario que está buscando
             self.show_status("Buscando correos con 'glosa' en el asunto...")
             
-            # Buscar mensajes usando el cliente IMAP (límite de 500)
-            msgs = self.client.search_by_subject("glosa", limit=500)
+            # Buscar mensajes usando el cliente IMAP (límite de 1000)
+            msgs = self.client.search_by_subject("glosa", limit=1000)
             
             # Limpiar la lista actual de mensajes
             self.messages_column.controls.clear()
