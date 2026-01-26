@@ -1,4 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
+"""
+PyInstaller spec file para Glosaap
+
+Este archivo genera Glosaap.exe y toda la distribución necesaria.
+Para compilar: pyinstaller glosaap.spec
+
+IMPORTANTE: Después de compilar Glosaap, también compilar el updater:
+    pyinstaller updater.spec
+    
+Y copiar updater.exe a la carpeta dist/Glosaap/
+"""
 from PyInstaller.utils.hooks import collect_all
 
 datas = [('assets', 'assets'), ('app', 'app')]
@@ -39,6 +50,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='assets/icons/app_logo.ico',
 )
 coll = COLLECT(
     exe,

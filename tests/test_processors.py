@@ -42,6 +42,55 @@ class TestCoosaludProcessor:
         from app.service.processors.coosalud_processor import CoosaludProcessor
         assert CoosaludProcessor is not None
     
+    def test_homologar_codigo_glosa_numerico(self):
+        """Verifica homologación de códigos numéricos"""
+        from app.service.processors.coosalud_processor import CoosaludProcessor
+        processor = CoosaludProcessor()
+        
+        # Test casos con números
+        assert processor._homologar_codigo_glosa("203") == "TA0301"
+        assert processor._homologar_codigo_glosa("103") == "FA0301"
+        assert processor._homologar_codigo_glosa("301") == "SO0101"
+        assert processor._homologar_codigo_glosa("405") == "AU0501"
+        assert processor._homologar_codigo_glosa("502") == "CO0201"
+        assert processor._homologar_codigo_glosa("605") == "CL0501"
+    
+    def test_homologar_codigo_glosa_especial_430(self):
+        """Verifica caso especial 430 -> AU2103"""
+        from app.service.processors.coosalud_processor import CoosaludProcessor
+        processor = CoosaludProcessor()
+        
+        assert processor._homologar_codigo_glosa("430") == "AU2103"
+    
+    def test_homologar_codigo_glosa_con_letras(self):
+        """Verifica que códigos con letras no se modifican"""
+        from app.service.processors.coosalud_processor import CoosaludProcessor
+        processor = CoosaludProcessor()
+        
+        # Códigos que ya empiezan con letra no deben modificarse
+        assert processor._homologar_codigo_glosa("AU01") == "AU01"
+        assert processor._homologar_codigo_glosa("SO1234") == "SO1234"
+        assert processor._homologar_codigo_glosa("FA01") == "FA01"
+        assert processor._homologar_codigo_glosa("TA02") == "TA02"
+    
+    def test_homologar_codigo_glosa_vacios(self):
+        """Verifica manejo de valores vacíos"""
+        from app.service.processors.coosalud_processor import CoosaludProcessor
+        processor = CoosaludProcessor()
+        
+        assert processor._homologar_codigo_glosa("") == ""
+        assert processor._homologar_codigo_glosa(None) == ""
+        assert processor._homologar_codigo_glosa("NAN") == ""
+    
+    def test_homologar_codigo_glosa_un_digito(self):
+        """Verifica homologación con un solo dígito"""
+        from app.service.processors.coosalud_processor import CoosaludProcessor
+        processor = CoosaludProcessor()
+        
+        # Un solo dígito debe agregar padding
+        assert processor._homologar_codigo_glosa("5") == "CO0001"
+        assert processor._homologar_codigo_glosa("2") == "TA0001"
+    
     def test_identify_file_pairs(self, tmp_path):
         """Verifica la identificación de pares de archivos"""
         from app.service.processors.coosalud_processor import CoosaludProcessor

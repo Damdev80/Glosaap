@@ -4,6 +4,7 @@ Vista del Dashboard principal
 import flet as ft
 import os
 from app.ui.styles import COLORS, FONT_SIZES, SPACING
+from app.config.settings import APP_VERSION
 
 
 class DashboardView:
@@ -222,6 +223,19 @@ class DashboardView:
                 ),
                 right=20,
                 top=70,
+            ),
+            # Indicador de versión con opción de actualización (esquina inferior izquierda)
+            ft.Container(
+                content=ft.TextButton(
+                    content=ft.Row([
+                        ft.Icon(ft.Icons.INFO_OUTLINE, size=14, color=COLORS["text_light"]),
+                        ft.Text(f"v{APP_VERSION}", size=11, color=COLORS["text_light"])
+                    ], spacing=4),
+                    tooltip="Buscar actualizaciones",
+                    on_click=lambda e: self._check_updates(e)
+                ),
+                left=10,
+                bottom=10,
             )
         ], expand=True, visible=False)
         
@@ -238,3 +252,17 @@ class DashboardView:
         if self.container:
             self.container.visible = False
             self.page.update()
+    
+    def _check_updates(self, e):
+        """Abre el diálogo de verificación de actualizaciones"""
+        # Obtener función de verificación desde page.data
+        if hasattr(self.page, 'data') and self.page.data:
+            check_fn = self.page.data.get('check_updates')
+            if check_fn:
+                check_fn()
+            else:
+                # Fallback: crear un nuevo verificador
+                from app.ui.components.update_dialog import UpdateChecker
+                from app.config.settings import GITHUB_REPO
+                checker = UpdateChecker(self.page, APP_VERSION, GITHUB_REPO)
+                checker.check_updates()

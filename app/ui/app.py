@@ -29,6 +29,10 @@ from app.ui.views.homologador_manual_view import HomologadorManualView
 from app.ui.views.web_download_view import WebDownloadView
 from app.ui.views.method_selection_view import MethodSelectionView
 from app.ui.components.alert_dialog import AlertDialog
+from app.ui.components.update_dialog import UpdateChecker
+from app.ui.navigation import NavigationController
+from app.ui.app_state import AppState
+from app.config.settings import APP_VERSION, GITHUB_REPO, AUTO_UPDATE_CONFIG, logger
 
 # Ruta de assets (carpeta con imágenes)
 ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "assets"))
@@ -716,6 +720,12 @@ def main(page: ft.Page):
     
     # ==================== CREAR VISTAS ====================
     
+    # Crear estado de aplicación para NavigationController
+    nav_app_state = AppState()
+    
+    # NavigationController se inicializará después de crear las vistas
+    navigation_controller = None  # Placeholder
+    
     login_view = LoginView(
         page=page,
         email_service=email_service,
@@ -735,6 +745,7 @@ def main(page: ft.Page):
     tools_view = ToolsView(
         page=page,
         assets_dir=ASSETS_DIR,
+        navigation_controller=navigation_controller,
         on_back=go_to_dashboard,
         on_homologacion=go_to_homologacion,
         on_mix_excel=go_to_mix_excel,
@@ -756,11 +767,13 @@ def main(page: ft.Page):
     
     homologacion_view = HomologacionView(
         page=page,
+        navigation_controller=navigation_controller,
         on_back=go_to_tools
     )
     
     mix_excel_view = MixExcelView(
         page=page,
+        navigation_controller=navigation_controller,
         on_back=go_to_tools
     )
     
@@ -783,6 +796,26 @@ def main(page: ft.Page):
         on_logout=go_to_dashboard
     )
     
+    # Inicializar NavigationController con todas las vistas
+    views_dict = {
+        "login": login_view,
+        "method_selection": method_selection_view,
+        "dashboard": dashboard_view,
+        "tools": tools_view,
+        "homologacion": homologacion_view,
+        "mix_excel": mix_excel_view,
+        "homologador_manual": homologador_manual_view,
+        "web_download": web_download_view,
+        "eps": eps_screen,
+        "messages": messages_view
+    }
+    navigation_controller = NavigationController(page, views_dict, nav_app_state)
+    
+    # Actualizar referencia en las vistas que lo necesitan
+    tools_view.navigation_controller = navigation_controller
+    homologacion_view.navigation_controller = navigation_controller
+    mix_excel_view.navigation_controller = navigation_controller
+    
     # ==================== CONSTRUIR PÁGINA ====================
     
     page.add(
@@ -801,6 +834,25 @@ def main(page: ft.Page):
             ] if control is not None
         ], expand=True)
     )
+    
+    # ==================== VERIFICADOR DE ACTUALIZACIONES ====================
+    
+    # Crear verificador de actualizaciones
+    update_checker = UpdateChecker(
+        page=page,
+        current_version=APP_VERSION,
+        github_repo=GITHUB_REPO
+    )
+    
+    # Verificar actualizaciones silenciosamente al inicio (si está habilitado)
+    if AUTO_UPDATE_CONFIG.get("enabled") and AUTO_UPDATE_CONFIG.get("check_on_startup"):
+        logger.info(f"Verificando actualizaciones al inicio (v{APP_VERSION})...")
+        update_checker.check_updates_silent()
+    
+    # Exponer función para verificar actualizaciones desde otras vistas
+    page.data = page.data if hasattr(page, 'data') and page.data else {}
+    page.data['check_updates'] = update_checker.check_updates
+    page.data['app_version'] = APP_VERSION
     
     # ==================== AUTO-LOGIN ====================
     

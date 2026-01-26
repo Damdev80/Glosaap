@@ -4,18 +4,21 @@ Vista de Herramientas
 import flet as ft
 import os
 from app.ui.styles import COLORS, FONT_SIZES
+from app.ui.components.navigation_header import NavigationHeader
 
 
 class ToolsView:
     """Vista del menú de herramientas"""
     
-    def __init__(self, page: ft.Page, assets_dir: str, on_back=None, on_homologacion=None, on_mix_excel=None, on_homologador_manual=None):
+    def __init__(self, page: ft.Page, assets_dir: str, navigation_controller=None, on_back=None, on_homologacion=None, on_mix_excel=None, on_homologador_manual=None):
         self.page = page
         self.assets_dir = assets_dir
+        self.navigation_controller = navigation_controller
         self.on_back = on_back
         self.on_homologacion = on_homologacion
         self.on_mix_excel = on_mix_excel
         self.on_homologador_manual = on_homologador_manual
+        self.nav_header = NavigationHeader(page, navigation_controller)
         self.container = self.build()
         
     def _create_tool_card(self, icon, title, description, color, on_click_action, image_src=None):
@@ -61,28 +64,21 @@ class ToolsView:
     
     def build(self):
         """Construye la vista de herramientas"""
+        
+        # Header con navegación
+        header = self.nav_header.build(
+            title="⚙️ Herramientas",
+            back_text="← Volver al Dashboard",
+            breadcrumb=[
+                {"text": "Dashboard", "action": lambda e: self.navigation_controller.go_to_dashboard() if self.navigation_controller else None},
+                {"text": "Herramientas", "action": None}
+            ]
+        )
+        
         self.container = ft.Container(
             content=ft.Column([
-                # Header
-                ft.Container(
-                    content=ft.Row([
-                        ft.IconButton(
-                            icon=ft.Icons.ARROW_BACK,
-                            icon_color=COLORS["text_secondary"],
-                            on_click=lambda e: self.on_back() if self.on_back else None
-                        ),
-                        ft.Image(
-                            src=os.path.join(self.assets_dir, "icons", "utils.png"),
-                            width=30,
-                            height=30,
-                            fit=ft.ImageFit.CONTAIN
-                        ),
-                        ft.Text("Herramientas", size=24, weight=ft.FontWeight.W_500, color=COLORS["text_primary"]),
-                    ], spacing=10),
-                    padding=20,
-                    bgcolor=COLORS["bg_white"],
-                    border=ft.border.only(bottom=ft.BorderSide(1, COLORS["border"]))
-                ),
+                # Header con navegación
+                header,
                 # Grid de herramientas
                 ft.Container(
                     content=ft.Column([

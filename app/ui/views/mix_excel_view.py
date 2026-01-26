@@ -5,15 +5,18 @@ Estilo Minimalista
 import flet as ft
 from pathlib import Path
 from app.ui.styles import COLORS, FONT_SIZES, SPACING
+from app.ui.components.navigation_header import NavigationHeader
 from app.core.mix_excel_service import MixExcelService
 
 
 class MixExcelView:
     """Vista para transferir columnas entre archivos Excel"""
     
-    def __init__(self, page: ft.Page, on_back):
+    def __init__(self, page: ft.Page, navigation_controller=None, on_back=None):
         self.page = page
+        self.navigation_controller = navigation_controller
         self.on_back = on_back
+        self.nav_header = NavigationHeader(page, navigation_controller)
         self.service = MixExcelService()
         
         # File picker

@@ -5,15 +5,18 @@ Con soporte para múltiples EPS
 import flet as ft
 import pandas as pd
 from app.ui.styles import COLORS, FONT_SIZES, SPACING
+from app.ui.components.navigation_header import NavigationHeader
 from app.core.homologacion_service import HomologacionService
 
 
 class HomologacionView:
     """Vista para CRUD de códigos de homologación con selector de EPS"""
     
-    def __init__(self, page: ft.Page, on_back):
+    def __init__(self, page: ft.Page, navigation_controller=None, on_back=None):
         self.page = page
+        self.navigation_controller = navigation_controller
         self.on_back = on_back
+        self.nav_header = NavigationHeader(page, navigation_controller)
         self.service = None  # Se inicializa cuando se selecciona una EPS
         self.current_eps = None
         

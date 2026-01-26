@@ -1,0 +1,140 @@
+"""
+Componente de header con navegación reutilizable
+Integrado con NavigationController existente
+"""
+import flet as ft
+from app.ui.styles import COLORS, FONT_SIZES, SPACING
+
+
+class NavigationHeader:
+    """Header de navegación que usa NavigationController"""
+    
+    def __init__(self, page: ft.Page, navigation_controller=None):
+        self.page = page
+        self.nav_controller = navigation_controller
+    
+    def build(
+        self,
+        title: str,
+        show_back: bool = True,
+        back_text: str = "← Atrás",
+        custom_back_action: callable = None,
+        breadcrumb: list = None,
+        actions: list = None
+    ) -> ft.Container:
+        """
+        Construye header con navegación
+        
+        Args:
+            title: Título de la sección
+            show_back: Mostrar botón de regreso
+            back_text: Texto del botón atrás
+            custom_back_action: Acción personalizada (opcional)
+            breadcrumb: Lista de breadcrumbs
+            actions: Botones adicionales
+        """
+        
+        content_items = []
+        
+        # Botón de regreso
+        if show_back:
+            back_button = self._create_back_button(
+                text=back_text,
+                custom_action=custom_back_action
+            )
+            content_items.append(back_button)
+            content_items.append(ft.Container(width=SPACING["md"]))
+        
+        # Título y breadcrumb
+        title_column = ft.Column([
+            ft.Text(
+                title,
+                size=FONT_SIZES["heading"],
+                weight=ft.FontWeight.BOLD,
+                color=COLORS["text_primary"]
+            )
+        ], spacing=SPACING["xs"])
+        
+        if breadcrumb:
+            breadcrumb_row = self._create_breadcrumb(breadcrumb)
+            title_column.controls.append(breadcrumb_row)
+        
+        content_items.append(title_column)
+        
+        # Spacer
+        content_items.append(ft.Container(expand=True))
+        
+        # Acciones adicionales
+        if actions:
+            action_row = ft.Row(actions, spacing=SPACING["sm"])
+            content_items.append(action_row)
+        
+        return ft.Container(
+            content=ft.Row(
+                content_items,
+                alignment=ft.MainAxisAlignment.START,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER
+            ),
+            padding=ft.padding.all(SPACING["lg"]),
+            bgcolor=COLORS["bg_white"],
+            border=ft.border.only(
+                bottom=ft.border.BorderSide(1, COLORS["border_light"])
+            )
+        )
+    
+    def _create_back_button(self, text: str, custom_action: callable = None) -> ft.ElevatedButton:
+        """Crea botón de regreso"""
+        
+        def on_click(e):
+            if custom_action:
+                custom_action()
+            elif self.nav_controller:
+                self.nav_controller.go_back()
+        
+        return ft.ElevatedButton(
+            text=text,
+            icon=ft.Icons.ARROW_BACK,
+            on_click=on_click,
+            bgcolor=COLORS["bg_light"],
+            color=COLORS["text_primary"],
+            elevation=1
+        )
+    
+    def _create_breadcrumb(self, breadcrumb: list) -> ft.Row:
+        """Crea breadcrumb navigation"""
+        items = []
+        
+        for i, crumb in enumerate(breadcrumb):
+            if i < len(breadcrumb) - 1:  # No es el último
+                if crumb.get("action"):
+                    # Link clicable
+                    link = ft.TextButton(
+                        text=crumb["text"],
+                        on_click=crumb["action"],
+                        style=ft.ButtonStyle(
+                            color=COLORS["primary"],
+                            padding=ft.padding.symmetric(horizontal=4, vertical=2)
+                        )
+                    )
+                    items.append(link)
+                else:
+                    items.append(
+                        ft.Text(crumb["text"], color=COLORS["text_secondary"], size=FONT_SIZES["small"])
+                    )
+                
+                # Separador
+                items.append(
+                    ft.Text(" > ", color=COLORS["text_secondary"], size=FONT_SIZES["small"])
+                )
+            else:
+                # Último elemento (actual)
+                items.append(
+                    ft.Text(
+                        crumb["text"],
+                        color=COLORS["text_primary"],
+                        size=FONT_SIZES["small"],
+                        weight=ft.FontWeight.W_500
+                    )
+                )
+        
+        return ft.Row(items, spacing=0)
