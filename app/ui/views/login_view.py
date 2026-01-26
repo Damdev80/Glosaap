@@ -1,10 +1,10 @@
 """
-Vista de Login
+Vista de Login - Minimalista con soporte de temas
 """
 import flet as ft
 import threading
 import os
-from app.ui.styles import COLORS, FONT_SIZES, SPACING, WINDOW_SIZES
+from app.ui.styles import FONT_SIZES, SPACING, WINDOW_SIZES
 from app.core.session_manager import save_session, load_session, clear_session
 
 
@@ -32,19 +32,14 @@ class LoginView:
         
     def _build(self):
         """Construye la vista de login"""
+        # Usar colores del tema de Flet (sin hardcodear)
         self.email_input = ft.TextField(
             label="Correo electrónico",
             width=380,
             height=56,
             autofocus=True,
-            border_color=COLORS["border"],
-            focused_border_color=COLORS["primary"],
-            bgcolor=COLORS["bg_white"],
-            color=COLORS["text_primary"],
-            label_style=ft.TextStyle(color=COLORS["text_secondary"], size=14),
-            cursor_color=COLORS["primary"],
             text_size=15,
-            border_radius=10,
+            border_radius=12,
             content_padding=ft.padding.symmetric(horizontal=16, vertical=14)
         )
         
@@ -54,14 +49,8 @@ class LoginView:
             can_reveal_password=True,
             width=380,
             height=56,
-            border_color=COLORS["border"],
-            focused_border_color=COLORS["primary"],
-            bgcolor=COLORS["bg_white"],
-            color=COLORS["text_primary"],
-            label_style=ft.TextStyle(color=COLORS["text_secondary"], size=14),
-            cursor_color=COLORS["primary"],
             text_size=15,
-            border_radius=10,
+            border_radius=12,
             content_padding=ft.padding.symmetric(horizontal=16, vertical=14)
         )
         
@@ -70,92 +59,72 @@ class LoginView:
             hint_text="Ej: imap.gmail.com, mail.tudominio.com",
             width=380,
             height=56,
-            border_color=COLORS["border"],
-            focused_border_color=COLORS["primary"],
-            bgcolor=COLORS["bg_white"],
-            color=COLORS["text_primary"],
-            label_style=ft.TextStyle(color=COLORS["text_secondary"], size=14),
-            hint_style=ft.TextStyle(color=COLORS["text_light"], size=14),
-            cursor_color=COLORS["primary"],
             text_size=15,
-            border_radius=10,
+            border_radius=12,
             content_padding=ft.padding.symmetric(horizontal=16, vertical=14)
         )
         
-        self.status_text = ft.Text("", size=FONT_SIZES["small"], color=COLORS["error"])
-        self.login_progress = ft.ProgressBar(visible=False, color=COLORS["primary"], bgcolor=COLORS["border"], width=380)
+        self.status_text = ft.Text("", size=FONT_SIZES["small"], color=ft.Colors.ERROR)
+        self.login_progress = ft.ProgressBar(visible=False, width=380)
         
         self.remember_session = ft.Checkbox(
             label="Recordar sesión",
             value=True,
-            check_color=COLORS["bg_white"],
-            active_color=COLORS["primary"],
-            label_style=ft.TextStyle(color=COLORS["text_primary"], size=14),
             width=200
         )
         
-        self.login_button = ft.Container(
-            content=ft.Text("Iniciar Sesión", size=16, weight=ft.FontWeight.W_600, color=COLORS["bg_white"]),
-            alignment=ft.alignment.center,
-            bgcolor=COLORS["primary"],
-            border_radius=10,
-            padding=ft.padding.symmetric(vertical=16),
+        self.login_button = ft.ElevatedButton(
+            content=ft.Text("Iniciar Sesión", size=16, weight=ft.FontWeight.W_600),
             width=380,
-            ink=True,
-            on_click=self._handle_login,
-            shadow=ft.BoxShadow(
-                spread_radius=0,
-                blur_radius=12,
-                color=ft.Colors.with_opacity(0.3, COLORS["primary"]),
-                offset=ft.Offset(0, 4)
-            )
+            height=52,
+            style=ft.ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=12),
+            ),
+            on_click=self._handle_login
         )
         
         # Ruta del logo
         logo_path = os.path.join(self.assets_dir, "icons", "app_logo.png") if self.assets_dir else None
         
+        # Card de login - usa Card de Flet para temas automáticos
+        login_card = ft.Card(
+            content=ft.Container(
+                content=ft.Column([
+                    # Logo de la app
+                    ft.Image(
+                        src=logo_path,
+                        width=70,
+                        height=70,
+                        fit=ft.ImageFit.CONTAIN
+                    ) if logo_path and os.path.exists(logo_path) else ft.Container(height=70),
+                    ft.Container(height=SPACING["sm"]),
+                    ft.Text("Glosaap", size=28, weight=ft.FontWeight.BOLD),
+                    ft.Text("Gestor de glosas y correos", size=14),
+                    ft.Container(height=SPACING["xl"]),
+                    self.email_input,
+                    ft.Container(height=SPACING["md"]),
+                    self.password_input,
+                    ft.Container(height=SPACING["md"]),
+                    self.server_input,
+                    ft.Container(height=SPACING["md"]),
+                    self.remember_session,
+                    ft.Container(height=SPACING["lg"]),
+                    self.login_button,
+                    ft.Container(height=SPACING["sm"]),
+                    self.login_progress,
+                    self.status_text
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                padding=ft.padding.all(40),
+            ),
+            elevation=2,
+            width=500,
+        )
+        
         self.container = ft.Container(
             content=ft.Column([
                 ft.Container(height=SPACING["lg"]),
-                ft.Container(
-                    content=ft.Column([
-                        # Logo de la app
-                        ft.Image(
-                            src=logo_path,
-                            width=70,
-                            height=70,
-                            fit=ft.ImageFit.CONTAIN
-                        ) if logo_path and os.path.exists(logo_path) else ft.Container(height=70),
-                        ft.Container(height=SPACING["sm"]),
-                        ft.Text("Glosaap", size=28, weight=ft.FontWeight.BOLD, color=COLORS["text_primary"]),
-                        ft.Text("Gestor de glosas y correos", size=14, color=COLORS["text_secondary"]),
-                        ft.Container(height=SPACING["xl"]),
-                        self.email_input,
-                        ft.Container(height=SPACING["lg"]),
-                        self.password_input,
-                        ft.Container(height=SPACING["lg"]),
-                        self.server_input,
-                        ft.Container(height=SPACING["md"]),
-                        self.remember_session,
-                        ft.Container(height=SPACING["lg"]),
-                        self.login_button,
-                        ft.Container(height=SPACING["sm"]),
-                        self.login_progress,
-                        self.status_text
-                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                    padding=ft.padding.all(SPACING["xxl"]),
-                    bgcolor=COLORS["bg_white"],
-                    border_radius=16,
-                    width=520,
-                    shadow=ft.BoxShadow(
-                        spread_radius=0, 
-                        blur_radius=20, 
-                        color=ft.Colors.with_opacity(0.12, COLORS["text_primary"]), 
-                        offset=ft.Offset(0, 4)
-                    )
-                ),
+                login_card,
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            bgcolor=COLORS["bg_light"],
             alignment=ft.alignment.center,
             expand=True
         )
@@ -253,7 +222,7 @@ class LoginView:
     def show_status(self, msg, is_error=False):
         """Muestra mensaje de estado"""
         self.status_text.value = msg
-        self.status_text.color = COLORS["error"] if is_error else COLORS["primary"]
+        self.status_text.color = ft.Colors.ERROR if is_error else ft.Colors.PRIMARY
         self.page.update()
     
     def show_progress(self, visible):
