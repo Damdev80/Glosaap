@@ -12,7 +12,7 @@ from pathlib import Path
 
 # Versión actual de la aplicación (seguir semver: MAJOR.MINOR.PATCH)
 # Actualizar manualmente en cada release
-APP_VERSION = "1.0.1"
+APP_VERSION = "1.0.2"
 
 # Nombre de la aplicación
 APP_NAME = "Glosaap"
