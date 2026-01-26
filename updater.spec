@@ -57,7 +57,4 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='assets/icons/app_logo.ico',  # Usar el mismo icono de la app
-    # Información de versión para Windows
-    version='file_version_info.txt',  # Opcional: crear este archivo para metadatos
 )
