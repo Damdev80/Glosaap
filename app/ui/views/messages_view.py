@@ -1,5 +1,6 @@
 """
 Vista de mensajes - Muestra y gestiona los correos encontrados
+Soporte completo de temas claro/oscuro
 """
 import flet as ft
 from app.ui.styles import COLORS, FONT_SIZES, SPACING, WINDOW_SIZES
@@ -30,20 +31,48 @@ class MessagesView:
         self.selected_messages = set()
         self.message_rows = {}  # Diccionario para acceder a MessageRow por ID
         
-        # Componentes
+        # Componentes - sin colores hardcodeados para soporte de temas
         self.messages_list = ft.Column([], scroll=ft.ScrollMode.AUTO, expand=True, spacing=0)
-        self.messages_status = ft.Text("", size=FONT_SIZES["small"], color=COLORS["text_secondary"])
-        self.loading_bar = ft.ProgressBar(visible=False, color=COLORS["primary"], bgcolor=COLORS["border"])
-        self.processing_bar = ft.ProgressBar(visible=False, color=COLORS["success"], bgcolor=COLORS["border"])
-        self.processing_status = ft.Text("", size=FONT_SIZES["small"], color=COLORS["text_secondary"])
-        self.search_info_text = ft.Text("", size=12, color=COLORS["text_secondary"])
+        self.messages_status = ft.Text("", size=FONT_SIZES["small"])
+        self.loading_bar = ft.ProgressBar(visible=False)
         
-        # Botones
+        # Barra de progreso mejorada
+        self.processing_progress = ft.ProgressBar(
+            value=None  # None = indeterminado
+        )
+        self.processing_percentage = ft.Text(
+            "", 
+            size=12, 
+            weight=ft.FontWeight.W_500
+        )
+        self.processing_spinner = ft.ProgressRing(
+            width=18, 
+            height=18, 
+            stroke_width=2
+        )
+        self.processing_status = ft.Text("", size=FONT_SIZES["small"])
+        
+        # Contenedor de progreso (se muestra/oculta completo)
+        self.processing_container = ft.Container(
+            content=ft.Column([
+                ft.Row([
+                    self.processing_spinner,
+                    self.processing_status,
+                    ft.Container(expand=True),
+                    self.processing_percentage,
+                ], spacing=8, alignment=ft.MainAxisAlignment.START),
+                self.processing_progress,
+            ], spacing=6, tight=True),
+            visible=False,
+            padding=ft.padding.only(top=10)
+        )
+        
+        self.search_info_text = ft.Text("", size=12)
+        
+        # Botones - sin colores hardcodeados
         self.process_eps_btn = ft.ElevatedButton(
             "📊 Procesar",
             icon=ft.Icons.TABLE_CHART,
-            bgcolor=COLORS["primary"],
-            color=COLORS["bg_white"],
             visible=False,
             on_click=lambda e: self.on_process()
         )
@@ -51,8 +80,6 @@ class MessagesView:
         self.download_selected_btn = ft.ElevatedButton(
             "📥 Descargar seleccionados",
             icon=ft.Icons.DOWNLOAD,
-            bgcolor=COLORS["success"],
-            color=COLORS["bg_white"],
             visible=False,
             disabled=True,
             on_click=lambda e: self.on_download_selected()
@@ -61,8 +88,6 @@ class MessagesView:
         self.select_all_checkbox = ft.Checkbox(
             label="Seleccionar todos",
             value=False,
-            fill_color=COLORS["primary"],
-            check_color=COLORS["bg_white"],
             visible=False,  # Ocultar - ya no es necesario
             on_change=self._on_select_all_changed
         )
@@ -70,7 +95,6 @@ class MessagesView:
         self.selected_count_text = ft.Text(
             "0 seleccionados",
             size=12,
-            color=COLORS["text_secondary"]
         )
         
         # Crear vista
@@ -80,77 +104,79 @@ class MessagesView:
         """Crea el contenedor de la vista"""
         back_btn = ft.IconButton(
             icon=ft.Icons.ARROW_BACK,
-            icon_color=COLORS["text_secondary"],
             tooltip="Volver",
             on_click=lambda e: self.on_back()
         )
         
         refresh_btn = ft.IconButton(
             icon=ft.Icons.REFRESH,
-            icon_color=COLORS["primary"],
             tooltip="Actualizar",
             on_click=lambda e: self.on_refresh()
         )
         
+        # Usar Card para el header - soporte de temas automático
         return ft.Column([
             # Header
-            ft.Container(
-                content=ft.Row([
-                    ft.Row([
-                        back_btn,
-                        ft.Text("Correos con 'glosa'", size=FONT_SIZES["heading"], 
-                               weight=ft.FontWeight.W_400, color=COLORS["text_primary"]),
-                    ], spacing=0),
-                    refresh_btn
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                bgcolor=COLORS["bg_white"],
-                padding=SPACING["lg"],
-                border=ft.border.only(bottom=ft.BorderSide(1, COLORS["border"]))
+            ft.Card(
+                content=ft.Container(
+                    content=ft.Row([
+                        ft.Row([
+                            back_btn,
+                            ft.Text("Correos con 'glosa'", size=FONT_SIZES["heading"], 
+                                   weight=ft.FontWeight.W_400),
+                        ], spacing=0),
+                        refresh_btn
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    padding=SPACING["md"],
+                ),
+                elevation=0,
+                margin=0,
             ),
             # Info de búsqueda
             ft.Container(
                 content=ft.Row([
-                    ft.Icon(ft.Icons.INFO_OUTLINE, size=14, color=COLORS["primary"]),
+                    ft.Icon(ft.Icons.INFO_OUTLINE, size=14),
                     self.search_info_text
                 ], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
                 padding=ft.padding.symmetric(horizontal=SPACING["md"], vertical=8),
-                bgcolor=COLORS["bg_input"]
             ),
             self.loading_bar,
             ft.Container(
                 content=self.messages_list,
                 expand=True,
                 padding=0,
-                bgcolor=COLORS["bg_light"]
             ),
             # Barra de selección y descarga manual
-            ft.Container(
-                content=ft.Row([
-                    self.select_all_checkbox,
-                    self.selected_count_text,
-                    ft.Container(expand=True),
-                    self.download_selected_btn
-                ], spacing=15, alignment=ft.MainAxisAlignment.START),
-                padding=ft.padding.symmetric(horizontal=15, vertical=10),
-                bgcolor=COLORS["bg_input"],
-                border=ft.border.only(top=ft.BorderSide(1, COLORS["border"]))
+            ft.Card(
+                content=ft.Container(
+                    content=ft.Row([
+                        self.select_all_checkbox,
+                        self.selected_count_text,
+                        ft.Container(expand=True),
+                        self.download_selected_btn
+                    ], spacing=15, alignment=ft.MainAxisAlignment.START),
+                    padding=ft.padding.symmetric(horizontal=15, vertical=10),
+                ),
+                elevation=0,
+                margin=0,
             ),
             # Procesamiento
-            ft.Container(
-                content=ft.Column([
-                    ft.Row([self.process_eps_btn], spacing=SPACING["md"], 
-                          alignment=ft.MainAxisAlignment.CENTER),
-                    self.processing_bar,
-                    self.processing_status
-                ], spacing=SPACING["sm"]),
-                padding=SPACING["md"],
-                bgcolor=COLORS["bg_white"],
-                border=ft.border.only(top=ft.BorderSide(1, COLORS["border"]))
+            ft.Card(
+                content=ft.Container(
+                    content=ft.Column([
+                        ft.Row([self.process_eps_btn], spacing=SPACING["md"], 
+                              alignment=ft.MainAxisAlignment.CENTER),
+                        # Indicador de progreso mejorado
+                        self.processing_container,
+                    ], spacing=SPACING["sm"]),
+                    padding=SPACING["md"],
+                ),
+                elevation=0,
+                margin=0,
             ),
             ft.Container(
                 content=self.messages_status,
                 padding=SPACING["md"],
-                bgcolor=COLORS["bg_white"]
             )
         ], expand=True, spacing=0, visible=False)
     
@@ -238,10 +264,29 @@ class MessagesView:
         self.messages_status.value = status_text
         self.page.update()
     
-    def set_processing(self, is_processing, status_text=""):
-        """Muestra/oculta el indicador de procesamiento"""
-        self.processing_bar.visible = is_processing
+    def set_processing(self, is_processing, status_text="", progress=None):
+        """
+        Muestra/oculta el indicador de procesamiento
+        
+        Args:
+            is_processing: Si está procesando
+            status_text: Texto de estado
+            progress: Valor de progreso (0.0 a 1.0) o None para indeterminado
+        """
+        # Mostrar/ocultar el contenedor de progreso completo
+        self.processing_container.visible = is_processing
         self.processing_status.value = status_text
+        
+        if is_processing:
+            if progress is not None:
+                self.processing_progress.value = progress
+                self.processing_percentage.value = f"{int(progress * 100)}%"
+            else:
+                self.processing_progress.value = None  # Indeterminado (animación)
+                self.processing_percentage.value = ""
+        else:
+            self.processing_percentage.value = ""
+        
         self.page.update()
     
     def show_process_button(self, visible=True):
