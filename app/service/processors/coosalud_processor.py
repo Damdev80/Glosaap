@@ -34,9 +34,10 @@ class CoosaludProcessor(BaseProcessor):
     GLOSA_CODE_COLUMN = "codigo_glosa"  # Código resolución 2284
     
     def __init__(self, homologador_path: Optional[str] = None):
-        super().__init__(homologador_path)
-        self.detalle_df = None
-        self.glosa_df = None
+        
+        super().__init__(homologador_path or "")
+        self.detalle_df: Optional[pd.DataFrame] = None
+        self.glosa_df: Optional[pd.DataFrame] = None
             
     def _extract_factura_number(self, filename: str) -> Optional[str]:
         """
@@ -333,109 +334,188 @@ class CoosaludProcessor(BaseProcessor):
             DataFrame con columnas de homologación
         """
         result_df = df.copy()
-        
-        # Agregar fecha de proceso
         result_df["FECHA_PROCESO"] = self.processing_date
         
-        # Verificar que existe la columna de código
-        code_column = self.DETALLE_CODE_COLUMN
-        if code_column not in result_df.columns:
-            # Buscar columna similar
-            for col in result_df.columns:
-                if "codigo" in col.lower() and "servicio" in col.lower():
-                    code_column = col
-                    break
-            else:
-                self.warnings.append(f"No se encontró columna '{self.DETALLE_CODE_COLUMN}'")
-                result_df["Codigo homologado DGH"] = ""
-                result_df["Codigo no homologado"] = ""
-                return result_df
+        # 1. Obtener columna de código en detalle
+        code_column = self._find_detalle_code_column(result_df)
+        if code_column is None:
+            result_df["Codigo homologado DGH"] = ""
+            result_df["Codigo no homologado"] = ""
+            return result_df
         
         print(f"   Columna de código: {code_column}")
         
-        # Si no hay homologador, marcar todos como no homologados
+        # 2. Verificar homologador
         if self.homologador_df is None:
             self.warnings.append("No hay archivo de homologación cargado")
             result_df["Codigo homologado DGH"] = ""
             result_df["Codigo no homologado"] = result_df[code_column]
             return result_df
         
-        # Buscar columna "Código Servicio de la ERP" en el homologador
-        homolog_code_col = None
-        for col in self.homologador_df.columns:
-            col_str = str(col).strip()
-            if col_str == "Código Servicio de la ERP":
-                homolog_code_col = col
-                break
+        # 3. Crear diccionario de homologación
+        homolog_dict = self._build_homologation_dict()
+        if not homolog_dict:
+            result_df["Codigo homologado DGH"] = ""
+            result_df["Codigo no homologado"] = result_df[code_column]
+            return result_df
         
-        if homolog_code_col is None:
-            # Intentar buscar por palabras clave
+        print(f"   Códigos en homologador: {len(homolog_dict)}")
+        
+        # 4. Aplicar homologación
+        result_df = self._apply_homologation(result_df, code_column, homolog_dict)
+        
+        return result_df
+    
+    def _find_detalle_code_column(self, df: pd.DataFrame) -> Optional[str]:
+        """Encuentra la columna de código en el archivo de detalle."""
+        code_column = self.DETALLE_CODE_COLUMN
+        
+        if code_column in df.columns:
+            return code_column
+        
+        # Buscar columna similar
+        for col in df.columns:
+            if "codigo" in col.lower() and "servicio" in col.lower():
+                return col
+        
+        self.warnings.append(f"No se encontró columna '{self.DETALLE_CODE_COLUMN}'")
+        return None
+    
+    def _find_homolog_column(self, keywords: List[str], exact_match: Optional[str] = None) -> Optional[str]:
+        """
+        Busca una columna en el homologador por nombre exacto o keywords.
+        
+        Args:
+            keywords: Lista de palabras clave a buscar (todas deben estar)
+            exact_match: Nombre exacto a buscar primero
+        """
+        if self.homologador_df is None:
+            return None
+        
+        # Buscar nombre exacto primero
+        if exact_match:
             for col in self.homologador_df.columns:
-                col_lower = str(col).lower()
-                if "codigo" in col_lower and "servicio" in col_lower and "erp" in col_lower:
-                    homolog_code_col = col
-                    break
+                if str(col).strip() == exact_match:
+                    return col
         
+        # Buscar por keywords
+        for col in self.homologador_df.columns:
+            col_lower = str(col).lower()
+            if all(kw in col_lower for kw in keywords):
+                return col
+        
+        return None
+    
+    def _build_homologation_dict(self) -> Dict[str, str]:
+        """Construye el diccionario de homologación {codigo_erp: codigo_dgh}."""
+        # Buscar columna origen
+        homolog_code_col = self._find_homolog_column(
+            keywords=["codigo", "servicio", "erp"],
+            exact_match="Código Servicio de la ERP"
+        )
         if homolog_code_col is None:
-            homolog_code_col = self.homologador_df.columns[0]
-            self.warnings.append(f"No se encontró 'Código Servicio de la ERP', usando: {homolog_code_col}")
+            if self.homologador_df is not None and len(self.homologador_df.columns) > 0:
+                homolog_code_col = self.homologador_df.columns[0]
+                self.warnings.append(f"No se encontró 'Código Servicio de la ERP', usando: {homolog_code_col}")
+            else:
+                return {}
         
         print(f"   Columna en homologador (origen): {homolog_code_col}")
         
-        # Buscar columna "Código producto en DGH" en el homologador
-        homolog_dgh_col = None
-        for col in self.homologador_df.columns:
-            col_str = str(col).strip()
-            if col_str == "Código producto en DGH":
-                homolog_dgh_col = col
-                break
-        
+        # Buscar columna destino
+        homolog_dgh_col = self._find_homolog_column(
+            keywords=["codigo", "dgh"],
+            exact_match="Código producto en DGH"
+        )
         if homolog_dgh_col is None:
-            # Intentar buscar por palabras clave
-            for col in self.homologador_df.columns:
-                col_lower = str(col).lower()
-                if "codigo" in col_lower and "dgh" in col_lower:
-                    homolog_dgh_col = col
-                    break
-        
-        if homolog_dgh_col is None:
-            homolog_dgh_col = self.homologador_df.columns[1] if len(self.homologador_df.columns) > 1 else self.homologador_df.columns[0]
+            if self.homologador_df is not None and len(self.homologador_df.columns) > 1:
+                homolog_dgh_col = self.homologador_df.columns[1]
+            elif self.homologador_df is not None and len(self.homologador_df.columns) > 0:
+                homolog_dgh_col = self.homologador_df.columns[0]
+            else:
+                return {}
             self.warnings.append(f"No se encontró 'Código producto en DGH', usando: {homolog_dgh_col}")
         
         print(f"   Columna en homologador (destino): {homolog_dgh_col}")
         
-        # Crear diccionario de homologación: {codigo_erp: codigo_dgh}
+        # Crear diccionario
         homolog_dict = {}
-        for _, row in self.homologador_df.iterrows():
-            codigo_erp = str(row[homolog_code_col]).strip().upper()
-            codigo_dgh = str(row[homolog_dgh_col]).strip()
-            if codigo_erp and codigo_erp != 'NAN':
-                homolog_dict[codigo_erp] = codigo_dgh
+        if self.homologador_df is not None:
+            for _, row in self.homologador_df.iterrows():
+                codigo_erp = self._normalize_code(row[homolog_code_col])
+                codigo_dgh = self._normalize_code(row[homolog_dgh_col])
+                
+                # Validar código origen
+                if not codigo_erp or codigo_erp in ['NAN', 'NONE', '']:
+                    continue
+                
+                # Si el código destino es "0" o inválido, NO agregarlo al diccionario
+                # Esto hará que estos códigos vayan a "Codigo no homologado"
+                if codigo_dgh and codigo_dgh not in ['0', 'NAN', 'NONE', '']:
+                    homolog_dict[codigo_erp] = codigo_dgh
+                # Si no hay código destino válido, no agregar al diccionario
+                # (no hacer autoasignación)
         
-        print(f"   Códigos en homologador: {len(homolog_dict)}")
+        return homolog_dict
+    
+    def _normalize_code(self, code) -> str:
+        """
+        Normaliza un código manejando correctamente floats, ints, strings y NaN.
         
-        # Homologar cada código
+        Args:
+            code: Código a normalizar
+            
+        Returns:
+            String normalizado en MAYÚSCULAS
+        """
+        if pd.isna(code):
+            return ""
+        
+        # Si es número (float/int), convertir a int primero para eliminar .0
+        if isinstance(code, (int, float)):
+            try:
+                return str(int(code)).strip().upper()
+            except (ValueError, OverflowError):
+                return str(code).strip().upper()
+        
+        # Si es string, limpiar y normalizar
+        return str(code).strip().upper()
+    
+    def _apply_homologation(self, df: pd.DataFrame, code_column: str, homolog_dict: Dict[str, str]) -> pd.DataFrame:
+        """
+        Aplica la homologación al DataFrame.
+        
+        Args:
+            df: DataFrame a homologar
+            code_column: Nombre de la columna con códigos
+            homolog_dict: Diccionario de homologación
+        """
         codigos_homologados = []
         codigos_no_homologados = []
         
-        for codigo in result_df[code_column]:
-            codigo_norm = str(codigo).strip().upper()
+        for codigo in df[code_column]:
+            codigo_norm = self._normalize_code(codigo)
             
-            if codigo_norm in homolog_dict:
-                # Encontrado - agregar código DGH
+            # Si el código normalizado es válido y existe en el diccionario
+            if codigo_norm and codigo_norm in homolog_dict:
                 codigos_homologados.append(homolog_dict[codigo_norm])
                 codigos_no_homologados.append("")
             else:
-                # No encontrado - marcar como no homologado
+                # No homologado: dejar vacío el homologado y poner el original en no_homologado
                 codigos_homologados.append("")
-                codigos_no_homologados.append(str(codigo))
+                codigos_no_homologados.append(str(codigo) if not pd.isna(codigo) else "")
         
-        # Agregar columnas al resultado
-        result_df["Codigo homologado DGH"] = codigos_homologados
-        result_df["Codigo no homologado"] = codigos_no_homologados
+        df["Codigo homologado DGH"] = codigos_homologados
+        df["Codigo no homologado"] = codigos_no_homologados
         
         # Estadísticas
-        total = len(result_df)
+        self._print_homologation_stats(codigos_homologados, codigos_no_homologados)
+        
+        return df
+    
+    def _print_homologation_stats(self, codigos_homologados: List[str], codigos_no_homologados: List[str]):
+        """Imprime estadísticas de homologación."""
+        total = len(codigos_homologados)
         homologados = sum(1 for c in codigos_homologados if c)
         no_homologados = total - homologados
         
@@ -448,8 +528,6 @@ class CoosaludProcessor(BaseProcessor):
         if no_homologados > 0:
             codigos_unicos = len(set([c for c in codigos_no_homologados if c]))
             print(f"   Códigos únicos no homologados: {codigos_unicos}")
-        
-        return result_df
     
     def get_non_homologated_summary(self, detalle_df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -673,9 +751,15 @@ class CoosaludProcessor(BaseProcessor):
         # Crear diccionario de homologación
         homolog_dict = {}
         for _, row in self.homologador_df.iterrows():
-            codigo_erp = str(row[homolog_code_col]).strip().upper()
-            codigo_dgh = str(row[homolog_dgh_col]).strip()
-            if codigo_erp and codigo_erp != 'NAN':
+            codigo_erp = self._normalize_code(row[homolog_code_col])
+            codigo_dgh = self._normalize_code(row[homolog_dgh_col])
+            
+            # Validar código origen
+            if not codigo_erp or codigo_erp in ['NAN', 'NONE', '']:
+                continue
+            
+            # Solo agregar si el código destino es válido (no "0")
+            if codigo_dgh and codigo_dgh not in ['0', 'NAN', 'NONE', '']:
                 homolog_dict[codigo_erp] = codigo_dgh
         
         # Homologar
@@ -683,13 +767,15 @@ class CoosaludProcessor(BaseProcessor):
         codigos_no_homologados = []
         
         for codigo in result_df[code_column]:
-            codigo_norm = str(codigo).strip().upper()
-            if codigo_norm in homolog_dict:
+            codigo_norm = self._normalize_code(codigo)
+            
+            # Si el código normalizado es válido y existe en el diccionario
+            if codigo_norm and codigo_norm in homolog_dict:
                 codigos_homologados.append(homolog_dict[codigo_norm])
                 codigos_no_homologados.append("")
             else:
                 codigos_homologados.append("")
-                codigos_no_homologados.append(str(codigo))
+                codigos_no_homologados.append(str(codigo) if not pd.isna(codigo) else "")
         
         result_df["Codigo homologado DGH"] = codigos_homologados
         result_df["Codigo no homologado"] = codigos_no_homologados

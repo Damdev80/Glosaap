@@ -136,185 +136,282 @@ class ImapClient:
             })
         return msgs
 
-    def search_by_subject(self, keyword: str, folder: str = "INBOX", limit: Optional[int] = None, timeout: int = 120, on_found: Optional[Callable[[Dict[str, Any]], None]] = None, date_from: Optional[datetime] = None, date_to: Optional[datetime] = None) -> List[Dict[str, Any]]:
+    # ==================== MÉTODOS AUXILIARES PARA BÚSQUEDA ====================
+    
+    def _format_imap_date(self, date_obj: Any, add_days: int = 0) -> Optional[str]:
+        """
+        Formatea una fecha al formato IMAP (DD-Mon-YYYY).
+        
+        Args:
+            date_obj: Fecha como datetime o string
+            add_days: Días a agregar (útil para BEFORE que es exclusivo)
+            
+        Returns:
+            String formateado o None si no se puede parsear
+        """
+        from datetime import timedelta
+        
+        if date_obj is None:
+            return None
+            
+        if isinstance(date_obj, str):
+            # Si ya es string, intentar parsearlo
+            for fmt in ['%Y-%m-%d', '%d/%m/%Y']:
+                try:
+                    date_obj = datetime.strptime(date_obj, fmt)
+                    break
+                except Exception:
+                    continue
+            else:
+                return None
+                
+        # Agregar días si es necesario
+        if add_days:
+            date_obj = date_obj + timedelta(days=add_days)
+            
+        # Formato IMAP: DD-Mon-YYYY
+        months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        return f"{date_obj.day:02d}-{months[date_obj.month-1]}-{date_obj.year}"
+    
+    def _build_search_criteria(
+        self, 
+        keyword: Optional[str] = None, 
+        date_from: Optional[datetime] = None, 
+        date_to: Optional[datetime] = None
+    ) -> str:
+        """
+        Construye el criterio de búsqueda IMAP.
+        
+        Args:
+            keyword: Palabra clave para buscar en SUBJECT
+            date_from: Fecha inicio (SINCE)
+            date_to: Fecha fin (BEFORE)
+            
+        Returns:
+            String con criterio IMAP formateado
+        """
+        criteria_parts: List[str] = []
+        
+        # Búsqueda por SUBJECT
+        if keyword:
+            safe_keyword = keyword.replace('"', '\\"')
+            criteria_parts.append(f'SUBJECT "{safe_keyword}"')
+            logger.info(f"Buscando por asunto: {keyword}")
+        
+        # Rango de fechas
+        if date_from:
+            imap_date = self._format_imap_date(date_from)
+            if imap_date:
+                criteria_parts.append(f'SINCE {imap_date}')
+                logger.info(f"Buscando desde: {imap_date}")
+        
+        if date_to:
+            # BEFORE es exclusivo, sumamos 1 día
+            imap_date = self._format_imap_date(date_to, add_days=1)
+            if imap_date:
+                criteria_parts.append(f'BEFORE {imap_date}')
+                logger.info(f"Buscando hasta: {imap_date}")
+        
+        if criteria_parts:
+            return '(' + ' '.join(criteria_parts) + ')'
+        return "ALL"
+    
+    def _execute_search(self, criteria: str) -> List[bytes]:
+        """
+        Ejecuta la búsqueda IMAP y retorna los IDs.
+        
+        Args:
+            criteria: Criterio de búsqueda IMAP
+            
+        Returns:
+            Lista de IDs de mensajes encontrados
+        """
+        logger.info(f"Criterio de búsqueda IMAP: {criteria}")
+        
+        typ, data = self.conn.search(None, criteria)
+        
+        if typ != "OK" or data[0] is None:
+            logger.info("Búsqueda IMAP no retornó resultados")
+            return []
+        
+        ids = data[0].split()
+        if not ids or ids == [b'']:
+            logger.info("No se encontraron IDs de correos")
+            return []
+        
+        logger.info(f"Correos encontrados por IMAP: {len(ids)}")
+        return ids
+    
+    def _detect_attachments(self, msg: email.message.Message) -> bool:
+        """
+        Detecta si un mensaje tiene adjuntos.
+        
+        Args:
+            msg: Mensaje de email parseado
+            
+        Returns:
+            True si tiene adjuntos
+        """
+        for part in msg.walk():
+            # Método 1: Content-Disposition
+            content_disposition = part.get("Content-Disposition", "")
+            if "attachment" in content_disposition.lower():
+                return True
+                
+            # Método 2: Filename presente
+            if part.get_filename():
+                return True
+                
+            # Método 3: Content-Type no es texto
+            content_type = part.get_content_type()
+            if content_type not in ["text/plain", "text/html", "multipart/alternative", 
+                                     "multipart/mixed", "multipart/related"]:
+                if part.get_payload(decode=True):
+                    return True
+        return False
+    
+    def _parse_message(self, msg_id: bytes, keyword: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Parsea un mensaje individual y extrae su información.
+        
+        Args:
+            msg_id: ID del mensaje en IMAP
+            keyword: Palabra clave para filtrar (opcional)
+            
+        Returns:
+            Diccionario con info del mensaje o None si debe descartarse
+        """
+        try:
+            typ, msg_data = self.conn.fetch(msg_id, "(RFC822)")
+            if typ != "OK" or not msg_data or msg_data[0] is None:
+                return None
+            
+            raw = msg_data[0][1]
+            if not isinstance(raw, bytes):
+                return None
+                
+            msg = email.message_from_bytes(raw)
+            subject = _decode_header(msg.get("Subject")) or ""
+            
+            # Filtrar por keyword (respaldo si IMAP no filtró bien)
+            if keyword and keyword.lower() not in subject.lower():
+                logger.debug(f"Correo descartado: {subject[:50]}")
+                return None
+            
+            logger.info(f"Correo encontrado: {subject[:60]}...")
+            
+            return {
+                "id": msg_id.decode() if isinstance(msg_id, bytes) else str(msg_id),
+                "subject": subject,
+                "from": _decode_header(msg.get("From")),
+                "date": _decode_header(msg.get("Date")),
+                "has_attachments": self._detect_attachments(msg),
+            }
+            
+        except Exception as e:
+            logger.debug(f"Error procesando correo {msg_id}: {e}")
+            return None
+    
+    def _process_message_ids(
+        self, 
+        ids: List[bytes], 
+        keyword: Optional[str],
+        limit: Optional[int],
+        timeout: int,
+        on_found: Optional[Callable[[Dict[str, Any]], None]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Procesa una lista de IDs de mensajes.
+        
+        Args:
+            ids: Lista de IDs de mensajes
+            keyword: Palabra clave para filtrar
+            limit: Máximo de mensajes a retornar
+            timeout: Timeout en segundos sin encontrar nuevos
+            on_found: Callback por cada mensaje encontrado
+            
+        Returns:
+            Lista de mensajes procesados
+        """
+        msgs: List[Dict[str, Any]] = []
+        last_found_time = time.time()
+        processed_count = 0
+        
+        # Procesar más recientes primero
+        for msg_id in reversed(ids):
+            processed_count += 1
+            
+            # Verificar timeout
+            time_since_last = time.time() - last_found_time
+            effective_timeout = timeout if msgs else timeout * 2
+            
+            if time_since_last > effective_timeout and processed_count > 10:
+                logger.info(f"Timeout: {effective_timeout}s sin nuevos. "
+                           f"Procesados: {processed_count}, Encontrados: {len(msgs)}")
+                break
+            
+            # Verificar límite
+            if limit is not None and len(msgs) >= limit:
+                break
+            
+            # Parsear mensaje
+            msg_info = self._parse_message(msg_id, keyword)
+            if msg_info:
+                last_found_time = time.time()
+                msgs.append(msg_info)
+                
+                if on_found:
+                    on_found(msg_info)
+        
+        return msgs
+    
+    # ==================== MÉTODO PRINCIPAL DE BÚSQUEDA ====================
+    
+    def search_by_subject(
+        self, 
+        keyword: str, 
+        folder: str = "INBOX", 
+        limit: Optional[int] = None, 
+        timeout: int = 120, 
+        on_found: Optional[Callable[[Dict[str, Any]], None]] = None, 
+        date_from: Optional[datetime] = None, 
+        date_to: Optional[datetime] = None
+    ) -> List[Dict[str, Any]]:
         """
         Busca correos que contengan una palabra clave en el asunto.
-        Busca tanto correos leídos como no leídos.
         
         Args:
             keyword: Palabra clave a buscar en el asunto
             folder: Carpeta IMAP (default: INBOX)
             limit: Máximo de correos a retornar (None = sin límite)
-            timeout: Tiempo máximo en segundos SIN ENCONTRAR un nuevo correo (default: 120)
-            on_found: Callback que se llama cada vez que se encuentra un mensaje
-            date_from: Fecha inicio del rango (datetime o string)
-            date_to: Fecha fin del rango (datetime o string)
+            timeout: Segundos sin encontrar nuevo correo antes de parar
+            on_found: Callback por cada mensaje encontrado
+            date_from: Fecha inicio del rango
+            date_to: Fecha fin del rango
             
         Returns:
             Lista de diccionarios con información de los mensajes
         """
         if self.conn is None:
             return []
-            
-        start_time = time.time()
-        last_found_time = time.time()
         
         try:
             self.select_folder(folder)
             
-            # Formatear fechas para IMAP (formato: DD-Mon-YYYY)
-            from datetime import timedelta
+            # 1. Construir criterio de búsqueda
+            criteria = self._build_search_criteria(keyword, date_from, date_to)
             
-            def format_imap_date(date_obj: Any, add_days: int = 0) -> Optional[str]:
-                if date_obj is None:
-                    return None
-                if isinstance(date_obj, str):
-                    # Si ya es string, intentar parsearlo
-                    try:
-                        date_obj = datetime.strptime(date_obj, '%Y-%m-%d')
-                    except Exception:
-                        try:
-                            date_obj = datetime.strptime(date_obj, '%d/%m/%Y')
-                        except Exception:
-                            return None
-                # Agregar días si es necesario (para BEFORE que es exclusivo)
-                if add_days:
-                    date_obj = date_obj + timedelta(days=add_days)
-                # Formato IMAP: DD-Mon-YYYY (ej: 01-Nov-2025)
-                months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-                return f"{date_obj.day:02d}-{months[date_obj.month-1]}-{date_obj.year}"
-            
-            # Construir criterio de búsqueda incluyendo SUBJECT
-            criteria_parts: List[str] = []
-            
-            # Agregar búsqueda por SUBJECT (más eficiente que filtrar después)
-            if keyword:
-                # Escapar comillas en la keyword
-                safe_keyword = keyword.replace('"', '\\"')
-                criteria_parts.append(f'SUBJECT "{safe_keyword}"')
-                logger.info(f"Buscando por asunto: {keyword}")
-            
-            if date_from:
-                imap_date_from = format_imap_date(date_from)
-                if imap_date_from:
-                    criteria_parts.append(f'SINCE {imap_date_from}')
-                    logger.info(f"Buscando desde: {imap_date_from}")
-            
-            if date_to:
-                # BEFORE es exclusivo, así que sumamos 1 día para incluir el día seleccionado
-                imap_date_to = format_imap_date(date_to, add_days=1)
-                if imap_date_to:
-                    criteria_parts.append(f'BEFORE {imap_date_to}')
-                    logger.info(f"Buscando hasta: {imap_date_to} (exclusivo)")
-            
-            if criteria_parts:
-                search_criteria = '(' + ' '.join(criteria_parts) + ')'
-            else:
-                search_criteria = "ALL"
-            
-            logger.info(f"Criterio de búsqueda IMAP: {search_criteria}")
-            
-            # Buscar correos según criterio
-            logger.info(f"Ejecutando búsqueda IMAP con criterio: {search_criteria}")
-            typ, data = self.conn.search(None, search_criteria)
-            if typ != "OK" or data[0] is None:
-                logger.info("Búsqueda IMAP no retornó resultados")
+            # 2. Ejecutar búsqueda
+            ids = self._execute_search(criteria)
+            if not ids:
                 return []
             
-            ids = data[0].split()
-            if not ids or ids == [b'']:
-                logger.info("No se encontraron IDs de correos")
-                return []
-            
-            logger.info(f"Correos encontrados por IMAP: {len(ids)}")
-            
-            msgs: List[Dict[str, Any]] = []
-            processed_count = 0
-            
-            # Procesar en orden inverso (más recientes primero)
-            for msg_id in reversed(ids):
-                processed_count += 1
-                
-                # Verificar timeout: solo aplicar después de procesar al menos algunos correos
-                # y si no hemos encontrado ninguno en el tiempo límite
-                time_since_last = time.time() - last_found_time
-                time_elapsed = time.time() - start_time
-                
-                # Si ya encontramos correos, usar timeout normal
-                # Si no hemos encontrado ninguno, dar más tiempo (el doble del timeout)
-                effective_timeout = timeout if len(msgs) > 0 else timeout * 2
-                
-                if time_since_last > effective_timeout and processed_count > 10:
-                    logger.info(f"Timeout: {effective_timeout}s sin encontrar nuevos correos. Procesados: {processed_count}, Encontrados: {len(msgs)}")
-                    break
-                    
-                if limit is not None and len(msgs) >= limit:
-                    break
-                    
-                try:
-                    typ, msg_data = self.conn.fetch(msg_id, "(RFC822)")
-                    if typ != "OK" or not msg_data or msg_data[0] is None:
-                        continue
-                        
-                    raw = msg_data[0][1]
-                    if not isinstance(raw, bytes):
-                        continue
-                    msg = email.message_from_bytes(raw)
-                    subject = _decode_header(msg.get("Subject")) or ""
-                    
-                    # Filtrar por palabra clave (case-insensitive) - respaldo por si IMAP no filtró bien
-                    if keyword and keyword.lower() not in subject.lower():
-                        logger.debug(f"Correo descartado (no contiene '{keyword}'): {subject[:50]}")
-                        continue
-                    
-                    # ¡Encontramos un correo! Reiniciar el contador
-                    last_found_time = time.time()
-                    logger.info(f"Correo encontrado: {subject[:60]}...")
-                    
-                    from_ = _decode_header(msg.get("From"))
-                    date = _decode_header(msg.get("Date"))
-                    
-                    # Detectar adjuntos - múltiples métodos
-                    has_attachments = False
-                    for part in msg.walk():
-                        # Método 1: Content-Disposition
-                        content_disposition = part.get("Content-Disposition", "")
-                        if "attachment" in content_disposition.lower():
-                            has_attachments = True
-                            break
-                        # Método 2: Filename presente
-                        if part.get_filename():
-                            has_attachments = True
-                            break
-                        # Método 3: Content-Type con name
-                        content_type = part.get_content_type()
-                        if content_type not in ["text/plain", "text/html", "multipart/alternative", "multipart/mixed", "multipart/related"]:
-                            if part.get_payload(decode=True):  # Tiene contenido
-                                has_attachments = True
-                                break
-                    
-                    msg_info = {
-                        "id": msg_id.decode() if isinstance(msg_id, bytes) else str(msg_id),
-                        "subject": subject,
-                        "from": from_,
-                        "date": date,
-                        "has_attachments": has_attachments,
-                    }
-                    
-                    msgs.append(msg_info)
-                    
-                    # Llamar callback si existe
-                    if on_found:
-                        on_found(msg_info)
-                        
-                except Exception as e:
-                    logger.debug(f"Error procesando correo {msg_id}: {e}")
-                    continue
-            
-            return msgs
+            # 3. Procesar mensajes encontrados
+            return self._process_message_ids(ids, keyword, limit, timeout, on_found)
             
         except Exception as e:
+            logger.error(f"Error en búsqueda: {e}")
             return []
 
     def download_attachments(self, msg_id: Union[str, bytes], folder: str = "INBOX", dest_dir: Optional[str] = None) -> List[str]:
