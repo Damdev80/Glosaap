@@ -12,7 +12,7 @@ from pathlib import Path
 
 # Versión actual de la aplicación (seguir semver: MAJOR.MINOR.PATCH)
 # Actualizar manualmente en cada release
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 
 # Nombre de la aplicación
 APP_NAME = "Glosaap"
@@ -23,7 +23,7 @@ GITHUB_REPO = "Damdev80/Glosaap"
 # Configuración de auto-actualización
 AUTO_UPDATE_CONFIG = {
     "enabled": True,              # Habilitar verificación automática
-    "check_on_startup": False,    # Verificar al iniciar la app (deshabilitado hasta primera release)
+    "check_on_startup": True,    # Verificar al iniciar la app (ACTIVADO para prueba)
     "check_interval_hours": 24,   # Intervalo entre verificaciones automáticas
     "show_changelog": True,       # Mostrar changelog en diálogo de actualización
     "create_backup": True,        # Crear backup antes de actualizar
