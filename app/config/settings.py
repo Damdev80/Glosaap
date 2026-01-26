@@ -23,7 +23,7 @@ GITHUB_REPO = "Damdev80/Glosaap"
 # Configuración de auto-actualización
 AUTO_UPDATE_CONFIG = {
     "enabled": True,              # Habilitar verificación automática
-    "check_on_startup": True,     # Verificar al iniciar la app
+    "check_on_startup": False,    # Verificar al iniciar la app (deshabilitado hasta primera release)
     "check_interval_hours": 24,   # Intervalo entre verificaciones automáticas
     "show_changelog": True,       # Mostrar changelog en diálogo de actualización
     "create_backup": True,        # Crear backup antes de actualizar
