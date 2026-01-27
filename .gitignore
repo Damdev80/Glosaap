@@ -10,6 +10,8 @@ __pycache__/
 *.egg
 dist/
 build/
+build_updater/
+release/
 pip-wheel-metadata/
 .python-version
 

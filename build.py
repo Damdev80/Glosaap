@@ -11,6 +11,15 @@ import zipfile
 from pathlib import Path
 from datetime import datetime
 
+# Si no está en el venv, redirigir al venv
+if not hasattr(sys, 'real_prefix') and not (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix):
+    # No estamos en un venv, redirigir
+    venv_python = Path(__file__).parent / ".venv" / "Scripts" / "python.exe"
+    if venv_python.exists():
+        print(f"🔄 Ejecutando desde venv: {venv_python}")
+        result = subprocess.run([str(venv_python), __file__] + sys.argv[1:])
+        sys.exit(result.returncode)
+
 # Configuración
 APP_NAME = "Glosaap"
 BUILD_DIR = "build"
@@ -37,7 +46,7 @@ def clean_directories():
     """Limpia directorios de builds anteriores"""
     print_step("Limpiando directorios anteriores")
     
-    dirs_to_clean = [BUILD_DIR, DIST_DIR, FINAL_DIR, "__pycache__"]
+    dirs_to_clean = [BUILD_DIR, f"{BUILD_DIR}_updater", DIST_DIR, "__pycache__"]
     
     for dir_name in dirs_to_clean:
         if os.path.exists(dir_name):
@@ -61,14 +70,14 @@ def get_version():
         print(f"⚠️  Error obteniendo versión: {e}")
         return "unknown"
 
-def build_executable():
-    """Construye el ejecutable con PyInstaller"""
-    print_step("Construyendo ejecutable")
+def build_main_executable():
+    """Construye el ejecutable principal con PyInstaller"""
+    print_step("Construyendo ejecutable principal")
     
     version = get_version()
     print(f"📋 Versión detectada: {version}")
     
-    # Comando PyInstaller
+    # Comando PyInstaller para ejecutable principal
     cmd = [
         "pyinstaller",
         "--onefile",                    # Un solo archivo ejecutable
@@ -97,13 +106,54 @@ def build_executable():
     
     try:
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-        print("✅ Build exitoso")
+        print("✅ Build del ejecutable principal exitoso")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"❌ Error en build:")
+        print(f"❌ Error en build del ejecutable principal:")
         print(f"STDOUT: {e.stdout}")
         print(f"STDERR: {e.stderr}")
         return False
+
+def build_updater():
+    """Construye el updater.exe por separado"""
+    print_step("Construyendo updater")
+    
+    # Comando PyInstaller para updater
+    cmd = [
+        "pyinstaller",
+        "--onefile",                    # Un solo archivo ejecutable
+        "--console",                    # Con ventana de consola para debugging
+        "--name", "updater",            # Nombre del ejecutable
+        "--distpath", DIST_DIR,         # Directorio de salida
+        "--workpath", f"{BUILD_DIR}_updater",  # Directorio de trabajo separado
+        "--clean",                      # Limpiar cache
+        "--noconfirm",                  # No pedir confirmación
+        
+        # Archivo del updater
+        "updater.py"
+    ]
+    
+    print(f"▶️  Ejecutando: {' '.join(cmd)}")
+    
+    try:
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        print("✅ Build del updater exitoso")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Error en build del updater:")
+        print(f"STDOUT: {e.stdout}")
+        print(f"STDERR: {e.stderr}")
+        return False
+
+def build_executables():
+    """Construye ambos ejecutables"""
+    if not build_main_executable():
+        return False
+    
+    if not build_updater():
+        return False
+    
+    return True
 
 def create_portable_package():
     """Crea un paquete portable con todos los recursos"""
@@ -117,15 +167,26 @@ def create_portable_package():
     # Crear directorio de release
     os.makedirs(package_dir, exist_ok=True)
     
-    # Copiar ejecutable
+    # Copiar ejecutable principal
     exe_source = os.path.join(DIST_DIR, f"{APP_NAME}.exe")
     exe_dest = os.path.join(package_dir, f"{APP_NAME}.exe")
     
     if os.path.exists(exe_source):
         shutil.copy2(exe_source, exe_dest)
-        print(f"📦 Ejecutable copiado: {APP_NAME}.exe")
+        print(f"📦 Ejecutable principal copiado: {APP_NAME}.exe")
     else:
-        print(f"❌ No se encontró ejecutable: {exe_source}")
+        print(f"❌ No se encontró ejecutable principal: {exe_source}")
+        return None
+    
+    # Copiar updater
+    updater_source = os.path.join(DIST_DIR, "updater.exe")
+    updater_dest = os.path.join(package_dir, "updater.exe")
+    
+    if os.path.exists(updater_source):
+        shutil.copy2(updater_source, updater_dest)
+        print(f"📦 Updater copiado: updater.exe")
+    else:
+        print(f"❌ No se encontró updater: {updater_source}")
         return None
     
     # Crear archivo README
@@ -192,7 +253,7 @@ def main():
         clean_directories()
         
         # 2. Build
-        if not build_executable():
+        if not build_executables():
             return False
         
         # 3. Empaquetar
