@@ -1,207 +1,227 @@
+#!/usr/bin/env python3
 """
-Script de construcción para Glosaap
-
-Este script compila la aplicación principal y el updater,
-y prepara la distribución final.
-
-Uso:
-    python build.py
-    
-    o con argumentos:
-    python build.py --clean      # Limpia directorios antes de compilar
-    python build.py --app-only   # Solo compila la app principal
-    python build.py --updater-only  # Solo compila el updater
+Script de build automático para Glosaap
+Crea ejecutable portable usando PyInstaller
 """
 import os
 import sys
 import shutil
 import subprocess
-import argparse
+import zipfile
 from pathlib import Path
+from datetime import datetime
 
-# Directorio raíz del proyecto
-ROOT_DIR = Path(__file__).parent
+# Configuración
+APP_NAME = "Glosaap"
+BUILD_DIR = "build"
+DIST_DIR = "dist"
+FINAL_DIR = "release"
 
+def print_step(message):
+    """Imprime un paso con formato bonito"""
+    print(f"\n🔧 {message}")
+    print("=" * 50)
 
-def clean_build():
-    """Limpia los directorios de build"""
-    print("🧹 Limpiando directorios de build...")
-    
-    dirs_to_clean = ['build', 'dist']
-    for dir_name in dirs_to_clean:
-        dir_path = ROOT_DIR / dir_name
-        if dir_path.exists():
-            print(f"   Eliminando {dir_name}/")
-            shutil.rmtree(dir_path)
-    
-    # Limpiar archivos .spec generados automáticamente (mantener los manuales)
-    # Solo limpiar si existen archivos temporales de PyInstaller
-    
-    print("   ✅ Limpieza completada")
-
-
-def build_app():
-    """Compila la aplicación principal"""
-    print("\n📦 Compilando Glosaap...")
-    
-    spec_file = ROOT_DIR / "glosaap.spec"
-    if not spec_file.exists():
-        print("   ❌ Error: glosaap.spec no encontrado")
-        return False
-    
-    result = subprocess.run(
-        [sys.executable, "-m", "PyInstaller", str(spec_file)],
-        cwd=str(ROOT_DIR),
-        capture_output=True,
-        text=True
-    )
-    
-    if result.returncode != 0:
-        print("   ❌ Error compilando Glosaap:")
-        print(result.stderr)
-        return False
-    
-    # Verificar que se creó el ejecutable
-    exe_path = ROOT_DIR / "dist" / "Glosaap" / "Glosaap.exe"
-    if exe_path.exists():
-        print(f"   ✅ Glosaap.exe creado exitosamente")
-        return True
-    else:
-        print("   ❌ Error: Glosaap.exe no fue creado")
-        return False
-
-
-def build_updater():
-    """Compila el updater"""
-    print("\n🔄 Compilando Updater...")
-    
-    spec_file = ROOT_DIR / "updater.spec"
-    if not spec_file.exists():
-        print("   ❌ Error: updater.spec no encontrado")
-        return False
-    
-    result = subprocess.run(
-        [sys.executable, "-m", "PyInstaller", str(spec_file)],
-        cwd=str(ROOT_DIR),
-        capture_output=True,
-        text=True
-    )
-    
-    if result.returncode != 0:
-        print("   ❌ Error compilando updater:")
-        print(result.stderr)
-        return False
-    
-    # Verificar que se creó el ejecutable
-    exe_path = ROOT_DIR / "dist" / "updater.exe"
-    if exe_path.exists():
-        print(f"   ✅ updater.exe creado exitosamente")
-        return True
-    else:
-        print("   ❌ Error: updater.exe no fue creado")
-        return False
-
-
-def copy_updater_to_dist():
-    """Copia updater.exe al directorio de distribución de Glosaap"""
-    print("\n📋 Copiando updater a distribución...")
-    
-    src = ROOT_DIR / "dist" / "updater.exe"
-    dst = ROOT_DIR / "dist" / "Glosaap" / "updater.exe"
-    
-    if not src.exists():
-        print(f"   ❌ Error: {src} no existe")
-        return False
-    
-    if not dst.parent.exists():
-        print(f"   ❌ Error: directorio {dst.parent} no existe")
-        return False
-    
-    shutil.copy2(src, dst)
-    print(f"   ✅ updater.exe copiado a dist/Glosaap/")
-    return True
-
-
-def create_release_zip():
-    """Crea el archivo zip para la release de GitHub"""
-    print("\n📦 Creando archivo de release...")
-    
-    dist_dir = ROOT_DIR / "dist" / "Glosaap"
-    if not dist_dir.exists():
-        print("   ❌ Error: directorio de distribución no existe")
-        return False
-    
-    # Leer versión desde settings
+def check_requirements():
+    """Verifica que PyInstaller esté disponible"""
     try:
-        sys.path.insert(0, str(ROOT_DIR))
-        from app.config.settings import APP_VERSION
-    except ImportError:
-        APP_VERSION = "1.0.0"
-    
-    zip_name = f"Glosaap_v{APP_VERSION}"
-    zip_path = ROOT_DIR / "dist" / zip_name
-    
-    # Crear zip
-    shutil.make_archive(str(zip_path), 'zip', str(dist_dir.parent), "Glosaap")
-    
-    final_zip = zip_path.with_suffix('.zip')
-    if final_zip.exists():
-        size_mb = final_zip.stat().st_size / (1024 * 1024)
-        print(f"   ✅ {final_zip.name} creado ({size_mb:.1f} MB)")
+        import PyInstaller
+        print("✅ PyInstaller encontrado")
         return True
-    else:
-        print("   ❌ Error creando archivo zip")
+    except ImportError:
+        print("❌ PyInstaller no encontrado")
+        print("Instala con: pip install pyinstaller")
         return False
 
+def clean_directories():
+    """Limpia directorios de builds anteriores"""
+    print_step("Limpiando directorios anteriores")
+    
+    dirs_to_clean = [BUILD_DIR, DIST_DIR, FINAL_DIR, "__pycache__"]
+    
+    for dir_name in dirs_to_clean:
+        if os.path.exists(dir_name):
+            shutil.rmtree(dir_name)
+            print(f"🗑️  Eliminado: {dir_name}")
+    
+    # Limpiar archivos spec
+    for spec_file in Path(".").glob("*.spec"):
+        spec_file.unlink()
+        print(f"🗑️  Eliminado: {spec_file}")
+
+def get_version():
+    """Obtiene la versión actual de settings.py"""
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("settings", "app/config/settings.py")
+        settings = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(settings)
+        return settings.APP_VERSION
+    except Exception as e:
+        print(f"⚠️  Error obteniendo versión: {e}")
+        return "unknown"
+
+def build_executable():
+    """Construye el ejecutable con PyInstaller"""
+    print_step("Construyendo ejecutable")
+    
+    version = get_version()
+    print(f"📋 Versión detectada: {version}")
+    
+    # Comando PyInstaller
+    cmd = [
+        "pyinstaller",
+        "--onefile",                    # Un solo archivo ejecutable
+        "--windowed",                   # Sin ventana de consola
+        "--name", APP_NAME,             # Nombre del ejecutable
+        "--distpath", DIST_DIR,         # Directorio de salida
+        "--workpath", BUILD_DIR,        # Directorio de trabajo
+        "--clean",                      # Limpiar cache
+        "--noconfirm",                  # No pedir confirmación
+        
+        # Incluir directorios necesarios
+        "--add-data", "app;app",
+        "--add-data", "assets;assets",
+        
+        # Archivo principal
+        "main.py"
+    ]
+    
+    # Agregar icono si existe
+    icon_path = "assets/icons/app_logo.ico"
+    if os.path.exists(icon_path):
+        cmd.extend(["--icon", icon_path])
+        print(f"📦 Icono incluido: {icon_path}")
+    
+    print(f"▶️  Ejecutando: {' '.join(cmd)}")
+    
+    try:
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        print("✅ Build exitoso")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Error en build:")
+        print(f"STDOUT: {e.stdout}")
+        print(f"STDERR: {e.stderr}")
+        return False
+
+def create_portable_package():
+    """Crea un paquete portable con todos los recursos"""
+    print_step("Creando paquete portable")
+    
+    version = get_version()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    package_name = f"{APP_NAME}_v{version}_{timestamp}"
+    package_dir = os.path.join(FINAL_DIR, package_name)
+    
+    # Crear directorio de release
+    os.makedirs(package_dir, exist_ok=True)
+    
+    # Copiar ejecutable
+    exe_source = os.path.join(DIST_DIR, f"{APP_NAME}.exe")
+    exe_dest = os.path.join(package_dir, f"{APP_NAME}.exe")
+    
+    if os.path.exists(exe_source):
+        shutil.copy2(exe_source, exe_dest)
+        print(f"📦 Ejecutable copiado: {APP_NAME}.exe")
+    else:
+        print(f"❌ No se encontró ejecutable: {exe_source}")
+        return None
+    
+    # Crear archivo README
+    readme_content = f"""🚀 Glosaap v{version}
+================================
+
+📥 INSTALACIÓN:
+1. Extrae todos los archivos a una carpeta
+2. Ejecuta Glosaapp.exe
+3. ¡Listo!
+
+📋 REQUISITOS:
+- Windows 10/11
+- Conexión a internet (para actualizaciones)
+- Acceso a \\\\MINERVA\\Cartera\\GLOSAAP (red corporativa)
+
+🔄 ACTUALIZACIONES:
+La aplicación verifica automáticamente las actualizaciones desde GitHub.
+
+📞 SOPORTE:
+- Repositorio: https://github.com/Damdev80/Glosaap
+- Versión: {version}
+- Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+💡 NOTAS:
+- Primera ejecución puede tardar unos segundos
+- Los archivos se procesan en \\\\MINERVA\\Cartera\\GLOSAAP\\REPOSITORIO DE RESULTADOS
+"""
+    
+    with open(os.path.join(package_dir, "README.txt"), "w", encoding="utf-8") as f:
+        f.write(readme_content)
+    
+    print(f"📄 README creado")
+    
+    # Crear ZIP
+    zip_path = f"{package_dir}.zip"
+    
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for root, dirs, files in os.walk(package_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                arc_name = os.path.relpath(file_path, FINAL_DIR)
+                zipf.write(file_path, arc_name)
+    
+    print(f"🗜️  ZIP creado: {zip_path}")
+    
+    # Mostrar información final
+    zip_size = os.path.getsize(zip_path) / (1024 * 1024)
+    print(f"📊 Tamaño final: {zip_size:.1f} MB")
+    
+    return zip_path
 
 def main():
-    parser = argparse.ArgumentParser(description="Script de construcción de Glosaap")
-    parser.add_argument("--clean", action="store_true", help="Limpiar antes de compilar")
-    parser.add_argument("--app-only", action="store_true", help="Solo compilar app principal")
-    parser.add_argument("--updater-only", action="store_true", help="Solo compilar updater")
-    parser.add_argument("--no-zip", action="store_true", help="No crear archivo zip")
+    """Función principal del build"""
+    print("🚀 GLOSAAP BUILD AUTOMÁTICO")
+    print("=" * 60)
     
-    args = parser.parse_args()
+    # Verificar requisitos
+    if not check_requirements():
+        return False
     
-    print("=" * 50)
-    print("🚀 Glosaap Build Script")
-    print("=" * 50)
-    
-    # Limpiar si se solicita
-    if args.clean:
-        clean_build()
-    
-    success = True
-    
-    # Compilar según argumentos
-    if args.updater_only:
-        success = build_updater()
-    elif args.app_only:
-        success = build_app()
-    else:
-        # Compilar todo
-        success = build_app()
-        if success:
-            success = build_updater()
-        if success:
-            success = copy_updater_to_dist()
-        if success and not args.no_zip:
-            success = create_release_zip()
-    
-    print("\n" + "=" * 50)
-    if success:
-        print("✅ Build completado exitosamente!")
-        print("\nArchivos generados:")
-        print("  - dist/Glosaap/Glosaap.exe")
-        print("  - dist/Glosaap/updater.exe")
-        if not args.no_zip:
-            print("  - dist/Glosaap_v*.zip (listo para GitHub Release)")
-    else:
-        print("❌ Build falló. Revisa los errores arriba.")
-    print("=" * 50)
-    
-    return 0 if success else 1
-
+    try:
+        # 1. Limpiar
+        clean_directories()
+        
+        # 2. Build
+        if not build_executable():
+            return False
+        
+        # 3. Empaquetar
+        zip_path = create_portable_package()
+        if not zip_path:
+            return False
+        
+        # 4. Éxito
+        print_step("BUILD COMPLETADO")
+        print(f"✅ Ejecutable listo: {zip_path}")
+        print(f"📁 Abre la carpeta: {os.path.abspath(FINAL_DIR)}")
+        
+        # Abrir carpeta en explorer
+        if sys.platform == 'win32':
+            subprocess.run(f'explorer "{os.path.abspath(FINAL_DIR)}"', shell=True)
+        
+        return True
+        
+    except Exception as e:
+        print(f"\n❌ ERROR INESPERADO: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 if __name__ == "__main__":
-    sys.exit(main())
+    success = main()
+    if success:
+        print(f"\n🎉 ¡Build exitoso! Archivo listo para distribuir.")
+    else:
+        print(f"\n💥 Build falló. Revisa los errores arriba.")
+    
+    input("\nPresiona Enter para salir...")

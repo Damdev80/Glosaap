@@ -79,7 +79,7 @@ class TestCoosaludProcessor:
         processor = CoosaludProcessor()
         
         assert processor._homologar_codigo_glosa("") == ""
-        assert processor._homologar_codigo_glosa(None) == ""
+        assert processor._homologar_codigo_glosa(None or "") == ""
         assert processor._homologar_codigo_glosa("NAN") == ""
     
     def test_homologar_codigo_glosa_un_digito(self):

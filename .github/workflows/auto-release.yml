@@ -1,0 +1,57 @@
+name: Auto Release
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'app/config/settings.py'
+
+jobs:
+  release:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Get version from settings.py
+      id: version
+      run: |
+        $content = Get-Content app/config/settings.py
+        $versionLine = $content | Where-Object { $_ -match 'APP_VERSION = "(.+)"' }
+        $version = $matches[1]
+        echo "version=$version" >> $env:GITHUB_OUTPUT
+        echo "Found version: $version"
+    
+    - name: Check if release exists
+      id: check_release
+      run: |
+        $response = try { 
+          Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/releases/tags/v${{ steps.version.outputs.version }}" -Headers @{Authorization="token ${{ secrets.GITHUB_TOKEN }}"}
+          $true
+        } catch { 
+          $false 
+        }
+        echo "exists=$response" >> $env:GITHUB_OUTPUT
+    
+    - name: Create Release
+      if: steps.check_release.outputs.exists == 'false'
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ steps.version.outputs.version }}
+        release_name: Glosaap v${{ steps.version.outputs.version }}
+        body: |
+          🚀 **Glosaap v${{ steps.version.outputs.version }}**
+          
+          ✨ **Novedades:**
+          - Actualizaciones automáticas desde GitHub
+          - Mejoras en la interfaz
+          - Correcciones de bugs
+          
+          📥 **Instalación:**
+          1. Descarga el archivo ZIP
+          2. Extrae en tu carpeta deseada
+          3. Ejecuta Glosaap.exe
+        draft: false
+        prerelease: false
