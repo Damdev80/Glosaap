@@ -1130,7 +1130,7 @@ class CoosaludProcessor(BaseProcessor):
             self.errors.append(f"Error al guardar archivo: {str(e)}")
             return False
     
-    def process_glosas(self, file_paths: List[str], output_dir: Optional[str] = None) -> Tuple[Optional[Dict[str, pd.DataFrame]], str]:
+    def process_glosas(self, file_paths: List[str], output_dir: Optional[str] = None, email_date: Optional[str] = None) -> Tuple[Optional[Dict[str, pd.DataFrame]], str]:
         """
         Método principal para procesar archivos de GLOSAS de Coosalud
         Procesa TODOS los pares de archivos (DETALLE + GLOSA) y los combina
@@ -1138,6 +1138,7 @@ class CoosaludProcessor(BaseProcessor):
         Args:
             file_paths: Lista de rutas a los archivos
             output_dir: Directorio de salida (opcional)
+            email_date: Fecha del correo recibido (formato string)
             
         Returns:
             Tupla con (Diccionario de DataFrames combinados, mensaje de estado)
@@ -1217,7 +1218,11 @@ class CoosaludProcessor(BaseProcessor):
         combined_glosa = pd.concat(all_glosas, ignore_index=True)
         
         # Agregar fecha del correo
-        combined_detalle["fecha_correo"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if email_date:
+            combined_detalle["fecha_correo"] = email_date
+        else:
+            # Fallback a fecha actual si no se proporciona
+            combined_detalle["fecha_correo"] = "No se obtuvo ninguna fecha"
         
         # Merge usando columnas comunes para traer codigo_glosa y justificacion_glosa a Detalles
         print(f"\n[PROC] Agregando codigo_glosa y justificacion_glosa a Detalles...")

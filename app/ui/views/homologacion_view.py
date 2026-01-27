@@ -217,14 +217,22 @@ class HomologacionView:
             on_change=self._on_buscar
         )
         
-        # Tabla de códigos existentes
+        # Determinar si mostrar columna COD_SERV_FACT (solo Mutualser)
+        mostrar_cod_serv_fact = self.current_eps == "mutualser"
+        
+        # Tabla de códigos existentes - columnas según EPS
+        columnas_tabla = [
+            ft.DataColumn(ft.Text("Código ERP", size=12, weight=ft.FontWeight.W_500, color=COLORS["text_secondary"]), numeric=False),
+            ft.DataColumn(ft.Text("Código DGH", size=12, weight=ft.FontWeight.W_500, color=COLORS["text_secondary"]), numeric=False),
+        ]
+        if mostrar_cod_serv_fact:
+            columnas_tabla.append(ft.DataColumn(ft.Text("COD_SERV_FACT", size=12, weight=ft.FontWeight.W_500, color=COLORS["text_secondary"]), numeric=False))
+        columnas_tabla.append(ft.DataColumn(ft.Text("", size=12)))
+        
+        self.mostrar_cod_serv_fact = mostrar_cod_serv_fact
+        
         self.tabla = ft.DataTable(
-            columns=[
-                ft.DataColumn(ft.Text("Código ERP", size=12, weight=ft.FontWeight.W_500, color=COLORS["text_secondary"]), numeric=False),
-                ft.DataColumn(ft.Text("Código DGH", size=12, weight=ft.FontWeight.W_500, color=COLORS["text_secondary"]), numeric=False),
-                ft.DataColumn(ft.Text("COD_SERV_FACT", size=12, weight=ft.FontWeight.W_500, color=COLORS["text_secondary"]), numeric=False),
-                ft.DataColumn(ft.Text("", size=12)),
-            ],
+            columns=columnas_tabla,
             rows=[],
             border=ft.border.all(1, COLORS["border"]),
             border_radius=12,
@@ -538,25 +546,31 @@ class HomologacionView:
         for _, row in df.iterrows():
             codigo_erp = str(row.get('Código Servicio de la ERP', ''))
             codigo_dgh = str(row.get('Código producto en DGH', ''))
-            cod_serv_fact = str(row.get('COD_SERV_FACT', ''))
             
-            self.tabla.rows.append(
-                ft.DataRow(cells=[
-                    ft.DataCell(ft.Text(codigo_erp, size=13, color=COLORS["text_secondary"])),
-                    ft.DataCell(ft.Text(codigo_dgh, size=13, color=COLORS["text_secondary"])),
-                    ft.DataCell(ft.Text(cod_serv_fact, size=13, color=COLORS["text_secondary"])),
-                    ft.DataCell(
-                        ft.IconButton(
-                            icon=ft.Icons.DELETE_OUTLINE,
-                            icon_color=COLORS["text_secondary"],
-                            icon_size=18,
-                            tooltip="Eliminar",
-                            data=codigo_erp,
-                            on_click=self._on_eliminar
-                        )
-                    )
-                ])
-            )
+            # Crear celdas según columnas de la EPS
+            celdas = [
+                ft.DataCell(ft.Text(codigo_erp, size=13, color=COLORS["text_secondary"])),
+                ft.DataCell(ft.Text(codigo_dgh, size=13, color=COLORS["text_secondary"])),
+            ]
+            
+            # Solo agregar COD_SERV_FACT si es Mutualser
+            if self.mostrar_cod_serv_fact:
+                cod_serv_fact = str(row.get('COD_SERV_FACT', ''))
+                celdas.append(ft.DataCell(ft.Text(cod_serv_fact, size=13, color=COLORS["text_secondary"])))
+            
+            # Botón de eliminar
+            celdas.append(ft.DataCell(
+                ft.IconButton(
+                    icon=ft.Icons.DELETE_OUTLINE,
+                    icon_color=COLORS["text_secondary"],
+                    icon_size=18,
+                    tooltip="Eliminar",
+                    data=codigo_erp,
+                    on_click=self._on_eliminar
+                )
+            ))
+            
+            self.tabla.rows.append(ft.DataRow(cells=celdas))
         
         if filtro:
             self.status_text.value = f"{len(df)} resultados"

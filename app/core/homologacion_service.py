@@ -23,7 +23,13 @@ class HomologacionService:
         "coosalud": "coosalud_homologacion.xlsx"
     }
     
-    # Columnas requeridas
+    # Columnas requeridas por EPS (Coosalud solo tiene 2 columnas)
+    EPS_COLUMNAS = {
+        "mutualser": ['Código Servicio de la ERP', 'Código producto en DGH', 'COD_SERV_FACT'],
+        "coosalud": ['Código Servicio de la ERP', 'Código producto en DGH']
+    }
+    
+    # Columnas por defecto (para compatibilidad)
     COLUMNAS = ['Código Servicio de la ERP', 'Código producto en DGH', 'COD_SERV_FACT']
     
     def __init__(self, eps: Optional[str] = None):
@@ -36,6 +42,7 @@ class HomologacionService:
         self.eps = eps
         self.homologacion_path: Optional[str] = None
         self.df: Optional[pd.DataFrame] = None
+        self.columnas_actuales: list = self.COLUMNAS  # Columnas según EPS
         
         if eps:
             self._set_eps(eps)
@@ -82,6 +89,8 @@ class HomologacionService:
         
         self.eps = eps_lower
         self.homologacion_path = os.path.join(self.HOMOLOGACION_DIR, self.EPS_FILES[eps_lower])
+        # Configurar columnas según la EPS
+        self.columnas_actuales = self.EPS_COLUMNAS.get(eps_lower, self.COLUMNAS)
         self._cargar()
     
     def cambiar_eps(self, eps: str):
@@ -96,7 +105,7 @@ class HomologacionService:
     def _cargar(self):
         """Carga el archivo de homologación"""
         if not self.homologacion_path:
-            self.df = pd.DataFrame(columns=self.COLUMNAS)
+            self.df = pd.DataFrame(columns=self.columnas_actuales)
             return
             
         try:
@@ -104,19 +113,19 @@ class HomologacionService:
                 self.df = pd.read_excel(self.homologacion_path)
                 # Limpiar columnas
                 self.df.columns = self.df.columns.str.strip()
-                # Mantener solo columnas relevantes
-                cols_existentes = [c for c in self.COLUMNAS if c in self.df.columns]
+                # Mantener solo columnas relevantes para esta EPS
+                cols_existentes = [c for c in self.columnas_actuales if c in self.df.columns]
                 if cols_existentes:
                     self.df = self.df[cols_existentes].copy()
                 eps_name = self.eps.upper() if self.eps else "DESCONOCIDA"
                 print(f"✅ Homologación {eps_name} cargada: {len(self.df)} registros")
             else:
-                # Crear DataFrame vacío con las columnas
-                self.df = pd.DataFrame(columns=self.COLUMNAS)
+                # Crear DataFrame vacío con las columnas de esta EPS
+                self.df = pd.DataFrame(columns=self.columnas_actuales)
                 print(f"⚠️ Archivo de homologación {self.eps or 'desconocida'} no encontrado, creando nuevo")
         except Exception as e:
             print(f"❌ Error cargando homologación: {e}")
-            self.df = pd.DataFrame(columns=self.COLUMNAS)
+            self.df = pd.DataFrame(columns=self.columnas_actuales)
     
     def _guardar(self):
         """Guarda los cambios en el archivo"""
@@ -160,7 +169,7 @@ class HomologacionService:
             DataFrame con los registros
         """
         if self.df is None or self.df.empty:
-            return pd.DataFrame(columns=self.COLUMNAS)
+            return pd.DataFrame(columns=self.columnas_actuales)
         
         df_resultado = self.df.copy()
         
@@ -201,7 +210,7 @@ class HomologacionService:
         Args:
             codigo_erp: Código Servicio de la ERP (del archivo de glosa)
             codigo_dgh: Código producto en DGH (código homologado)
-            cod_serv_fact: COD_SERV_FACT (opcional, si es diferente de codigo_dgh)
+            cod_serv_fact: COD_SERV_FACT (opcional, solo para Mutualser)
             
         Returns:
             True si se agregó correctamente
@@ -212,15 +221,19 @@ class HomologacionService:
                 print(f"⚠️ El código {codigo_erp} ya existe")
                 return False
             
-            # Usar codigo_dgh como cod_serv_fact si no se especifica
-            if cod_serv_fact is None:
-                cod_serv_fact = codigo_dgh
-            
-            nuevo = pd.DataFrame([{
+            # Crear registro según columnas de la EPS
+            nuevo_registro = {
                 'Código Servicio de la ERP': str(codigo_erp).strip(),
-                'Código producto en DGH': str(codigo_dgh).strip(),
-                'COD_SERV_FACT': str(cod_serv_fact).strip()
-            }])
+                'Código producto en DGH': str(codigo_dgh).strip()
+            }
+            
+            # Solo agregar COD_SERV_FACT si la EPS lo requiere (Mutualser)
+            if 'COD_SERV_FACT' in self.columnas_actuales:
+                if cod_serv_fact is None:
+                    cod_serv_fact = codigo_dgh
+                nuevo_registro['COD_SERV_FACT'] = str(cod_serv_fact).strip()
+            
+            nuevo = pd.DataFrame([nuevo_registro])
             
             self.df = pd.concat([self.df, nuevo], ignore_index=True)
             
@@ -240,7 +253,7 @@ class HomologacionService:
         Args:
             codigo_erp: Código a actualizar
             codigo_dgh: Nuevo código DGH (opcional)
-            cod_serv_fact: Nuevo COD_SERV_FACT (opcional)
+            cod_serv_fact: Nuevo COD_SERV_FACT (opcional, solo para Mutualser)
             
         Returns:
             True si se actualizó correctamente
@@ -259,7 +272,8 @@ class HomologacionService:
             
             if codigo_dgh:
                 self.df.loc[mask, 'Código producto en DGH'] = str(codigo_dgh).strip()
-            if cod_serv_fact:
+            # Solo actualizar COD_SERV_FACT si la EPS lo tiene (Mutualser)
+            if cod_serv_fact and 'COD_SERV_FACT' in self.columnas_actuales:
                 self.df.loc[mask, 'COD_SERV_FACT'] = str(cod_serv_fact).strip()
             
             if self._guardar():
@@ -324,11 +338,16 @@ class HomologacionService:
             
             # Validar que no exista
             if self.buscar_por_codigo_erp(codigo_erp) is None:
-                nuevo = pd.DataFrame([{
+                # Crear registro según columnas de la EPS
+                nuevo_registro = {
                     'Código Servicio de la ERP': str(codigo_erp).strip(),
-                    'Código producto en DGH': str(codigo_dgh).strip(),
-                    'COD_SERV_FACT': str(cod_serv_fact).strip()
-                }])
+                    'Código producto en DGH': str(codigo_dgh).strip()
+                }
+                # Solo agregar COD_SERV_FACT si la EPS lo requiere
+                if 'COD_SERV_FACT' in self.columnas_actuales:
+                    nuevo_registro['COD_SERV_FACT'] = str(cod_serv_fact).strip()
+                
+                nuevo = pd.DataFrame([nuevo_registro])
                 self.df = pd.concat([self.df, nuevo], ignore_index=True)
                 agregados += 1
         
@@ -373,11 +392,18 @@ class HomologacionService:
         if self.df is None or self.df.empty:
             return {'total': 0, 'con_dgh': 0, 'con_serv_fact': 0}
         
-        return {
+        stats = {
             'total': len(self.df),
-            'con_dgh': self.df['Código producto en DGH'].notna().sum(),
-            'con_serv_fact': self.df['COD_SERV_FACT'].notna().sum()
+            'con_dgh': self.df['Código producto en DGH'].notna().sum() if 'Código producto en DGH' in self.df.columns else 0
         }
+        
+        # Solo incluir con_serv_fact si la columna existe (Mutualser)
+        if 'COD_SERV_FACT' in self.columnas_actuales and 'COD_SERV_FACT' in self.df.columns:
+            stats['con_serv_fact'] = self.df['COD_SERV_FACT'].notna().sum()
+        else:
+            stats['con_serv_fact'] = 0
+        
+        return stats
     
     def exportar_no_homologados(self, codigos, output_path=None):
         """
@@ -395,13 +421,19 @@ class HomologacionService:
             return None
         
         if output_path is None:
-            output_path = f"codigos_pendientes_homologar_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            eps_name = self.eps or "general"
+            output_path = f"codigos_pendientes_homologar_{eps_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         
-        df_export = pd.DataFrame({
+        # Crear DataFrame según columnas de la EPS
+        export_data = {
             'Código Servicio de la ERP': codigos,
-            'Código producto en DGH': '',
-            'COD_SERV_FACT': ''
-        })
+            'Código producto en DGH': ''
+        }
+        # Solo agregar COD_SERV_FACT si la EPS lo requiere
+        if 'COD_SERV_FACT' in self.columnas_actuales:
+            export_data['COD_SERV_FACT'] = ''
+        
+        df_export = pd.DataFrame(export_data)
         
         df_export.to_excel(output_path, index=False)
         print(f"✅ Exportado: {output_path} ({len(codigos)} códigos pendientes)")
@@ -521,11 +553,16 @@ class HomologacionService:
         try:
             nuevos_registros = []
             for codigo_eps, codigo_homologo in codigos_validos:
-                nuevos_registros.append({
+                # Crear registro según columnas de la EPS
+                nuevo_registro = {
                     'Código Servicio de la ERP': str(codigo_eps).strip(),
-                    'Código producto en DGH': str(codigo_homologo).strip(),
-                    'COD_SERV_FACT': str(codigo_homologo).strip()  # Mismo valor por defecto
-                })
+                    'Código producto en DGH': str(codigo_homologo).strip()
+                }
+                # Solo agregar COD_SERV_FACT si la EPS lo requiere (Mutualser)
+                if 'COD_SERV_FACT' in self.columnas_actuales:
+                    nuevo_registro['COD_SERV_FACT'] = str(codigo_homologo).strip()  # Mismo valor por defecto
+                
+                nuevos_registros.append(nuevo_registro)
             
             if nuevos_registros:
                 df_nuevos = pd.DataFrame(nuevos_registros)

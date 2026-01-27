@@ -314,7 +314,41 @@ class EPSProcessor:
                 logger.warning(f"No se pudo crear directorio: {e}")
         
         processor = CoosaludProcessor(homologador_path=homologador_path)
-        result_data, message = processor.process_glosas(excel_files, output_dir=output_dir)
+        
+        # Obtener fecha del correo más reciente
+        email_date = None
+        if hasattr(self.app_state, 'found_messages') and self.app_state.found_messages:
+            # Buscar la fecha más reciente de los correos
+            dates = []
+            for msg in self.app_state.found_messages:
+                msg_date = msg.get('date')
+                if msg_date:
+                    try:
+                        # Convertir fecha del correo a formato estándar
+                        from datetime import datetime
+                        if isinstance(msg_date, str):
+                            # Intentar parsear diferentes formatos de fecha
+                            parsed_date = None
+                            for fmt in ['%a, %d %b %Y %H:%M:%S %z', '%a, %d %b %Y %H:%M:%S', '%d %b %Y %H:%M:%S']:
+                                try:
+                                    parsed_date = datetime.strptime(msg_date.strip(), fmt)
+                                    break
+                                except ValueError:
+                                    continue
+                            if parsed_date:
+                                dates.append(parsed_date)
+                        elif hasattr(msg_date, 'strftime'):  # datetime object
+                            dates.append(msg_date)
+                    except Exception:
+                        continue
+            
+            if dates:
+                # Usar la fecha más reciente y formatearla
+                latest_date = max(dates)
+                email_date = latest_date.strftime('%Y-%m-%d %H:%M:%S')
+                logger.info(f"Usando fecha del correo: {email_date}")
+        
+        result_data, message = processor.process_glosas(excel_files, output_dir=output_dir, email_date=email_date)
         
         if result_data:
             self.messages_view.set_processing(False, f"✅ {message}")
