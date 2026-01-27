@@ -205,6 +205,13 @@ def extract_update(update_file: Path, app_dir: Path, logger: logging.Logger | No
         for item in source_dir.iterdir():
             dest = app_dir / item.name
             
+            # ⚠️ IMPORTANTE: Saltar updater.exe (está en uso)
+            # Se actualizará en la próxima ejecución
+            if item.name.lower() == "updater.exe":
+                if logger:
+                    logger.warning(f"Saltando {item.name} (está en uso, se actualizará en próxima ejecución)")
+                continue
+            
             # Eliminar destino si existe
             if dest.exists():
                 if dest.is_dir():
