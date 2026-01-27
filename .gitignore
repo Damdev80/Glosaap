@@ -16,7 +16,7 @@ pip-wheel-metadata/
 # ============================
 #   ENTORNOS VIRTUALES
 # ============================
-env/
+.env/
 venv/
 ENV/
 .venv/
@@ -83,3 +83,10 @@ credentials.json
 #   SELENIUM WEBDRIVERS
 # ============================
 temp
+
+# .gitignore
+# ============================
+#   CREDENTIALS / SENSITIVE
+# ============================
+.env
+credentials.json
