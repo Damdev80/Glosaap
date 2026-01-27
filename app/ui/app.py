@@ -325,12 +325,12 @@ def main(page: ft.Page):
         eps_filter = eps_info.get("filter", "").lower()
         if eps_filter == "mutualser":
             messages_view.show_process_button(True)
-            messages_view.process_eps_btn.text = "📊 Procesar MUTUALSER"
+            messages_view.process_eps_btn.text = " Procesar MUTUALSER"
             messages_view.process_eps_btn.bgcolor = COLORS["primary"]
             messages_view.process_eps_btn.data = "mutualser"
         elif eps_filter == "coosalud":
             messages_view.show_process_button(True)
-            messages_view.process_eps_btn.text = "📊 Procesar COOSALUD"
+            messages_view.process_eps_btn.text = " Procesar COOSALUD"
             messages_view.process_eps_btn.bgcolor = COLORS["success"]
             messages_view.process_eps_btn.data = "coosalud"
         else:
