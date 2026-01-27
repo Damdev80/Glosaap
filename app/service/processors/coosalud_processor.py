@@ -495,6 +495,293 @@ class CoosaludProcessor(BaseProcessor):
         print(f"   [DEBUG] Grupos procesados: {len(result_rows)}")
         return pd.DataFrame(result_rows)
     
+    def _prepare_glosa_merge_by_id_detalle(self, glosa_df: pd.DataFrame, merge_columns: List[str]) -> pd.DataFrame:
+        """
+        Prepara el DataFrame de glosa aplicando la nueva regla de id_detalle:
+        
+        REGLA:
+        - Si id_detalle aparece 2+ veces en GLOSA → usar esas observaciones específicas
+        - Si id_detalle NO está repetido → usar esa observación única, no pegar con otras
+        
+        Args:
+            glosa_df: DataFrame de glosa
+            merge_columns: Columnas para hacer merge
+            
+        Returns:
+            DataFrame procesado con las observaciones correctas
+        """
+        print(f"   [DEBUG] Aplicando nueva lógica de id_detalle...")
+        
+        if "id_detalle" not in glosa_df.columns:
+            print(f"   [WARN] No hay columna id_detalle en GLOSA")
+            return pd.DataFrame()
+        
+        has_codigo = "codigo_glosa" in glosa_df.columns
+        has_justif = "justificacion_glosa" in glosa_df.columns
+        
+        if not has_codigo and not has_justif:
+            print(f"   [WARN] No hay columnas de observaciones en GLOSA")
+            return pd.DataFrame()
+        
+        # Analizar frecuencia de id_detalle
+        id_detalle_counts = glosa_df['id_detalle'].value_counts()
+        id_repetidos = id_detalle_counts[id_detalle_counts >= 2].index.tolist()
+        id_unicos = id_detalle_counts[id_detalle_counts == 1].index.tolist()
+        
+        print(f"   [INFO] ID_detalle repetidos (2+): {len(id_repetidos)}")
+        print(f"   [INFO] ID_detalle únicos: {len(id_unicos)}")
+        
+        result_rows = []
+        
+        # Agrupar por las columnas de merge
+        for keys, group in glosa_df.groupby(merge_columns):
+            # Crear diccionario base con las columnas de merge
+            if isinstance(keys, tuple):
+                row = dict(zip(merge_columns, keys))
+            else:
+                row = {merge_columns[0]: keys}
+            
+            # Obtener todos los id_detalle en este grupo
+            ids_en_grupo = group['id_detalle'].unique()
+            
+            # Separar según la regla
+            ids_para_pegar = []  # IDs que aparecen 2+ veces
+            ids_individuales = []  # IDs que aparecen solo 1 vez
+            
+            for id_det in ids_en_grupo:
+                if id_det in id_repetidos:
+                    ids_para_pegar.append(id_det)
+                else:
+                    ids_individuales.append(id_det)
+            
+            print(f"   [DEBUG] Grupo {keys}: IDs a pegar: {len(ids_para_pegar)}, IDs individuales: {len(ids_individuales)}")
+            
+            # Filtrar observaciones según la regla
+            filas_a_procesar = pd.DataFrame()
+            
+            if ids_para_pegar:
+                # Solo incluir observaciones de IDs repetidos
+                filas_a_procesar = group[group['id_detalle'].isin(ids_para_pegar)]
+                print(f"     [RULE] Usando {len(filas_a_procesar)} observaciones de IDs repetidos")
+            elif ids_individuales:
+                # Si no hay IDs repetidos, tomar solo uno de los individuales
+                primer_id = ids_individuales[0]
+                filas_a_procesar = group[group['id_detalle'] == primer_id]
+                print(f"     [RULE] Usando 1 observación del ID individual: {primer_id}")
+            
+            if filas_a_procesar.empty:
+                print(f"     [WARN] No hay observaciones para procesar en grupo {keys}")
+                row["codigo_glosa"] = ""
+                row["justificacion_glosa"] = ""
+            else:
+                # Procesar codigo_glosa con homologación y priorización
+                if has_codigo:
+                    codigos_raw = filas_a_procesar["codigo_glosa"].dropna().astype(str).tolist()
+                    
+                    # Homologar códigos
+                    codigos_homologados = []
+                    for codigo in codigos_raw:
+                        codigo_homolog = self._homologar_codigo_glosa(codigo)
+                        if codigo_homolog and codigo_homolog not in codigos_homologados:
+                            codigos_homologados.append(codigo_homolog)
+                    
+                    # Priorización: FA, SO, AU, CO, CL primero, TA al final
+                    prioritarios = ["FA", "SO", "AU", "CO", "CL"]
+                    codigo_final = None
+                    
+                    for prefijo in prioritarios:
+                        for codigo in codigos_homologados:
+                            if codigo.upper().startswith(prefijo):
+                                codigo_final = codigo
+                                break
+                        if codigo_final:
+                            break
+                    
+                    if not codigo_final:
+                        for codigo in codigos_homologados:
+                            if codigo.upper().startswith("TA"):
+                                codigo_final = codigo
+                                break
+                    
+                    if not codigo_final and codigos_homologados:
+                        codigo_final = codigos_homologados[0]
+                    
+                    row["codigo_glosa"] = codigo_final if codigo_final else ""
+                
+                # Procesar justificacion_glosa - ORDENAR por prioridad de códigos
+                if has_justif:
+                    # Crear lista de justificaciones con sus códigos asociados
+                    justif_con_codigo = []
+                    for _, row_glosa in filas_a_procesar.iterrows():
+                        justif = row_glosa.get("justificacion_glosa")
+                        codigo_raw = row_glosa.get("codigo_glosa", "")
+                        
+                        if pd.notna(justif) and str(justif).strip():
+                            justif_text = str(justif).strip()
+                            codigo_homolog = self._homologar_codigo_glosa(str(codigo_raw)) if pd.notna(codigo_raw) else ""
+                            
+                            # Solo agregar si no existe (evitar duplicados)
+                            ya_existe = any(item["justificacion"] == justif_text for item in justif_con_codigo)
+                            if not ya_existe:
+                                justif_con_codigo.append({
+                                    "justificacion": justif_text,
+                                    "codigo": codigo_homolog,
+                                    "es_ta": codigo_homolog.upper().startswith("TA") if codigo_homolog else True
+                                })
+                    
+                    # ORDENAR según prioridad: FA > SO > AU > CO > CL > TA
+                    prioritarios = ["FA", "SO", "AU", "CO", "CL"]
+                    
+                    def get_priority(item):
+                        codigo = item["codigo"].upper() if item["codigo"] else ""
+                        
+                        # Asignar prioridad numérica (menor = mayor prioridad)
+                        for i, prefijo in enumerate(prioritarios):
+                            if codigo.startswith(prefijo):
+                                return i  # FA=0, SO=1, AU=2, CO=3, CL=4
+                        
+                        # TA o desconocido = menor prioridad
+                        return 999
+                    
+                    # Ordenar justificaciones por prioridad
+                    justif_ordenadas = sorted(justif_con_codigo, key=get_priority)
+                    
+                    # Extraer solo los textos de justificación ordenados
+                    justificaciones_finales = [item["justificacion"] for item in justif_ordenadas]
+                    
+                    # Concatenar con " // "
+                    justificacion_final = " // ".join(justificaciones_finales) if justificaciones_finales else ""
+                    row["justificacion_glosa"] = justificacion_final
+                    
+                    print(f"     [DEBUG] Justificaciones procesadas: {len(justificaciones_finales)}")
+                    if justificaciones_finales:
+                        print(f"     [DEBUG] Orden aplicado: {[item['codigo'] for item in justif_ordenadas]}")
+            
+            result_rows.append(row)
+        
+        print(f"   [DEBUG] Grupos procesados con nueva regla: {len(result_rows)}")
+        return pd.DataFrame(result_rows)
+    
+    def _prepare_glosa_merge_by_id_detalle_direct(self, glosa_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Prepara el DataFrame de glosa para merge DIRECTO por id_detalle.
+        
+        REGLA SIMPLE:
+        - Agrupar por id_detalle
+        - Si un id_detalle tiene múltiples observaciones → concatenar solo esas
+        - Si un id_detalle tiene una sola observación → usar esa
+        
+        Esto garantiza que cada servicio en DETALLE reciba SOLO sus observaciones específicas.
+        
+        Args:
+            glosa_df: DataFrame de glosa
+            
+        Returns:
+            DataFrame con id_detalle, codigo_glosa, justificacion_glosa
+        """
+        print(f"   [DEBUG] Preparando merge directo por id_detalle...")
+        
+        if "id_detalle" not in glosa_df.columns:
+            print(f"   [ERROR] No existe columna id_detalle en GLOSA")
+            return pd.DataFrame()
+        
+        has_codigo = "codigo_glosa" in glosa_df.columns
+        has_justif = "justificacion_glosa" in glosa_df.columns
+        
+        if not has_codigo and not has_justif:
+            print(f"   [ERROR] No existen columnas de observaciones")
+            return pd.DataFrame()
+        
+        result_rows = []
+        
+        # Agrupar por id_detalle (columna directa de conexión)
+        for id_detalle, group in glosa_df.groupby("id_detalle"):
+            row = {"id_detalle": id_detalle}
+            
+            # Procesar codigo_glosa con homologación y priorización
+            if has_codigo:
+                codigos_raw = group["codigo_glosa"].dropna().astype(str).tolist()
+                
+                # Homologar todos los códigos
+                codigos_homologados = []
+                for codigo in codigos_raw:
+                    codigo_homolog = self._homologar_codigo_glosa(codigo)
+                    if codigo_homolog and codigo_homolog not in codigos_homologados:
+                        codigos_homologados.append(codigo_homolog)
+                
+                # Priorización: FA, SO, AU, CO, CL primero, TA al final
+                prioritarios = ["FA", "SO", "AU", "CO", "CL"]
+                codigo_final = None
+                
+                for prefijo in prioritarios:
+                    for codigo in codigos_homologados:
+                        if codigo.upper().startswith(prefijo):
+                            codigo_final = codigo
+                            break
+                    if codigo_final:
+                        break
+                
+                if not codigo_final:
+                    for codigo in codigos_homologados:
+                        if codigo.upper().startswith("TA"):
+                            codigo_final = codigo
+                            break
+                
+                if not codigo_final and codigos_homologados:
+                    codigo_final = codigos_homologados[0]
+                
+                row["codigo_glosa"] = codigo_final if codigo_final else ""
+            
+            # Procesar justificacion_glosa - ORDENAR por prioridad de códigos
+            if has_justif:
+                # Crear lista de justificaciones con sus códigos asociados
+                justif_con_codigo = []
+                for _, row_glosa in group.iterrows():
+                    justif = row_glosa.get("justificacion_glosa")
+                    codigo_raw = row_glosa.get("codigo_glosa", "")
+                    
+                    if pd.notna(justif) and str(justif).strip():
+                        justif_text = str(justif).strip()
+                        codigo_homolog = self._homologar_codigo_glosa(str(codigo_raw)) if pd.notna(codigo_raw) else ""
+                        
+                        # Solo agregar si no existe (evitar duplicados)
+                        ya_existe = any(item["justificacion"] == justif_text for item in justif_con_codigo)
+                        if not ya_existe:
+                            justif_con_codigo.append({
+                                "justificacion": justif_text,
+                                "codigo": codigo_homolog,
+                                "es_ta": codigo_homolog.upper().startswith("TA") if codigo_homolog else True
+                            })
+                
+                # ORDENAR según prioridad: FA > SO > AU > CO > CL > TA
+                prioritarios = ["FA", "SO", "AU", "CO", "CL"]
+                
+                def get_priority(item):
+                    codigo = item["codigo"].upper() if item["codigo"] else ""
+                    
+                    # Asignar prioridad numérica (menor = mayor prioridad)
+                    for i, prefijo in enumerate(prioritarios):
+                        if codigo.startswith(prefijo):
+                            return i  # FA=0, SO=1, AU=2, CO=3, CL=4
+                    
+                    # TA o desconocido = menor prioridad
+                    return 999
+                
+                # Ordenar justificaciones por prioridad
+                justif_ordenadas = sorted(justif_con_codigo, key=get_priority)
+                
+                # Extraer solo los textos de justificación ordenados
+                justificaciones_finales = [item["justificacion"] for item in justif_ordenadas]
+                
+                # Concatenar SOLO las justificaciones de este id_detalle específico
+                justificacion_final = " // ".join(justificaciones_finales) if justificaciones_finales else ""
+                row["justificacion_glosa"] = justificacion_final
+            
+            result_rows.append(row)
+        
+        print(f"   [INFO] Procesados {len(result_rows)} id_detalle únicos")
+        return pd.DataFrame(result_rows)
+    
     def homologate(self, data: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
         """
         Realiza el proceso de homologación para Coosalud
@@ -537,26 +824,21 @@ class CoosaludProcessor(BaseProcessor):
         # Mapeo para preservar case original
         detalle_col_map = {c.lower(): c for c in detalle_result.columns}
         
-        # Columnas candidatas para merge (necesitamos codigo_servicio para merge específico)
-        merge_candidates = ['id_cuenta', 'numero_factura', 'docpaciente', 'codigo_servicio']
-        merge_columns = []
-        
-        for col in merge_candidates:
-            if col in detalle_cols and col in glosa_cols:
-                merge_columns.append(detalle_col_map[col])
-        
-        # Solo hacer merge si tenemos codigo_servicio para evitar concatenaciones masivas
-        has_specific_merge = 'codigo_servicio' in [c.lower() for c in merge_columns]
-        
-        if has_specific_merge and merge_columns:
-            print(f"   [DEBUG] Columnas de merge encontradas: {merge_columns}")
-            # Verificar que existan las columnas en glosa
+        # PRIORIDAD: usar id_detalle si existe en ambos (conexión directa)
+        if 'id_detalle' in detalle_cols and 'id_detalle' in glosa_cols:
+            print(f"   [INFO] Usando id_detalle para merge directo (conexión específica)")
+            
             if "codigo_glosa" in glosa_result.columns or "justificacion_glosa" in glosa_result.columns:
-                # Preparar merge agrupando glosa por las columnas de merge
-                glosa_merge = self._prepare_glosa_merge_multi(glosa_result, merge_columns)
+                # Preparar glosa para merge por id_detalle
+                glosa_merge = self._prepare_glosa_merge_by_id_detalle_direct(glosa_result)
                 
                 if not glosa_merge.empty:
-                    detalle_result = detalle_result.merge(glosa_merge, on=merge_columns, how="left")
+                    # Hacer merge directo por id_detalle
+                    detalle_result = detalle_result.merge(
+                        glosa_merge, 
+                        on='id_detalle', 
+                        how='left'
+                    )
                     
                     cols_added = []
                     if "codigo_glosa" in glosa_merge.columns:
@@ -564,7 +846,7 @@ class CoosaludProcessor(BaseProcessor):
                     if "justificacion_glosa" in glosa_merge.columns:
                         cols_added.append("justificacion_glosa")
                         
-                    print(f"   [OK] Columnas agregadas desde Glosa: {cols_added}")
+                    print(f"   [OK] Columnas agregadas por id_detalle: {cols_added}")
                 else:
                     print(f"   [!] No se pudo preparar datos de glosa para merge")
                     detalle_result["codigo_glosa"] = ""
@@ -575,10 +857,7 @@ class CoosaludProcessor(BaseProcessor):
                 detalle_result["codigo_glosa"] = ""
                 detalle_result["justificacion_glosa"] = ""
         else:
-            # Sin codigo_servicio, NO hacer merge para evitar concatenación masiva
-            print(f"   [WARN] No hay columna específica (codigo_servicio) para vincular servicios con glosas")
-            print(f"   [INFO] Las columnas codigo_glosa y justificacion_glosa estarán vacías en Detalles")
-            print(f"   [INFO] Consulte la hoja 'Glosa' del Excel para ver las observaciones completas")
+            print(f"   [WARN] No existe id_detalle en ambos archivos, no se puede hacer merge específico")
             detalle_result["codigo_glosa"] = ""
             detalle_result["justificacion_glosa"] = ""
         
@@ -937,6 +1216,9 @@ class CoosaludProcessor(BaseProcessor):
         combined_detalle = pd.concat(all_detalles, ignore_index=True)
         combined_glosa = pd.concat(all_glosas, ignore_index=True)
         
+        # Agregar fecha del correo
+        combined_detalle["fecha_correo"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
         # Merge usando columnas comunes para traer codigo_glosa y justificacion_glosa a Detalles
         print(f"\n[PROC] Agregando codigo_glosa y justificacion_glosa a Detalles...")
         
@@ -950,26 +1232,23 @@ class CoosaludProcessor(BaseProcessor):
         
         # Mapeo para preservar case original
         detalle_col_map = {c.lower(): c for c in combined_detalle.columns}
+        glosa_col_map = {c.lower(): c for c in combined_glosa.columns}
         
-        # Columnas candidatas para merge (necesitamos codigo_servicio para merge específico)
-        merge_candidates = ['id_cuenta', 'numero_factura', 'docpaciente', 'codigo_servicio']
-        merge_columns = []
-        
-        for col in merge_candidates:
-            if col in detalle_cols and col in glosa_cols:
-                merge_columns.append(detalle_col_map[col])
-        
-        # Solo hacer merge si tenemos codigo_servicio para evitar concatenaciones masivas
-        has_specific_merge = 'codigo_servicio' in [c.lower() for c in merge_columns]
-        
-        if has_specific_merge and merge_columns:
-            print(f"   [DEBUG] Columnas de merge encontradas: {merge_columns}")
+        # PRIORIDAD: usar id_detalle si existe en ambos (conexión directa)
+        if 'id_detalle' in detalle_cols and 'id_detalle' in glosa_cols:
+            print(f"   [INFO] Usando id_detalle para merge directo (conexión específica)")
+            
             if "codigo_glosa" in combined_glosa.columns or "justificacion_glosa" in combined_glosa.columns:
-                # Usar el método especial para manejar duplicados
-                glosa_merge = self._prepare_glosa_merge_multi(combined_glosa, merge_columns)
+                # Preparar glosa para merge por id_detalle
+                glosa_merge = self._prepare_glosa_merge_by_id_detalle_direct(combined_glosa)
                 
                 if not glosa_merge.empty:
-                    combined_detalle = combined_detalle.merge(glosa_merge, on=merge_columns, how="left")
+                    # Hacer merge directo por id_detalle
+                    combined_detalle = combined_detalle.merge(
+                        glosa_merge, 
+                        on='id_detalle', 
+                        how='left'
+                    )
                     
                     cols_added = []
                     if "codigo_glosa" in glosa_merge.columns:
@@ -977,7 +1256,7 @@ class CoosaludProcessor(BaseProcessor):
                     if "justificacion_glosa" in glosa_merge.columns:
                         cols_added.append("justificacion_glosa")
                         
-                    print(f"   [OK] Columnas agregadas: {cols_added}")
+                    print(f"   [OK] Columnas agregadas por id_detalle: {cols_added}")
                 else:
                     print(f"   [!] No se pudo preparar datos de glosa para merge")
                     combined_detalle["codigo_glosa"] = ""
@@ -987,10 +1266,7 @@ class CoosaludProcessor(BaseProcessor):
                 combined_detalle["codigo_glosa"] = ""
                 combined_detalle["justificacion_glosa"] = ""
         else:
-            # Sin codigo_servicio, NO hacer merge para evitar concatenación masiva
-            print(f"   [WARN] No hay columna específica (codigo_servicio) para vincular servicios con glosas")
-            print(f"   [INFO] Las columnas codigo_glosa y justificacion_glosa estarán vacías en Detalles")
-            print(f"   [INFO] Consulte la hoja 'Glosa' del Excel para ver las observaciones completas")
+            print(f"   [WARN] No existe id_detalle en ambos archivos, no se puede hacer merge específico")
             combined_detalle["codigo_glosa"] = ""
             combined_detalle["justificacion_glosa"] = ""
         
