@@ -48,6 +48,19 @@ def main(page: ft.Page):
     # Nota: Flet no soporta window_min_width/height directamente
     # El tamaño mínimo se controla validando en los métodos go_to_*
     
+    # Atajos de teclado para navegación
+    def handle_keyboard(e):
+        """Maneja los atajos de teclado"""
+        if e.key == "Escape":
+            # ESC para ir hacia atrás
+            go_back()
+        elif e.key == "F5":
+            # F5 para actualizar en vista de mensajes
+            if current_view["name"] == "messages":
+                load_messages(messages_view.search_info_text.value or "")
+    
+    page.on_keyboard_event = handle_keyboard
+    
     # FORZAR modo claro (ignorar tema del sistema)
     page.theme_mode = ft.ThemeMode.LIGHT
     page.bgcolor = COLORS["bg_white"]
@@ -89,9 +102,6 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        if not page.window.full_screen:
-            page.window.width = WINDOW_SIZES["main"]["width"]
-            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_method_selection():
@@ -107,9 +117,6 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        if not page.window.full_screen:
-            page.window.width = WINDOW_SIZES["main"]["width"]
-            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_dashboard():
@@ -143,9 +150,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        if not page.window.full_screen:
-            page.window.width = WINDOW_SIZES["main"]["width"]
-            page.window.height = WINDOW_SIZES["main"]["height"]
+        # Ocultar cualquier loading activo
+        dashboard_view.hide_loading()
+        tools_view.hide_loading()
         page.update()
     
     def go_to_homologacion():
@@ -161,9 +168,8 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        if not page.window.full_screen:
-            page.window.width = WINDOW_SIZES["main"]["width"]
-            page.window.height = WINDOW_SIZES["main"]["height"]
+        # Ocultar cualquier loading activo
+        tools_view.hide_loading()
         page.update()
     
     def go_to_mix_excel():
@@ -179,9 +185,8 @@ def main(page: ft.Page):
         homologador_manual_view.hide()
         mix_excel_view.show()
         web_download_view.hide()
-        if not page.window.full_screen:
-            page.window.width = WINDOW_SIZES["main"]["width"]
-            page.window.height = WINDOW_SIZES["main"]["height"]
+        # Ocultar cualquier loading activo
+        tools_view.hide_loading()
         page.update()
     
     def go_to_homologador_manual():
@@ -197,9 +202,8 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.show()
         web_download_view.hide()
-        if not page.window.full_screen:
-            page.window.width = WINDOW_SIZES["main"]["width"]
-            page.window.height = WINDOW_SIZES["main"]["height"]
+        # Ocultar cualquier loading activo
+        tools_view.hide_loading()
         page.update()
     
     def go_to_web_download():
@@ -215,9 +219,6 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.show()
-        if not page.window.full_screen:
-            page.window.width = WINDOW_SIZES["main"]["width"]
-            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_eps_selection():
@@ -233,9 +234,9 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        if not page.window.full_screen:
-            page.window.width = WINDOW_SIZES["main"]["width"]
-            page.window.height = WINDOW_SIZES["main"]["height"]
+        # Ocultar cualquier loading activo
+        dashboard_view.hide_loading()
+        tools_view.hide_loading()
         page.update()
     
     def go_to_messages():
@@ -290,6 +291,8 @@ def main(page: ft.Page):
         """Callback cuando se selecciona una acción del dashboard"""
         app_state["dashboard_action"] = action_key
         go_to_eps_selection()
+        # Ocultar loading del dashboard después de navegar
+        dashboard_view.hide_loading()
     
     def on_eps_selected(eps_info, date_from, date_to):
         """Callback cuando se selecciona una EPS"""
@@ -793,8 +796,23 @@ def main(page: ft.Page):
     eps_screen = EpsScreen(
         page=page,
         on_eps_selected=on_eps_selected,
-        on_logout=go_to_dashboard
+        on_logout=go_to_dashboard,
+        on_back=go_to_dashboard
     )
+    
+    # Configurar navegación disponible en page.data para las vistas
+    page.data = {
+        'navigation_controller': {
+            'go_to_dashboard': go_to_dashboard,
+            'go_to_eps_selection': go_to_eps_selection,
+            'go_to_messages': go_to_messages,
+            'go_to_tools': go_to_tools,
+            'go_to_homologacion': go_to_homologacion,
+            'go_to_mix_excel': go_to_mix_excel,
+            'go_to_homologador_manual': go_to_homologador_manual,
+            'go_back': go_back
+        }
+    }
     
     # Inicializar NavigationController con todas las vistas
     views_dict = {

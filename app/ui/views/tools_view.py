@@ -5,6 +5,7 @@ import flet as ft
 import os
 from app.ui.styles import COLORS, FONT_SIZES
 from app.ui.components.navigation_header import NavigationHeader
+from app.ui.components.loading_overlay import LoadingOverlay, ToastNotification, LoadingButton
 
 
 class ToolsView:
@@ -19,6 +20,11 @@ class ToolsView:
         self.on_mix_excel = on_mix_excel
         self.on_homologador_manual = on_homologador_manual
         self.nav_header = NavigationHeader(page, navigation_controller)
+        
+        # Componentes de loading
+        self.loading_overlay = LoadingOverlay(page)
+        self.toast = ToastNotification(page)
+        
         self.container = self.build()
         
     def _create_tool_card(self, icon, title, description, color, on_click_action, image_src=None):
@@ -88,7 +94,7 @@ class ToolsView:
                                 "Gestión Homologación",
                                 "Agregar/editar códigos de homologación",
                                 "#4CAF50",
-                                lambda e: self.on_homologacion() if self.on_homologacion else None,
+                                lambda e: self._handle_homologacion(),
                                 image_src=os.path.join(self.assets_dir, "img", "homologar.png")
                             ),
                             self._create_tool_card(
@@ -96,7 +102,7 @@ class ToolsView:
                                 "Mix Excel",
                                 "Transferir datos entre archivos Excel",
                                 "#2196F3",
-                                lambda e: self.on_mix_excel() if self.on_mix_excel else None,
+                                lambda e: self._handle_mix_excel(),
                                 image_src=os.path.join(self.assets_dir, "img", "mix_excel.png")
                             ),
                         ], spacing=20, alignment=ft.MainAxisAlignment.CENTER),
@@ -107,7 +113,7 @@ class ToolsView:
                                 "Homologador Manual",
                                 "Homologar archivos Excel por EPS",
                                 "#FF9800",
-                                lambda e: self.on_homologador_manual() if self.on_homologador_manual else None,
+                                lambda e: self._handle_homologador_manual(),
                                 image_src=os.path.join(self.assets_dir, "img", "homologador_manual.png")
                             ),
                             self._create_tool_card(
@@ -115,7 +121,7 @@ class ToolsView:
                                 "Configuración",
                                 "Ajustes de la aplicación",
                                 "#9C27B0",
-                                lambda e: print("Configuración - TODO")
+                                lambda e: self._handle_settings()
                             ),
                         ], spacing=20, alignment=ft.MainAxisAlignment.CENTER),
                     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
@@ -129,6 +135,43 @@ class ToolsView:
         )
         
         return self.container
+    
+    def show_loading(self, message="Cargando..."):
+        """Muestra el overlay de carga"""
+        if self.loading_overlay:
+            self.loading_overlay.show(message)
+    
+    def hide_loading(self):
+        """Oculta el overlay de carga"""
+        if self.loading_overlay:
+            self.loading_overlay.hide()
+    
+    def show_toast(self, message, toast_type="success"):
+        """Muestra una notificación toast"""
+        if self.toast:
+            self.toast.show(message, toast_type)
+    
+    def _handle_homologacion(self):
+        """Maneja la navegación a homologación con loading"""
+        if self.on_homologacion:
+            self.show_loading("Cargando Gestión de Homologación...")
+            self.on_homologacion()
+    
+    def _handle_mix_excel(self):
+        """Maneja la navegación a mix excel con loading"""
+        if self.on_mix_excel:
+            self.show_loading("Cargando Mix Excel...")
+            self.on_mix_excel()
+    
+    def _handle_homologador_manual(self):
+        """Maneja la navegación a homologador manual con loading"""
+        if self.on_homologador_manual:
+            self.show_loading("Cargando Homologador Manual...")
+            self.on_homologador_manual()
+    
+    def _handle_settings(self):
+        """Maneja el acceso a configuración"""
+        self.show_toast("Configuración - Función en desarrollo", "info")
     
     def show(self):
         """Muestra la vista"""

@@ -5,6 +5,7 @@ Soporte completo de temas claro/oscuro
 import flet as ft
 from app.ui.styles import COLORS, FONT_SIZES, SPACING, WINDOW_SIZES
 from app.ui.components.message_row import MessageRow
+from app.ui.components.loading_overlay import LoadingOverlay, ToastNotification, LoadingButton
 
 
 class MessagesView:
@@ -30,6 +31,10 @@ class MessagesView:
         # Estado
         self.selected_messages = set()
         self.message_rows = {}  # Diccionario para acceder a MessageRow por ID
+        
+        # Componentes de loading y feedback
+        self.loading_overlay = LoadingOverlay(page)
+        self.toast_notification = ToastNotification(page)
         
         # Componentes - sin colores hardcodeados para soporte de temas
         self.messages_list = ft.Column([], scroll=ft.ScrollMode.AUTO, expand=True, spacing=0)
@@ -104,29 +109,53 @@ class MessagesView:
         """Crea el contenedor de la vista"""
         back_btn = ft.IconButton(
             icon=ft.Icons.ARROW_BACK,
-            tooltip="Volver",
+            tooltip="Volver (ESC)",
             on_click=lambda e: self.on_back()
         )
         
         refresh_btn = ft.IconButton(
             icon=ft.Icons.REFRESH,
-            tooltip="Actualizar",
+            tooltip="Actualizar (F5)",
             on_click=lambda e: self.on_refresh()
         )
+        
+        # Breadcrumb navigation
+        breadcrumb = ft.Row([
+            ft.TextButton(
+                "Dashboard",
+                style=ft.ButtonStyle(color=ft.Colors.BLUE),
+                on_click=lambda e: self.page.data.get('navigation_controller', {}).get('go_to_dashboard', lambda: None)() if hasattr(self.page, 'data') and self.page.data else None
+            ),
+            ft.Text(" > ", color=ft.Colors.GREY),
+            ft.TextButton(
+                "Selección EPS",
+                style=ft.ButtonStyle(color=ft.Colors.BLUE),
+                on_click=lambda e: self.on_back()
+            ),
+            ft.Text(" > ", color=ft.Colors.GREY),
+            ft.Text("Mensajes", weight=ft.FontWeight.BOLD),
+        ], spacing=0)
         
         # Usar Card para el header - soporte de temas automático
         return ft.Column([
             # Header
             ft.Card(
                 content=ft.Container(
-                    content=ft.Row([
+                    content=ft.Column([
                         ft.Row([
-                            back_btn,
-                            ft.Text("Correos con 'glosa'", size=FONT_SIZES["heading"], 
-                                   weight=ft.FontWeight.W_400),
-                        ], spacing=0),
-                        refresh_btn
-                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                            ft.Row([
+                                back_btn,
+                                ft.Text("Correos con 'glosa'", size=FONT_SIZES["heading"], 
+                                       weight=ft.FontWeight.W_400),
+                            ], spacing=0),
+                            refresh_btn
+                        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                        # Breadcrumb
+                        ft.Container(
+                            content=breadcrumb,
+                            padding=ft.padding.only(left=45, top=5)
+                        )
+                    ], spacing=5),
                     padding=SPACING["md"],
                 ),
                 elevation=0,
@@ -219,6 +248,32 @@ class MessagesView:
         
         self.page.update()
     
+    # ==================== MÉTODOS DE LOADING Y FEEDBACK ====================
+    
+    def show_loading(self, message: str):
+        """Muestra overlay de carga con mensaje"""
+        self.loading_overlay.show(message)
+    
+    def hide_loading(self):
+        """Oculta overlay de carga"""
+        self.loading_overlay.hide()
+    
+    def show_toast(self, message: str, is_success: bool = True):
+        """Muestra notificación toast"""
+        self.toast_notification.show(message, is_success)
+    
+    def set_loading_progress(self, current: int, total: int, message: str = ""):
+        """Actualiza progreso de carga"""
+        if total > 0:
+            progress = current / total
+            self.processing_progress.value = progress
+            self.processing_percentage.value = f"{int(progress * 100)}%"
+        
+        if message:
+            self.processing_status.value = message
+        
+        self.page.update()
+
     def show_messages(self, messages, search_info=""):
         """
         Muestra una lista de mensajes

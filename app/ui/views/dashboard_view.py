@@ -5,6 +5,7 @@ import flet as ft
 import os
 from app.ui.styles import COLORS, FONT_SIZES, SPACING
 from app.config.settings import APP_VERSION
+from app.ui.components.loading_overlay import LoadingOverlay, ToastNotification
 
 
 class DashboardView:
@@ -17,6 +18,11 @@ class DashboardView:
         self.on_tools_click = on_tools_click
         self.on_logout = on_logout
         self.on_web_download = on_web_download
+        
+        # Componentes de loading
+        self.loading_overlay = LoadingOverlay(page)
+        self.toast = ToastNotification(page)
+        
         self.container = self.build()
         
     def _create_dashboard_card(self, icon, title, subtitle, color, action_key, image_path=None):
@@ -52,8 +58,20 @@ class DashboardView:
             self.page.update()
         
         def on_click(e):
+            """Maneja el click en la card con feedback visual"""
             if self.on_card_click:
-                self.on_card_click(action_key)
+                import threading
+                self.show_loading(f"Cargando {title}...")
+                
+                def navigate():
+                    try:
+                        self.on_card_click(action_key)
+                    finally:
+                        # Asegurarse de ocultar el loading aunque haya errores
+                        self.hide_loading()
+                
+                # Usar thread para evitar congelar la UI
+                threading.Thread(target=navigate, daemon=True).start()
         
         card_content = ft.Column([
                 visual_element,
@@ -241,6 +259,41 @@ class DashboardView:
         
         return self.container
     
+    def show_loading(self, message="Cargando..."):
+        """Muestra el overlay de carga"""
+        if self.loading_overlay:
+            self.loading_overlay.show(message)
+    
+    def hide_loading(self):
+        """Oculta el overlay de carga"""
+        if self.loading_overlay:
+            self.loading_overlay.hide()
+    
+    def show_toast(self, message, toast_type="success"):
+        """Muestra una notificación toast"""
+        if self.toast:
+            self.toast.show(message, toast_type)
+    
+    def _check_updates(self, e):
+        """Abre el diálogo de verificación de actualizaciones con loading"""
+        try:
+            self.show_loading("Verificando actualizaciones...")
+            
+            # Obtener función de verificación desde page.data
+            if hasattr(self.page, 'data') and self.page.data:
+                check_fn = self.page.data.get('check_updates')
+                if check_fn:
+                    check_fn()
+                else:
+                    self.show_toast("Función de actualización no disponible", "warning")
+            else:
+                self.show_toast("No se pudo verificar actualizaciones", "error")
+                
+        except Exception as ex:
+            self.show_toast(f"Error al verificar actualizaciones: {str(ex)}", "error")
+        finally:
+            self.hide_loading()
+    
     def show(self):
         """Muestra la vista"""
         if self.container:
@@ -252,17 +305,3 @@ class DashboardView:
         if self.container:
             self.container.visible = False
             self.page.update()
-    
-    def _check_updates(self, e):
-        """Abre el diálogo de verificación de actualizaciones"""
-        # Obtener función de verificación desde page.data
-        if hasattr(self.page, 'data') and self.page.data:
-            check_fn = self.page.data.get('check_updates')
-            if check_fn:
-                check_fn()
-            else:
-                # Fallback: crear un nuevo verificador
-                from app.ui.components.update_dialog import UpdateChecker
-                from app.config.settings import GITHUB_REPO
-                checker = UpdateChecker(self.page, APP_VERSION, GITHUB_REPO)
-                checker.check_updates()

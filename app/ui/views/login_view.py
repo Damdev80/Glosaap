@@ -6,6 +6,7 @@ import threading
 import os
 from app.ui.styles import FONT_SIZES, SPACING, WINDOW_SIZES
 from app.core.session_manager import save_session, load_session, clear_session
+from app.ui.components.loading_overlay import LoadingOverlay, LoadingButton, ToastNotification
 
 
 class LoginView:
@@ -17,6 +18,10 @@ class LoginView:
         self.on_login_success = on_login_success
         self.assets_dir = assets_dir
         self.container = None
+        
+        # Componentes de loading y feedback
+        self.loading_overlay = LoadingOverlay(page)
+        self.toast_notification = ToastNotification(page)
         
         # Controles
         self.email_input = None
@@ -73,14 +78,12 @@ class LoginView:
             width=200
         )
         
-        self.login_button = ft.ElevatedButton(
-            content=ft.Text("Iniciar Sesión", size=16, weight=ft.FontWeight.W_600),
+        self.login_button = LoadingButton(
+            text="Iniciar Sesión",
+            icon=ft.Icons.LOGIN,
+            on_click=self._handle_login,
             width=380,
-            height=52,
-            style=ft.ButtonStyle(
-                shape=ft.RoundedRectangleBorder(radius=12),
-            ),
-            on_click=self._handle_login
+            height=52
         )
         
         # Ruta del logo
@@ -193,29 +196,26 @@ class LoginView:
             # Intentar conectar automáticamente
             def auto_connect():
                 try:
-                    self.show_status("🔄 Reconectando...")
-                    self.login_progress.visible = True
-                    self.page.update()
+                    self.loading_overlay.show("ð Reconectando con sesión guardada...")
                     
-                    self.email_service.connect(
-                        saved_session["email"],
-                        saved_session["password"],
-                        saved_session.get("server", "imap.gmail.com")
-                    )
+                    email = saved_session["email"]
+                    password = saved_session["password"]
+                    server = saved_session.get("server", "")
                     
-                    self.login_progress.visible = False
-                    self.show_status("✅ Sesión restaurada")
-                    self.page.update()
+                    self.email_service.connect(email, password, server)
+                    
+                    self.loading_overlay.hide()
+                    self.toast_notification.show("¡Reconectado exitosamente!")
                     
                     # Callback de éxito
                     if self.on_login_success:
                         self.on_login_success()
-                    
+                        
                 except Exception as ex:
-                    self.login_progress.visible = False
-                    self.show_status(f"Sesión expirada - Ingresa de nuevo", True)
-                    clear_session()
-                    self.page.update()
+                    self.loading_overlay.hide()
+                    self.toast_notification.show(f"Error de reconexión: {str(ex)}", False)
+                    
+            threading.Thread(target=auto_connect, daemon=True).start()
             
             threading.Thread(target=auto_connect, daemon=True).start()
     
@@ -269,3 +269,17 @@ class LoginView:
         self.server_input.value = ""
         self.status_text.value = ""
         self.page.update()
+    
+    # ==================== MÉTODOS DE LOADING Y FEEDBACK ====================
+    
+    def show_loading_overlay(self, message: str):
+        """Muestra overlay de carga"""
+        self.loading_overlay.show(message)
+    
+    def hide_loading_overlay(self):
+        """Oculta overlay de carga"""
+        self.loading_overlay.hide()
+    
+    def show_toast(self, message: str, is_success: bool = True):
+        """Muestra notificación toast"""
+        self.toast_notification.show(message, is_success)

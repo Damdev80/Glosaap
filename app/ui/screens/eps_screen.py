@@ -12,16 +12,18 @@ from app.config.eps_config import get_eps_list
 class EpsScreen:
     """Pantalla para seleccionar EPS y rango de fechas"""
     
-    def __init__(self, page: ft.Page, on_eps_selected=None, on_logout=None):
+    def __init__(self, page: ft.Page, on_eps_selected=None, on_logout=None, on_back=None):
         """
         Args:
             page: Página de Flet
             on_eps_selected: Callback(eps_info, date_from, date_to) al seleccionar EPS
             on_logout: Callback al cerrar sesión
+            on_back: Callback para navegar atrás
         """
         self.page = page
         self.on_eps_selected = on_eps_selected
         self.on_logout = on_logout
+        self.on_back = on_back
         
         # Cargar lista de EPS desde configuración
         self.eps_list = get_eps_list()
@@ -85,6 +87,11 @@ class EpsScreen:
             "La fecha 'Desde' no puede ser mayor que la fecha 'Hasta'.\n\nPor favor, corrige el rango de fechas antes de continuar."
         )
     
+    def _handle_back(self, e):
+        """Maneja el regreso al menú anterior"""
+        if self.on_back:
+            self.on_back()
+    
     def _handle_logout(self, e):
         """Maneja el cierre de sesión"""
         if self.on_logout:
@@ -102,20 +109,38 @@ class EpsScreen:
             alignment=ft.MainAxisAlignment.CENTER
         )
         
+        # Header con navegación
+        header = ft.Container(
+            content=ft.Row([
+                ft.IconButton(
+                    icon=ft.Icons.ARROW_BACK,
+                    icon_color=COLORS["primary"],
+                    icon_size=24,
+                    tooltip="Volver al Dashboard",
+                    on_click=self._handle_back
+                ),
+                ft.Text(
+                    "Gestor de Glosas",
+                    size=20,
+                    weight=ft.FontWeight.W_600,
+                    color=COLORS["text_primary"]
+                ),
+                ft.Container(expand=True),  # Espaciador
+            ], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            padding=ft.padding.symmetric(horizontal=20, vertical=10),
+            bgcolor=COLORS["bg_white"],
+            border=ft.border.only(bottom=ft.BorderSide(1, COLORS["border"]))
+        )
+        
         # Contenedor principal
         self.view = ft.Container(
             content=ft.Column([
-                ft.Container(height=SPACING["md"]),
+                # Header de navegación
+                header,
                 
-                # Título
-                ft.Text(
-                    "Gestor de Glosas",
-                    size=38,
-                    weight=ft.FontWeight.BOLD,
-                    color=COLORS["text_primary"],
-                    text_align=ft.TextAlign.CENTER
-                ),
-                ft.Container(height=4),
+                ft.Container(height=SPACING["sm"]),
+                
+                # Subtítulo
                 ft.Text(
                     "Busca y procesa notificaciones de glosas por EPS",
                     size=15,
@@ -193,16 +218,6 @@ class EpsScreen:
                         )
                     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                 ),
-                
-                ft.Container(height=SPACING["md"]),
-                
-                # Botón de volver al dashboard
-                ft.TextButton(
-                    "← Volver al menú",
-                    icon=ft.Icons.ARROW_BACK,
-                    on_click=self._handle_logout,
-                    style=ft.ButtonStyle(color=COLORS["text_secondary"])
-                )
                 
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO),
             padding=ft.padding.all(SPACING["lg"]),
