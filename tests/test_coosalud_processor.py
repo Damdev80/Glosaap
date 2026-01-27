@@ -94,11 +94,11 @@ class TestCoosaludProcessor:
     
     # ==================== TESTS DE MERGE CON GLOSA ====================
     
-    def test_prepare_glosa_merge_prioritizes_au(self, processor):
-        """Prioriza códigos que empiezan con AU"""
+    def test_prepare_glosa_merge_prioritizes_fa(self, processor):
+        """Prioriza códigos que empiezan con FA (mayor prioridad)"""
         glosa_df = pd.DataFrame({
             'id_detalle': [1, 1, 1],
-            'codigo_glosa': ['XX123', 'AU456', 'SO789'],
+            'codigo_glosa': ['XX123', 'FA456', 'SO789'],
             'justificacion_glosa': ['Just 1', 'Just 2', 'Just 3']
         })
         
@@ -106,11 +106,11 @@ class TestCoosaludProcessor:
         
         # Debe haber solo 1 fila para id_detalle=1
         assert len(result) == 1
-        # Debe priorizar AU456
-        assert result.loc[0, 'codigo_glosa'] == 'AU456'
+        # Debe priorizar FA456 (FA > SO > AU > CO > CL > TA)
+        assert result.loc[0, 'codigo_glosa'] == 'FA456'
     
     def test_prepare_glosa_merge_prioritizes_so(self, processor):
-        """Prioriza SO si no hay AU"""
+        """Prioriza SO si no hay FA"""
         glosa_df = pd.DataFrame({
             'id_detalle': [1, 1],
             'codigo_glosa': ['XX123', 'SO789'],
@@ -121,8 +121,20 @@ class TestCoosaludProcessor:
         
         assert result.loc[0, 'codigo_glosa'] == 'SO789'
     
+    def test_prepare_glosa_merge_prioritizes_au(self, processor):
+        """Prioriza AU si no hay FA ni SO"""
+        glosa_df = pd.DataFrame({
+            'id_detalle': [1, 1],
+            'codigo_glosa': ['XX123', 'AU999'],
+            'justificacion_glosa': ['Just 1', 'Just 2']
+        })
+        
+        result = processor._prepare_glosa_merge(glosa_df)
+        
+        assert result.loc[0, 'codigo_glosa'] == 'AU999'
+
     def test_prepare_glosa_merge_prioritizes_cl(self, processor):
-        """Prioriza CL si no hay AU ni SO"""
+        """Prioriza CL si no hay FA, SO ni AU"""
         glosa_df = pd.DataFrame({
             'id_detalle': [1, 1],
             'codigo_glosa': ['XX123', 'CL999'],

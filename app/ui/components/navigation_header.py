@@ -4,6 +4,7 @@ Integrado con NavigationController existente
 """
 import flet as ft
 from app.ui.styles import COLORS, FONT_SIZES, SPACING
+from typing import Callable, List, Optional
 
 
 class NavigationHeader:
@@ -18,9 +19,9 @@ class NavigationHeader:
         title: str,
         show_back: bool = True,
         back_text: str = "← Atrás",
-        custom_back_action: callable = None,
-        breadcrumb: list = None,
-        actions: list = None
+        custom_back_action: Optional[Callable] = None,
+        breadcrumb: Optional[List] = None,
+        actions: Optional[List] = None
     ) -> ft.Container:
         """
         Construye header con navegación
@@ -82,7 +83,7 @@ class NavigationHeader:
             )
         )
     
-    def _create_back_button(self, text: str, custom_action: callable = None) -> ft.ElevatedButton:
+    def _create_back_button(self, text: str, custom_action: Optional[Callable] = None) -> ft.ElevatedButton:
         """Crea botón de regreso"""
         
         def on_click(e):

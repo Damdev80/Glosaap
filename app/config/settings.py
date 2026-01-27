@@ -12,7 +12,7 @@ from pathlib import Path
 
 # Versión actual de la aplicación (seguir semver: MAJOR.MINOR.PATCH)
 # Actualizar manualmente en cada release
-APP_VERSION = "0.11.5"
+APP_VERSION = "0.11.7"
 
 # Nombre de la aplicación
 APP_NAME = "Glosaap"
@@ -56,7 +56,7 @@ NETWORK_PATHS = {
 # Archivos de homologación por EPS
 HOMOLOGADOR_FILES = {
     "mutualser": os.path.join(NETWORK_PATHS["homologador"], "mutualser_homologacion.xlsx"),
-    "coosalud": os.path.join(NETWORK_PATHS["homologador"], "mutualser_homologacion.xlsx"),  # Usa el mismo
+    "coosalud": os.path.join(NETWORK_PATHS["homologador"], "coosalud_homologacion.xlsx"),
 }
 
 # ==================== CONFIGURACIÓN IMAP ====================

@@ -63,8 +63,10 @@ def get_version():
     try:
         import importlib.util
         spec = importlib.util.spec_from_file_location("settings", "app/config/settings.py")
-        settings = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(settings)
+        if spec and spec.loader:
+            settings = importlib.util.module_from_spec(spec)
+        if spec and spec.loader:
+            spec.loader.exec_module(settings)
         return settings.APP_VERSION
     except Exception as e:
         print(f"⚠️  Error obteniendo versión: {e}")
