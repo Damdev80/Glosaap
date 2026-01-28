@@ -255,7 +255,7 @@ Glosaap/
 
 ## 👨‍💻 Guía de Desarrollo
 
-Para desarrolladores que quieran contribuir al proyecto, consulta la **[Guía de Desarrollo](DEVELOPER_GUIDE.md)** que incluye:
+Para desarrolladores que quieran contribuir al proyecto, consulta la **[Guía de Desarrollo](docs/DEVELOPER_GUIDE.md)** que incluye:
 
 - 🏗️ Arquitectura del proyecto
 - 🎨 Sistema de temas (claro/oscuro)
