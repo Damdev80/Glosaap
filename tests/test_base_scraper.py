@@ -79,7 +79,7 @@ class TestBaseScraperLog:
     def test_log_with_none_callback_no_error(self, tmp_path):
         """log() con callback None no da error"""
         scraper = ConcreteScraper(download_dir=str(tmp_path))
-        scraper.progress_callback = None
+        scraper.progress_callback = None  # type: ignore
         
         # No debería fallar
         scraper.log("Test")
@@ -99,7 +99,7 @@ class TestBaseScraperAbstract:
     def test_cannot_instantiate_directly(self, tmp_path):
         """No se puede instanciar directamente"""
         with pytest.raises(TypeError):
-            BaseScraper(download_dir=str(tmp_path))
+            BaseScraper(download_dir=str(tmp_path))  # type: ignore
 
 
 class TestBaseScraperConcreteImplementation:

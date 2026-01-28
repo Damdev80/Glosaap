@@ -111,6 +111,25 @@ WINDOW_SIZES = {
     "tools": {"width": 900, "height": 600},
 }
 
+# ==================== CONFIGURACIÓN DE PLAYWRIGHT ====================
+
+def setup_playwright_browsers():
+    """
+    Configura la ruta de navegadores de Playwright.
+    Debe llamarse ANTES de importar playwright.
+    """
+    import sys
+    if sys.platform == 'win32':
+        appdata = os.environ.get('APPDATA', os.path.expanduser('~'))
+        browsers_path = os.path.join(appdata, 'Glosaap', 'browsers')
+        os.environ['PLAYWRIGHT_BROWSERS_PATH'] = browsers_path
+        os.makedirs(browsers_path, exist_ok=True)
+        return browsers_path
+    return None
+
+# Configurar Playwright automáticamente al importar settings
+PLAYWRIGHT_BROWSERS_PATH = setup_playwright_browsers()
+
 # ==================== FUNCIONES DE UTILIDAD ====================
 
 def is_network_available() -> bool:

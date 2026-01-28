@@ -7,18 +7,13 @@ import sys
 import threading
 from typing import Optional, List
 
-# Configurar ruta de navegadores de Playwright ANTES de cualquier import
-if sys.platform == 'win32':
-    appdata = os.getenv('APPDATA', os.path.expanduser('~'))
-    browsers_path = os.path.join(appdata, 'Glosaap', 'browsers')
-    os.environ['PLAYWRIGHT_BROWSERS_PATH'] = browsers_path
-    # Crear directorio si no existe
-    os.makedirs(browsers_path, exist_ok=True)
-
 # Configurar path para imports - agregar el directorio raíz del proyecto
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
+
+# Importar settings (configura Playwright automáticamente)
+from app.config.settings import PLAYWRIGHT_BROWSERS_PATH
 
 from app.service.email_service import EmailService
 from app.ui.styles import COLORS, WINDOW_SIZES

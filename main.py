@@ -5,18 +5,13 @@ Ejecuta la nueva versión modular de la aplicación
 import sys
 import os
 
-# Configurar ruta de navegadores de Playwright ANTES de cualquier import
-if sys.platform == 'win32':
-    appdata = os.getenv('APPDATA', os.path.expanduser('~'))
-    browsers_path = os.path.join(appdata, 'Glosaap', 'browsers')
-    os.environ['PLAYWRIGHT_BROWSERS_PATH'] = browsers_path
-    # Crear directorio si no existe
-    os.makedirs(browsers_path, exist_ok=True)
-
 # Agregar el directorio raíz al path para imports
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
+
+# Importar settings primero (configura Playwright automáticamente)
+from app.config.settings import PLAYWRIGHT_BROWSERS_PATH
 
 # Importar y ejecutar la app
 from app.ui.app import main

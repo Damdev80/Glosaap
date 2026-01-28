@@ -65,15 +65,15 @@ class TestAuthServiceLogin:
         on_error = Mock()
         
         # Ejecutar login directamente sin thread
-        service.client = mock_client
+        service.client = mock_client  # type: ignore
         mock_client.connect.return_value = True
         
-        service.client.connect("test@email.com", "password")
+        service.client.connect("test@email.com", "password")  # type: ignore
         service.is_authenticated = True
-        service.current_email = "test@email.com"
+        service.current_email = "test@email.com"  # type: ignore
         
         assert service.is_authenticated is True
-        assert service.current_email == "test@email.com"
+        assert service.current_email == "test@email.com"  # type: ignore
 
 
 class TestAuthServiceLogout:
@@ -82,9 +82,9 @@ class TestAuthServiceLogout:
     def test_logout_clears_client(self):
         """logout limpia el cliente"""
         service = AuthService()
-        service.client = MagicMock()
+        service.client = MagicMock()  # type: ignore
         service.is_authenticated = True
-        service.current_email = "test@email.com"
+        service.current_email = "test@email.com"  # type: ignore
         
         service.logout()
         
@@ -93,7 +93,7 @@ class TestAuthServiceLogout:
     def test_logout_clears_authentication(self):
         """logout marca como no autenticado"""
         service = AuthService()
-        service.client = MagicMock()
+        service.client = MagicMock()  # type: ignore
         service.is_authenticated = True
         
         service.logout()
@@ -103,8 +103,8 @@ class TestAuthServiceLogout:
     def test_logout_clears_email(self):
         """logout limpia current_email"""
         service = AuthService()
-        service.client = MagicMock()
-        service.current_email = "test@email.com"
+        service.client = MagicMock()  # type: ignore
+        service.current_email = "test@email.com"  # type: ignore
         
         service.logout()
         
@@ -120,7 +120,7 @@ class TestAuthServiceLogout:
         service = AuthService()
         mock_client = MagicMock()
         mock_client.logout.side_effect = Exception("Connection error")
-        service.client = mock_client
+        service.client = mock_client  # type: ignore
         
         # No debería lanzar excepción
         service.logout()
@@ -134,7 +134,7 @@ class TestAuthServiceGetClient:
         """Retorna cliente cuando está autenticado"""
         service = AuthService()
         mock_client = MagicMock()
-        service.client = mock_client
+        service.client = mock_client  # type: ignore
         service.is_authenticated = True
         
         result = service.get_client()
@@ -144,7 +144,7 @@ class TestAuthServiceGetClient:
     def test_get_client_when_not_authenticated(self):
         """Retorna None cuando no está autenticado"""
         service = AuthService()
-        service.client = MagicMock()
+        service.client = MagicMock()  # type: ignore
         service.is_authenticated = False
         
         result = service.get_client()

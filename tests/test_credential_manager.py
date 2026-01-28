@@ -171,6 +171,7 @@ class TestCredentialManagerLoad:
         
         result = manager.load_credentials("fomag")
         
+        assert result is not None
         assert result["nit"] == "123456"
         assert result["sede"] == "centro"
 
@@ -230,5 +231,6 @@ class TestCredentialManagerSecurity:
         creds = manager.load_credentials("secure")
         
         # Verificar que se pueden acceder
+        assert creds is not None
         assert creds["username"] == "admin"
         assert creds["password"] == "p4ssw0rd!"
