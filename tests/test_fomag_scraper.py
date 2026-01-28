@@ -513,4 +513,4 @@ class TestFomagScraperIntegration:
     def test_class_attributes(self):
         """Test atributos de clase importantes"""
         assert hasattr(FomagScraper, '__doc__')
-        assert 'Fomag' in FomagScraper.__doc__ or 'Horus' in FomagScraper.__doc__
+        assert FomagScraper.__doc__ is not None and ('Fomag' in FomagScraper.__doc__ or 'Horus' in FomagScraper.__doc__)

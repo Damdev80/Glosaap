@@ -388,6 +388,7 @@ class TestHomologacionServiceIntegration:
             
             # Cargar datos
             assert service._cargar() is True
+            assert service.df is not None
             assert len(service.df) == 2
             
             # Buscar código - retorna Serie
