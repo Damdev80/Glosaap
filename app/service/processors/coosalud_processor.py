@@ -56,23 +56,67 @@ class CoosaludProcessor(BaseProcessor):
     
     def _homologar_codigo_glosa(self, codigo: str) -> str:
         """
-        Homologa un codigo_glosa numérico a formato estándar.
+        Homologa un codigo_glosa numérico a formato estándar según resolución 2284.
         
-        Reglas:
-        - Si comienza con letra: retornar tal cual
-        - Si comienza con número: PREFIJO + resto_números + "01"
-        - Caso especial 430 -> AU2103
+        Aplica las siguientes reglas de transformación:
+        - Si el código comienza con letra: se retorna sin modificación
+        - Si comienza con número: se aplica PREFIJO + resto_números + "01" 
+        - Casos especiales predefinidos (ej: "430" -> "AU2103")
         
-        Ejemplos:
-            "203" -> "TA0301" (2=TA, 03=resto, 01=sufijo)
-            "430" -> "AU2103" (caso especial)
-            "AU01" -> "AU01" (ya tiene letra, no modificar)
+        Mapeo de primer dígito a prefijo:
+        - "1" -> "FA" (Factor de riesgo)
+        - "2" -> "TA" (Tarifas)
+        - "3" -> "SO" (Soporte)
+        - "4" -> "AU" (Auditoría)
+        - "5" -> "CO" (Cobertura)
+        - "6" -> "CL" (Clínica)
         
         Args:
-            codigo: Código de glosa original
+            codigo (str): Código de glosa original (puede ser numérico o alfanumérico)
             
         Returns:
-            Código homologado
+            str: Código homologado según resolución 2284
+            
+        Examples:
+            >>> processor = CoosaludProcessor()
+            >>> 
+            >>> # Casos numéricos estándar
+            >>> processor._homologar_codigo_glosa("203")
+            'TA0301'
+            >>> processor._homologar_codigo_glosa("15")
+            'FA1501'
+            >>> processor._homologar_codigo_glosa("4")
+            'AU0401'
+            >>> 
+            >>> # Caso especial
+            >>> processor._homologar_codigo_glosa("430")
+            'AU2103'
+            >>> 
+            >>> # Códigos ya formateados (no se modifican)
+            >>> processor._homologar_codigo_glosa("AU01")
+            'AU01'
+            >>> processor._homologar_codigo_glosa("FA0301")
+            'FA0301'
+            >>> 
+            >>> # Casos edge con padding
+            >>> processor._homologar_codigo_glosa("17")
+            'FA0701'
+            >>> processor._homologar_codigo_glosa("205")
+            'TA0501'
+            >>> 
+            >>> # Casos inválidos
+            >>> processor._homologar_codigo_glosa("")
+            ''
+            >>> processor._homologar_codigo_glosa(None)
+            ''
+            >>> processor._homologar_codigo_glosa("9999")
+            '9999'  # Primer dígito no mapeado, retorna original
+        
+        Note:
+            - Se asegura que el resto numérico tenga al menos 2 dígitos (padding con ceros)
+            - Los códigos vacíos, None o NaN se convierten en string vacío
+            - Si el primer dígito no está en el mapeo, retorna el código original
+            - Es case-insensitive y elimina espacios automáticamente
         """
         if not codigo:
             return ""
@@ -123,13 +167,71 @@ class CoosaludProcessor(BaseProcessor):
         
     def identify_file_pairs(self, file_paths: List[str]) -> List[Dict[str, str]]:
         """
-        Identifica TODOS los pares de archivos de Coosalud agrupados por factura
+        Identifica y empareja archivos de Coosalud por número de factura para procesamiento masivo.
+        
+        Los archivos de Coosalud vienen en pares por cada factura:
+        - DETALLE FC{número}.xlsx: contiene códigos de servicio a homologar
+        - GLOSAS FC{número}.xlsx: contiene códigos de glosa (resolución 2284)
+        
+        Funcionalidades principales:
+        - Extrae números de factura de nombres como "DETALLE FC12345.xlsx"
+        - Empareja archivos del mismo número de factura
+        - Ignora automáticamente archivos de devolución
+        - Reporta archivos sin pareja para diagnóstico
+        - Maneja grandes volúmenes con progreso visible
         
         Args:
-            file_paths: Lista de rutas a los archivos
+            file_paths (List[str]): Lista completa de rutas de archivos a clasificar
             
         Returns:
-            Lista de diccionarios con pares {"detalle": path, "glosa": path, "factura": "FC..."}
+            List[Dict[str, str]]: Lista de pares identificados, cada uno con:
+                - "detalle": ruta del archivo DETALLE FC{num}.xlsx
+                - "glosa": ruta del archivo GLOSAS FC{num}.xlsx  
+                - "factura": número de factura extraído (ej: "FC12345")
+                
+        Examples:
+            >>> processor = CoosaludProcessor()
+            >>> 
+            >>> # Ejemplo básico con archivos pareados
+            >>> archivos = [
+            ...     "/tmp/DETALLE FC12345.xlsx",
+            ...     "/tmp/GLOSAS FC12345.xlsx",
+            ...     "/tmp/DETALLE FC67890.xlsx",
+            ...     "/tmp/GLOSAS FC67890.xlsx",
+            ...     "/tmp/DEVOLUCION FC99999.xlsx"  # Se ignora
+            ... ]
+            >>> pares = processor.identify_file_pairs(archivos)
+            >>> print(len(pares))  # 2
+            >>> print(pares[0])
+            {
+                'detalle': '/tmp/DETALLE FC12345.xlsx',
+                'glosa': '/tmp/GLOSAS FC12345.xlsx', 
+                'factura': 'FC12345'
+            }
+            >>> 
+            >>> # Procesamiento de directorio completo
+            >>> import glob
+            >>> archivos_coosalud = glob.glob("/ruta/coosalud/*.xlsx")
+            >>> pares = processor.identify_file_pairs(archivos_coosalud)
+            >>> print(f"Encontrados {len(pares)} pares de factura para procesar")
+            >>> 
+            >>> # Análisis detallado de resultados
+            >>> for i, par in enumerate(pares[:3]):  # Primeros 3
+            ...     print(f"Par {i+1}: Factura {par['factura']}")
+            ...     print(f"  DETALLE: {os.path.basename(par['detalle'])}")
+            ...     print(f"  GLOSA: {os.path.basename(par['glosa'])}")
+            >>> 
+            >>> # Verificar warnings de archivos sin pareja
+            >>> if processor.warnings:
+            ...     for warning in processor.warnings:
+            ...         print(f"⚠️ {warning}")
+        
+        Note:
+            - Se ignoran automáticamente archivos que contengan "devolucion" en el nombre
+            - Archivos sin número de factura se agrupan por nombre completo 
+            - Se muestra progreso cada 100 archivos para grandes volúmenes
+            - Los warnings se almacenan en self.warnings para revisión posterior
+            - Case-insensitive para palabras clave (DETALLE, GLOSA, DEVOLUCION)
         """
         excel_files = [f for f in file_paths if f.endswith(('.xlsx', '.xls', '.xlsm', '.csv'))]
         
@@ -234,7 +336,69 @@ class CoosaludProcessor(BaseProcessor):
     
     def extract_data(self, identified_files: Dict[str, str]) -> Dict[str, pd.DataFrame]:
         """
-        Extrae los datos de los archivos de Coosalud
+        Extrae y carga datos de los archivos DETALLE y GLOSA de Coosalud en DataFrames.
+        
+        Procesa un par de archivos identificados cargándolos como DataFrames de pandas
+        con validación de errores y logging detallado del proceso.
+        
+        Args:
+            identified_files (Dict[str, str]): Diccionario con rutas de archivos:
+                - "detalle": ruta del archivo DETALLE FC{num}.xlsx
+                - "glosa": ruta del archivo GLOSAS FC{num}.xlsx
+                
+        Returns:
+            Dict[str, pd.DataFrame]: Diccionario con DataFrames cargados:
+                - "detalle": DataFrame del archivo de detalle
+                - "glosa": DataFrame del archivo de glosa
+                Retorna diccionario vacío si hay errores en la carga
+                
+        Raises:
+            Los errores se capturan y almacenan en self.errors, no se propagan
+            
+        Examples:
+            >>> processor = CoosaludProcessor()
+            >>> 
+            >>> # Extraer datos de un par identificado
+            >>> par = {
+            ...     "detalle": "/tmp/DETALLE FC12345.xlsx",
+            ...     "glosa": "/tmp/GLOSAS FC12345.xlsx"
+            ... }
+            >>> data = processor.extract_data(par)
+            >>> 
+            >>> if data:  # Si la carga fue exitosa
+            ...     detalle_df = data["detalle"]
+            ...     glosa_df = data["glosa"]
+            ...     print(f"Detalle: {len(detalle_df)} filas, {len(detalle_df.columns)} columnas")
+            ...     print(f"Glosa: {len(glosa_df)} filas, {len(glosa_df.columns)} columnas")
+            ...     
+            ...     # Verificar columnas esperadas
+            ...     if "codigo_servicio" in detalle_df.columns:
+            ...         print("✅ Archivo detalle tiene código_servicio")
+            ...     if "codigo_glosa" in glosa_df.columns:
+            ...         print("✅ Archivo glosa tiene código_glosa")
+            ... else:
+            ...     print("❌ Error en la carga de archivos")
+            ...     for error in processor.errors:
+            ...         print(f"   {error}")
+            >>> 
+            >>> # Acceso directo a atributos del processor
+            >>> print(f"DataFrame detalle también disponible en processor.detalle_df")
+            >>> print(f"Forma del detalle: {processor.detalle_df.shape}")
+            >>> print(f"Forma de la glosa: {processor.glosa_df.shape}")
+            >>> 
+            >>> # Inspección rápida de estructura
+            >>> if data:
+            ...     print("\nColumnas DETALLE:")
+            ...     print(list(data["detalle"].columns))
+            ...     print("\nColumnas GLOSA:")
+            ...     print(list(data["glosa"].columns))
+        
+        Note:
+            - Los DataFrames también se almacenan en self.detalle_df y self.glosa_df
+            - Se muestra información de filas cargadas para cada archivo
+            - Maneja automáticamente diferentes formatos Excel (.xlsx, .xls, .xlsm)
+            - Los errores de lectura se capturan y no interrumpen el flujo principal
+            - Es responsabilidad del llamador verificar que el diccionario no esté vacío
         """
         data = {}
         
