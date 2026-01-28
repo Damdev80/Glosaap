@@ -1,1350 +1,906 @@
-# 🛠️ Guía del Desarrollador - Glosaap
+# 📚 Guía de Desarrollo - Glosaap
 
-> **Documento técnico para desarrolladores**  
-> Última actualización: Enero 2026
-
----
-## 📁 Estructura del Proyecto
-
-```
-Glosaap/
-├── main.py                    # Punto de entrada de la aplicación
-├── app/
-│   ├── config/                # Configuraciones centralizadas
-│   │   ├── settings.py        # ⚠️ CRÍTICO - Rutas y constantes globales
-│   │   └── eps_config.py      # ⚠️ CRÍTICO - Configuración de cada EPS
-│   │
-│   ├── core/                  # Lógica de negocio principal
-│   │   ├── imap_client.py     # Cliente IMAP para conexión a correos
-│   │   ├── homologacion_service.py  # CRUD de archivos de homologación
-│   │   ├── mutualser_processor.py   # Procesador específico de Mutualser
-│   │   └── web_scraper.py     # Scraping web (deprecated)
-│   │
-│   ├── service/               # Servicios de alto nivel
-│   │   ├── email_service.py   # ⭐ Orquestador principal de emails
-│   │   ├── attachment_service.py  # Gestión de adjuntos
-│   │   ├── processors/        # Procesadores por EPS
-│   │   │   ├── base_processor.py  # 📌 Clase base abstracta
-│   │   │   └── coosalud_processor.py
-│   │   └── web_scraper/       # Scrapers de portales web
-│   │       ├── base_scraper.py    # 📌 Clase base abstracta
-│   │       ├── familiar_scraper.py
-│   │       └── fomag_scraper.py
-│   │
-│   └── ui/                    # Interfaz gráfica (Flet)
-│       ├── app.py             # ⭐ Aplicación principal y navegación
-│       ├── styles.py          # Colores, tamaños, estilos
-│       ├── components/        # Componentes reutilizables
-│       └── views/             # Pantallas de la aplicación
-│
-├── assets/                    # Recursos estáticos
-│   ├── icons/                 # Iconos de la app
-│   └── img/eps/               # Logos de las EPS
-│
-└── temp/                      # Archivos temporales (gitignore)
-```
+Esta guía está diseñada para que desarrolladores nuevos puedan entender rápidamente la arquitectura del proyecto y comenzar a contribuir.
 
 ---
 
-## 🔑 Archivos Críticos - NO MODIFICAR SIN ENTENDER
+## 📋 Tabla de Contenidos
 
-### 1. `app/config/settings.py`
-**Propósito:** Configuración centralizada de rutas y constantes.
+1. [Inicio Rápido](#-inicio-rápido)
+2. [Arquitectura del Proyecto](#-arquitectura-del-proyecto)
+3. [Sistema de UI con Flet](#-sistema-de-ui-con-flet)
+4. [Sistema de Temas](#-sistema-de-temas)
+5. [Crear una Nueva Vista](#-crear-una-nueva-vista)
+6. [Crear un Nuevo Componente](#-crear-un-nuevo-componente)
+7. [Crear un Procesador de EPS](#-crear-un-procesador-de-eps)
+8. [Sistema de Navegación](#-sistema-de-navegación)
+9. [Buenas Prácticas](#-buenas-prácticas)
+10. [Testing](#-testing)
+11. [Debugging](#-debugging)
+
+---
+
+## 🚀 Inicio Rápido
+
+### Requisitos
+- Python 3.10+
+- Git
+- Acceso a red corporativa (para rutas `\\MINERVA\...`)
+
+### Setup del Entorno
+
+```powershell
+# 1. Clonar el repositorio
+git clone https://github.com/Damdev80/Glosaap.git
+cd Glosaap
+
+# 2. Crear entorno virtual
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+# 3. Instalar dependencias
+pip install -r requirements.txt
+
+# 4. Instalar navegadores de Playwright (para descarga web)
+playwright install chromium
+
+# 5. Ejecutar la aplicación
+python main.py
+```
+
+---
+
+## 🏗️ Arquitectura del Proyecto
+
+### Diagrama de Capas
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      CAPA DE UI                              │
+│                   (app/ui/)                                  │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐        │
+│  │   views/     │ │  screens/    │ │ components/  │        │
+│  │ (Vistas)     │ │ (Pantallas)  │ │ (Widgets)    │        │
+│  └──────────────┘ └──────────────┘ └──────────────┘        │
+│                                                              │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐        │
+│  │   app.py     │ │  styles.py   │ │ navigation.py│        │
+│  │  (Main App)  │ │ (Temas)      │ │ (Navegación) │        │
+│  └──────────────┘ └──────────────┘ └──────────────┘        │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    CAPA DE SERVICIOS                         │
+│                      (app/service/)                          │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐        │
+│  │ email_service│ │ attachment_  │ │ auth_service │        │
+│  │              │ │ service      │ │              │        │
+│  └──────────────┘ └──────────────┘ └──────────────┘        │
+│                                                              │
+│  ┌──────────────┐ ┌──────────────┐                         │
+│  │ processors/  │ │ web_scraper/ │                         │
+│  │ (Por EPS)    │ │ (Scrapers)   │                         │
+│  └──────────────┘ └──────────────┘                         │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      CAPA CORE                               │
+│                       (app/core/)                            │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐        │
+│  │ imap_client  │ │ homologacion │ │ session_     │        │
+│  │              │ │ _service     │ │ manager      │        │
+│  └──────────────┘ └──────────────┘ └──────────────┘        │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  RECURSOS EXTERNOS                           │
+│  • Servidores IMAP           • Rutas de red (\\MINERVA\)   │
+│  • GitHub API (updates)       • Portales web EPS           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Estructura de Carpetas
+
+```
+app/
+├── config/           # Configuración de la aplicación
+│   ├── settings.py   # → VERSION, rutas, constantes
+│   └── eps_config.py # → Definición de EPS soportadas
+│
+├── core/             # Lógica de negocio pura
+│   ├── imap_client.py        # → Cliente IMAP
+│   ├── homologacion_service.py # → CRUD homologación
+│   └── session_manager.py    # → Gestión de sesiones
+│
+├── service/          # Servicios de aplicación
+│   ├── email_service.py      # → Orquestación de correos
+│   ├── attachment_service.py # → Manejo de adjuntos
+│   ├── processors/           # → Procesadores por EPS
+│   └── web_scraper/          # → Scrapers web
+│
+└── ui/               # Interfaz de usuario
+    ├── app.py        # → Punto de entrada de UI
+    ├── styles.py     # → ThemeManager y estilos
+    ├── navigation.py # → Control de navegación
+    ├── views/        # → Vistas principales
+    ├── screens/      # → Pantallas completas
+    └── components/   # → Widgets reutilizables
+```
+
+---
+
+## 🎨 Sistema de UI con Flet
+
+### ¿Qué es Flet?
+[Flet](https://flet.dev) es un framework de Python que permite crear aplicaciones de escritorio, web y móvil con una API similar a Flutter.
+
+### Conceptos Básicos
 
 ```python
-# Rutas de red (servidor MINERVA)
-NETWORK_BASE = r"\\MINERVA\Cartera\GLOSAAP"
+import flet as ft
 
-NETWORK_PATHS = {
-    "homologador": "...",      # Archivos Excel de homologación
-    "resultados": "...",       # Donde se guardan los resultados
-    "mutualser_output": "...", # Resultados de Mutualser
-    "coosalud_output": "...",  # Resultados de Coosalud
-}
+def main(page: ft.Page):
+    # page es la ventana principal de la aplicación
+    page.title = "Mi App"
+    
+    # Los controles son widgets
+    texto = ft.Text("Hola mundo")
+    boton = ft.ElevatedButton("Click me", on_click=lambda e: print("clicked"))
+    
+    # Se agregan a la página
+    page.add(texto, boton)
+
+ft.app(target=main)
 ```
 
-⚠️ **CUIDADO:** Si cambias las rutas de red, la app no encontrará los archivos de homologación.
+### Controles Más Usados en Glosaap
+
+```python
+# Textos
+ft.Text("Mi texto", size=16, weight=ft.FontWeight.BOLD)
+
+# Botones
+ft.ElevatedButton("Primario", color=ft.Colors.WHITE, bgcolor=ft.Colors.PRIMARY)
+ft.OutlinedButton("Secundario")
+ft.IconButton(icon=ft.Icons.SETTINGS)
+
+# Contenedores
+ft.Container(
+    content=ft.Text("En container"),
+    padding=20,
+    bgcolor=ft.Colors.SURFACE,
+    border_radius=10
+)
+
+# Layouts
+ft.Column([...], spacing=10)  # Vertical
+ft.Row([...], spacing=10)     # Horizontal
+ft.Stack([...])               # Superpuestos (para navegación)
+
+# Inputs
+ft.TextField(label="Email")
+ft.Dropdown(options=[...])
+ft.Checkbox(label="Acepto")
+```
 
 ---
 
-### 2. `app/config/eps_config.py`
-**Propósito:** Define cada EPS con su configuración.
+## 🌓 Sistema de Temas
+
+### ThemeManager
+
+El sistema de temas está centralizado en `app/ui/styles.py`:
 
 ```python
-class MutualserEps(EpsInfo):
-    def __init__(self):
-        super().__init__(
-            name="Mutualser",
-            filter_value="mutualser",           # Clave única de la EPS
-            subject_pattern="Objeciones de glosa Factura FC",  # Patrón en asunto
-            processor_class="MutualserProcessor",  # Clase que procesa
-            homologador_file="HOMOLOGADOR_MUTUALSER.xlsx",  # Archivo en red
-            sender_filter=None  # Filtrar por remitente (opcional)
+from app.ui.styles import ThemeManager
+
+# Verificar tema actual
+if ThemeManager.is_dark():
+    print("Modo oscuro")
+else:
+    print("Modo claro")
+
+# Cambiar tema
+ThemeManager.toggle_theme()
+```
+
+### Colores que se Adaptan al Tema
+
+**SIEMPRE** usar `ft.Colors.*` en lugar de colores hardcodeados:
+
+```python
+# ✅ CORRECTO - Se adapta al tema automáticamente
+ft.Container(
+    bgcolor=ft.Colors.SURFACE,           # Fondo principal
+    content=ft.Text(
+        "Hola",
+        color=ft.Colors.ON_SURFACE       # Texto que contrasta
+    )
+)
+
+# ❌ INCORRECTO - No se adapta al tema
+ft.Container(
+    bgcolor="#ffffff",                    # Siempre blanco
+    content=ft.Text(
+        "Hola",
+        color="#000000"                   # Siempre negro
+    )
+)
+```
+
+### Tabla de Colores Semánticos
+
+| Color | Uso | Tema Oscuro | Tema Claro |
+|-------|-----|-------------|------------|
+| `ft.Colors.SURFACE` | Fondo de contenedores | Gris oscuro | Blanco |
+| `ft.Colors.ON_SURFACE` | Texto principal | Blanco | Negro |
+| `ft.Colors.SURFACE_VARIANT` | Fondo secundario | Gris más oscuro | Gris claro |
+| `ft.Colors.ON_SURFACE_VARIANT` | Texto secundario | Gris claro | Gris oscuro |
+| `ft.Colors.PRIMARY` | Color de acento | Azul brillante | Azul |
+| `ft.Colors.ON_PRIMARY` | Texto sobre primary | Blanco | Blanco |
+| `ft.Colors.OUTLINE` | Bordes | Gris | Gris |
+| `ft.Colors.ERROR` | Errores | Rojo | Rojo |
+
+---
+
+## 📄 Crear una Nueva Vista
+
+### Paso 1: Crear el archivo
+
+```python
+# app/ui/views/mi_vista_view.py
+"""
+Vista para Mi Nueva Funcionalidad.
+
+Esta vista muestra información sobre X y permite al usuario hacer Y.
+"""
+import flet as ft
+from typing import Optional, Callable
+
+
+class MiVistaView:
+    """
+    Vista de Mi Funcionalidad.
+    
+    Attributes:
+        page: Referencia a la página principal de Flet
+        on_back: Callback opcional para volver atrás
+        container: Contenedor principal de la vista
+    """
+    
+    def __init__(
+        self, 
+        page: ft.Page, 
+        on_back: Optional[Callable[[], None]] = None
+    ):
+        """
+        Inicializa la vista.
+        
+        Args:
+            page: Página principal de Flet
+            on_back: Callback para navegación hacia atrás
+        """
+        self.page = page
+        self.on_back = on_back
+        self.container = self._build()
+    
+    def _build(self) -> ft.Container:
+        """Construye la interfaz de la vista."""
+        
+        # Header con navegación
+        header = ft.Container(
+            content=ft.Row([
+                ft.IconButton(
+                    icon=ft.Icons.ARROW_BACK,
+                    icon_color=ft.Colors.ON_SURFACE_VARIANT,
+                    tooltip="Volver",
+                    on_click=lambda e: self.on_back() if self.on_back else None
+                ),
+                ft.Text(
+                    "Mi Nueva Vista",
+                    size=18,
+                    weight=ft.FontWeight.W_500,
+                    color=ft.Colors.ON_SURFACE
+                ),
+            ], alignment=ft.MainAxisAlignment.START, spacing=8),
+            padding=ft.padding.symmetric(horizontal=24, vertical=16),
         )
+        
+        # Contenido principal
+        content = ft.Container(
+            content=ft.Column([
+                ft.Text(
+                    "Contenido aquí",
+                    color=ft.Colors.ON_SURFACE
+                ),
+                ft.ElevatedButton(
+                    "Acción Principal",
+                    bgcolor=ft.Colors.PRIMARY,
+                    color=ft.Colors.ON_PRIMARY,
+                    on_click=self._handle_action
+                )
+            ], spacing=16),
+            padding=ft.padding.all(24),
+            expand=True
+        )
+        
+        # Layout principal
+        main_column = ft.Column(
+            [header, content],
+            spacing=0,
+            expand=True
+        )
+        
+        return ft.Container(
+            content=main_column,
+            bgcolor=ft.Colors.SURFACE,  # ⚠️ OBLIGATORIO - Fondo sólido
+            expand=True,
+            visible=False  # Inicialmente oculta
+        )
+    
+    def _handle_action(self, e):
+        """Maneja el click en el botón de acción."""
+        # Implementar lógica aquí
+        print("Acción ejecutada")
+    
+    def show(self):
+        """Muestra la vista."""
+        self.container.visible = True
+        self.page.update()
+    
+    def hide(self):
+        """Oculta la vista."""
+        self.container.visible = False
+        self.page.update()
 ```
 
-#### 📌 Para agregar una nueva EPS:
+### Paso 2: Registrar en app.py
 
-1. **Crear la clase** en `eps_config.py`:
-   ```python
-   class NuevaEpsConfig(EpsInfo):
-       def __init__(self):
-           super().__init__(
-               name="Nueva EPS",
-               filter_value="nuevaeps",
-               subject_pattern="PATRÓN DEL ASUNTO",
-               processor_class="NuevaEpsProcessor",
-               homologador_file="HOMOLOGADOR_NUEVAEPS.xlsx",
-               sender_filter="correo@nuevaeps.com"  # Opcional
-           )
-   ```
+```python
+# app/ui/app.py
 
-2. **Agregar al registro** al final de `eps_config.py`:
-   ```python
-   EPS_REGISTRY["nuevaeps"] = NuevaEpsConfig()
-   ```
+# 1. Importar la nueva vista
+from app.ui.views.mi_vista_view import MiVistaView
 
-3. **Crear el procesador** (ver sección de procesadores abajo).
+def main(page: ft.Page):
+    # ... código existente ...
+    
+    # 2. Instanciar la vista
+    mi_vista_view = MiVistaView(
+        page=page,
+        on_back=go_to_dashboard  # Callback para volver
+    )
+    
+    # 3. Crear función de navegación
+    def go_to_mi_vista():
+        current_view["name"] = "mi_vista"
+        # Ocultar todas las vistas
+        dashboard_view.hide()
+        tools_view.hide()
+        homologacion_view.hide()
+        # ... ocultar otras vistas ...
+        
+        # Mostrar la nueva vista
+        mi_vista_view.show()
+        page.update()
+    
+    # 4. Agregar al Stack principal
+    page.add(
+        ft.Stack([
+            # ... otras vistas ...
+            mi_vista_view.container,  # ← Agregar aquí
+        ], expand=True)
+    )
+```
 
 ---
 
-## 🔧 Servicios Principales
+## 🧩 Crear un Nuevo Componente
 
-### `EmailService` - El Orquestador
-**Ubicación:** `app/service/email_service.py`
+Los componentes son widgets reutilizables que se usan en múltiples vistas.
 
-Este servicio coordina todo el flujo de correos:
+### Ejemplo: Tarjeta de Información
 
 ```python
-email_service = EmailService()
+# app/ui/components/info_card.py
+"""
+Componente: Tarjeta de Información.
 
-# 1. Conectar al servidor IMAP
-email_service.connect(email, password, server="imap.gmail.com")
+Muestra información resumida con título, descripción e icono.
+"""
+import flet as ft
+from typing import Optional, Callable
 
-# 2. Buscar mensajes por palabra clave
-mensajes = email_service.search_messages(
-    keyword="Objeciones de glosa",
-    date_from="2025-01-01",
-    date_to="2025-12-31",
-    limit=None  # Sin límite
-)
 
-# 3. Descargar adjuntos
-stats = email_service.download_all_attachments(
-    messages=mensajes,
-    on_progress=lambda idx, total, msg, files: print(f"{idx}/{total}")
-)
+class InfoCard(ft.UserControl):
+    """
+    Tarjeta de información reutilizable.
+    
+    Ejemplo de uso:
+        InfoCard(
+            title="Usuarios",
+            value="125",
+            icon=ft.Icons.PEOPLE,
+            on_click=lambda: print("clicked")
+        )
+    """
+    
+    def __init__(
+        self,
+        title: str,
+        value: str,
+        icon: str = ft.Icons.INFO,
+        on_click: Optional[Callable[[], None]] = None
+    ):
+        super().__init__()
+        self.title = title
+        self.value = value
+        self.icon = icon
+        self._on_click = on_click
+    
+    def build(self):
+        return ft.Container(
+            content=ft.Column([
+                ft.Row([
+                    ft.Icon(
+                        self.icon,
+                        color=ft.Colors.PRIMARY,
+                        size=24
+                    ),
+                    ft.Text(
+                        self.title,
+                        size=14,
+                        color=ft.Colors.ON_SURFACE_VARIANT
+                    )
+                ], spacing=8),
+                ft.Text(
+                    self.value,
+                    size=28,
+                    weight=ft.FontWeight.BOLD,
+                    color=ft.Colors.ON_SURFACE
+                )
+            ], spacing=8),
+            padding=20,
+            bgcolor=ft.Colors.SURFACE_VARIANT,
+            border_radius=12,
+            on_click=lambda e: self._on_click() if self._on_click else None,
+            ink=True  # Efecto de ripple al hacer click
+        )
 
-# 4. Procesar archivos Excel
-resultado = email_service.process_mutualser_files()
+
+# Uso en una vista:
+# from app.ui.components.info_card import InfoCard
+# 
+# card = InfoCard(
+#     title="Glosas Pendientes",
+#     value="47",
+#     icon=ft.Icons.PENDING_ACTIONS,
+#     on_click=lambda: go_to_pending()
+# )
 ```
-
-#### Métodos importantes:
-| Método | Descripción |
-|--------|-------------|
-| `connect()` | Conecta al servidor IMAP |
-| `search_messages()` | Busca correos por asunto/fecha |
-| `download_all_attachments()` | Descarga todos los adjuntos |
-| `get_excel_files()` | Lista archivos Excel descargados |
-| `process_mutualser_files()` | Procesa y homologa archivos |
 
 ---
 
-### `ImapClient` - Conexión a Correo
-**Ubicación:** `app/core/imap_client.py`
+## 🏥 Crear un Procesador de EPS
 
-Cliente de bajo nivel para IMAP. **No modificar** a menos que entiendas el protocolo IMAP.
+Los procesadores manejan la lógica específica de cada EPS.
+
+### Estructura Base
 
 ```python
-# Auto-detecta servidor IMAP por dominio del correo
-client = ImapClient()
-client.connect("usuario@gmail.com", "password")
+# app/service/processors/nueva_eps_processor.py
+"""
+Procesador para NUEVA_EPS.
 
-# Buscar por asunto con rango de fechas
-mensajes = client.search_by_subject(
-    keyword="glosa",
-    date_from=datetime(2025, 1, 1),
-    date_to=datetime(2025, 12, 31)
-)
+Este procesador maneja archivos de glosas de NUEVA_EPS y los transforma
+al formato requerido para la respuesta de objeciones.
+"""
+import pandas as pd
+from typing import Optional
+from pathlib import Path
+from .base_processor import BaseProcessor
 
-# Descargar adjuntos de un mensaje
-archivos = client.download_attachments(mensaje_id, dest_dir="./temp")
+
+class NuevaEpsProcessor(BaseProcessor):
+    """
+    Procesador de archivos de glosas para NUEVA_EPS.
+    
+    Attributes:
+        EPS_NAME: Nombre de la EPS
+        COLUMN_MAPPING: Mapeo de columnas entrada → salida
+    """
+    
+    EPS_NAME = "NUEVA_EPS"
+    
+    # Mapeo de columnas del archivo de entrada a salida
+    COLUMN_MAPPING = {
+        'numero_factura': 'NRO_FACTURA',
+        'codigo_servicio': 'COD_SERVICIO',
+        'codigo_glosa': 'COD_GLOSA',
+        'valor_glosado': 'VALOR_GLOSADO',
+        'concepto_glosa': 'CONCEPTO',
+    }
+    
+    def __init__(self, homologacion_path: str, output_path: str):
+        """
+        Inicializa el procesador.
+        
+        Args:
+            homologacion_path: Ruta al archivo de homologación
+            output_path: Ruta de salida para archivos generados
+        """
+        super().__init__(homologacion_path, output_path)
+    
+    def process_file(self, filepath: str) -> Optional[pd.DataFrame]:
+        """
+        Procesa un archivo de glosas de NUEVA_EPS.
+        
+        Args:
+            filepath: Ruta al archivo Excel de entrada
+            
+        Returns:
+            DataFrame procesado o None si hay error
+        """
+        try:
+            # Leer archivo
+            df = pd.read_excel(filepath)
+            
+            # Validar columnas requeridas
+            required_cols = list(self.COLUMN_MAPPING.keys())
+            missing = set(required_cols) - set(df.columns)
+            if missing:
+                self.logger.error(f"Columnas faltantes: {missing}")
+                return None
+            
+            # Renombrar columnas
+            df = df.rename(columns=self.COLUMN_MAPPING)
+            
+            # Aplicar homologación
+            df = self._apply_homologation(df, 'COD_SERVICIO')
+            
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"Error procesando {filepath}: {e}")
+            return None
+    
+    def _apply_homologation(
+        self, 
+        df: pd.DataFrame, 
+        column: str
+    ) -> pd.DataFrame:
+        """Aplica homologación a una columna."""
+        # Cargar archivo de homologación
+        homo_df = pd.read_excel(self.homologacion_path)
+        
+        # Merge para homologar
+        df = df.merge(
+            homo_df[['COD_ORIGINAL', 'COD_HOMOLOGADO']],
+            left_on=column,
+            right_on='COD_ORIGINAL',
+            how='left'
+        )
+        
+        # Usar código homologado si existe, sino mantener original
+        df[column] = df['COD_HOMOLOGADO'].fillna(df[column])
+        
+        return df.drop(columns=['COD_ORIGINAL', 'COD_HOMOLOGADO'], errors='ignore')
+    
+    def generate_objections_file(
+        self, 
+        df: pd.DataFrame, 
+        output_name: str
+    ) -> str:
+        """
+        Genera archivo de objeciones.
+        
+        Args:
+            df: DataFrame procesado
+            output_name: Nombre del archivo de salida
+            
+        Returns:
+            Ruta del archivo generado
+        """
+        output_path = Path(self.output_path) / f"{output_name}_objeciones.xlsx"
+        df.to_excel(output_path, index=False)
+        return str(output_path)
 ```
 
-#### ⚠️ NO MODIFICAR:
-- Función `_decode_header()` - Maneja encoding de headers
-- Formato de fechas IMAP (`DD-Mon-YYYY`)
-- Lógica de timeout en `search_by_subject()`
-
----
-
-### `HomologacionService` - CRUD de Homologación
-**Ubicación:** `app/core/homologacion_service.py`
-
-Gestiona los archivos Excel de homologación por EPS.
+### Registrar en Configuración
 
 ```python
-# Inicializar para una EPS
-service = HomologacionService(eps="mutualser")
+# app/config/eps_config.py
 
-# Operaciones CRUD
-service.agregar_codigo("123456", "789012", "COD_FACT")
-service.buscar_por_codigo("123456")
-service.editar_registro(indice=5, nuevos_valores={...})
-service.eliminar_registro(indice=5)
-
-# Guardar cambios (crea backup automático)
-service.guardar()
-```
-
-#### Columnas requeridas en Excel:
-```python
-COLUMNAS = [
-    'Código Servicio de la ERP',    # Código original
-    'Código producto en DGH',       # Código homologado
-    'COD_SERV_FACT'                 # Código de facturación
+EPS_CONFIG = [
+    # ... otras EPS ...
+    {
+        "name": "NUEVA_EPS",
+        "filter": "nueva_eps",        # Para búsqueda en correos
+        "filter_type": "keyword",
+        "description": "Nueva EPS para pruebas",
+        "image_path": "assets/img/eps/nueva_eps.png",
+        "processor_class": "NuevaEpsProcessor"
+    }
 ]
 ```
 
 ---
 
-## � Componentes de UI y Feedback Visual
+## 🧭 Sistema de Navegación
 
-### Nuevos Componentes de Loading (v1.0.0)
-**Ubicación:** `app/ui/components/loading_overlay.py`
+### Cómo Funciona
 
-#### 1. LoadingOverlay - Overlay Modal
-Capa semi-transparente que bloquea la interfaz durante operaciones:
+La navegación usa un `ft.Stack` donde todas las vistas están superpuestas pero solo una es visible:
 
 ```python
-from app.ui.components.loading_overlay import LoadingOverlay
-
-# En tu vista:
-def __init__(self, page: ft.Page):
-    self.loading_overlay = LoadingOverlay(page)
-
-# Usar con operaciones largas:
-def async_operation(self):
-    self.loading_overlay.show("Procesando archivos...")
-    try:
-        # Tu operación aquí
-        await process_files()
-    finally:
-        self.loading_overlay.hide()
-
-# O usar con context manager:
-def sync_operation(self):
-    with self.loading_overlay.context("Cargando datos..."):
-        data = fetch_data()
-```
-
-#### 2. ToastNotification - Notificaciones No-bloqueantes
-Notificaciones temporales estilo "toast":
-
-```python
-from app.ui.components.loading_overlay import ToastNotification
-
-# En tu vista:
-def __init__(self, page: ft.Page):
-    self.toast = ToastNotification(page)
-
-# Mostrar mensajes:
-self.toast.show("¡Operación exitosa!", True)   # Verde (éxito)
-self.toast.show("Error de conexión", False)    # Rojo (error)
-```
-
-#### 3. LoadingButton - Botón con Estado de Carga
-Botón que muestra spinner cuando está procesando:
-
-```python
-from app.ui.components.loading_overlay import LoadingButton
-
-# Crear botón:
-self.login_button = LoadingButton(
-    text="Iniciar Sesión",
-    icon=ft.Icons.LOGIN,
-    on_click=self._handle_login,
-    width=380,
-    height=52
+# Pseudocódigo de app.py
+page.add(
+    ft.Stack([
+        login_view.container,      # visible=True  si no autenticado
+        dashboard_view.container,  # visible=True  si autenticado
+        tools_view.container,      # visible=False
+        homologacion_view.container,  # visible=False
+        # ... más vistas
+    ], expand=True)
 )
-
-# Usar en operaciones:
-def _handle_login(self, e):
-    self.login_button.set_loading(True, "Conectando...")
-    try:
-        await connect_to_server()
-        self.login_button.set_loading(False)
-    except Exception as ex:
-        self.login_button.set_loading(False)
-        # Manejar error
 ```
 
-#### 4. ProgressIndicator - Indicador de Progreso
-Barra de progreso con porcentaje:
+### Patrón de Navegación
 
 ```python
-from app.ui.components.loading_overlay import ProgressIndicator
+# Variable para trackear vista actual
+current_view = {"name": "login"}
 
-# Crear indicador:
-self.progress = ProgressIndicator()
-
-# Actualizar progreso:
-def process_files(self, files):
-    total = len(files)
-    for i, file in enumerate(files):
-        self.progress.update(i, total, f"Procesando {file}")
-        process_file(file)
-    self.progress.update(total, total, "¡Completado!")
-```
-
-#### 🎯 Patrones de Uso Recomendados
-
-**1. Vista de Login:**
-```python
-class LoginView:
-    def __init__(self, page: ft.Page):
-        self.loading_overlay = LoadingOverlay(page)
-        self.toast_notification = ToastNotification(page)
-        self.login_button = LoadingButton("Iniciar Sesión", ...)
+def go_to_dashboard():
+    """Navega al dashboard."""
+    current_view["name"] = "dashboard"
     
-    def _handle_login(self, e):
-        # Usar LoadingButton para feedback inmediato
-        self.login_button.set_loading(True, "Conectando...")
-        # Usar overlay para bloquear UI
-        self.loading_overlay.show("Conectando al servidor IMAP...")
-        
-        def connect_worker():
-            try:
-                connect()
-                self.login_button.set_loading(False)
-                self.loading_overlay.hide()
-                self.toast_notification.show("¡Conexión exitosa!")
-            except Exception as ex:
-                self.login_button.set_loading(False)
-                self.loading_overlay.hide()
-                self.toast_notification.show(f"Error: {ex}", False)
-```
-
-**2. Vista de Mensajes:**
-```python
-class MessagesView:
-    def show_loading(self, message: str):
-        self.loading_overlay.show(message)
+    # Ocultar todas
+    login_view.hide()
+    tools_view.hide()
+    homologacion_view.hide()
     
-    def hide_loading(self):
-        self.loading_overlay.hide()
-    
-    def show_toast(self, message: str, is_success: bool = True):
-        self.toast_notification.show(message, is_success)
-    
-    def set_loading_progress(self, current: int, total: int, message: str = ""):
-        if total > 0:
-            progress = current / total
-            self.processing_progress.value = progress
-            self.processing_percentage.value = f"{int(progress * 100)}%"
-        
-        if message:
-            self.processing_status.value = message
-        
-        self.page.update()
-```
-
-#### ⚠️ Consideraciones Importantes
-
-1. **Thread Safety:** Los componentes son seguros para usar con threading
-2. **Performance:** Usa `context manager` para operaciones síncronas cortas
-3. **UX:** Siempre proporciona mensajes descriptivos al usuario
-4. **Error Handling:** Siempre oculta loading en bloques finally
-5. **Consistencia:** Usa los mismos componentes en toda la aplicación
-
----
-
-### Integración en Vistas Existentes
-
-**Pasos para integrar:**
-
-1. **Importar componentes:**
-```python
-from app.ui.components.loading_overlay import LoadingOverlay, ToastNotification, LoadingButton
-```
-
-2. **Inicializar en constructor:**
-```python
-def __init__(self, page: ft.Page):
-    self.loading_overlay = LoadingOverlay(page)
-    self.toast_notification = ToastNotification(page)
-```
-
-3. **Usar en métodos:**
-```python
-def process_data(self):
-    self.loading_overlay.show("Procesando...")
-    try:
-        # Tu lógica aquí
-        pass
-    finally:
-        self.loading_overlay.hide()
-```
-
----
-
-## �🏭 Procesadores de EPS
-
-### Clase Base - `BaseProcessor`
-**Ubicación:** `app/service/processors/base_processor.py`
-
-Define la interfaz que **TODO procesador debe implementar**:
-
-```python
-from abc import ABC, abstractmethod
-
-class BaseProcessor(ABC):
-    
-    @abstractmethod
-    def identify_files(self, file_paths: List[str]) -> Dict[str, str]:
-        """Identifica y clasifica archivos de entrada"""
-        pass
-    
-    @abstractmethod
-    def validate_files(self, identified_files: Dict[str, str]) -> bool:
-        """Valida que los archivos sean correctos"""
-        pass
-    
-    @abstractmethod
-    def extract_data(self, identified_files: Dict[str, str]) -> Dict[str, pd.DataFrame]:
-        """Extrae datos de los archivos"""
-        pass
-    
-    @abstractmethod
-    def homologate(self, data: Dict[str, pd.DataFrame]) -> pd.DataFrame:
-        """Realiza homologación de códigos"""
-        pass
-    
-    @abstractmethod
-    def generate_output(self, df_homologated: pd.DataFrame) -> str:
-        """Genera archivo de salida"""
-        pass
-```
-
-### Crear un Nuevo Procesador
-
-1. **Crear archivo** `app/service/processors/nuevaeps_processor.py`:
-
-```python
-from app.service.processors.base_processor import BaseProcessor
-import pandas as pd
-
-class NuevaEpsProcessor(BaseProcessor):
-    
-    # Columnas que debe tener el archivo de esta EPS
-    COLUMNAS_REQUERIDAS = ['Factura', 'Codigo', 'Valor', 'Glosa']
-    
-    def __init__(self, output_dir: str = 'outputs'):
-        homologador = r"\\MINERVA\Cartera\GLOSAAP\HOMOLOGADOR\nuevaeps_homologacion.xlsx"
-        super().__init__(homologador_path=homologador)
-        self.output_dir = output_dir
-    
-    def identify_files(self, file_paths):
-        # Tu lógica para identificar archivos
-        return {"detalle": file_paths[0]}
-    
-    def validate_files(self, identified_files):
-        # Validar que existan las columnas requeridas
-        return True
-    
-    def extract_data(self, identified_files):
-        df = pd.read_excel(identified_files["detalle"])
-        return {"detalle": df}
-    
-    def homologate(self, data):
-        df = data["detalle"]
-        # Tu lógica de homologación
-        return df
-    
-    def generate_output(self, df_homologated):
-        output_path = f"{self.output_dir}/resultado_nuevaeps.xlsx"
-        df_homologated.to_excel(output_path, index=False)
-        return output_path
-```
-
-2. **Registrar en `__init__.py`**:
-```python
-# app/service/processors/__init__.py
-from .nuevaeps_processor import NuevaEpsProcessor
-```
-
-3. **Agregar a EPS_REGISTRY** (ver sección de eps_config.py arriba)
-
----
-
-## 🌐 Web Scrapers
-
-### Clase Base - `BaseScraper`
-**Ubicación:** `app/service/web_scraper/base_scraper.py`
-
-Para automatización de portales web de EPS.
-
-```python
-class BaseScraper(ABC):
-    
-    def __init__(self, download_dir: str = None, progress_callback = None):
-        self.download_dir = download_dir or "~/Desktop/descargas_glosaap"
-        self.progress_callback = progress_callback or print
-    
-    def log(self, message: str):
-        """Envía mensaje de progreso"""
-        self.progress_callback(message)
-    
-    @abstractmethod
-    def login_and_download(self, **kwargs) -> dict:
-        """
-        Ejecuta login y descarga
-        Returns: {"success": bool, "files": int, "message": str}
-        """
-        pass
-```
-
-### Ejemplo de Scraper (Playwright)
-
-```python
-from playwright.sync_api import sync_playwright
-from app.service.web_scraper.base_scraper import BaseScraper
-
-class MiEpsScraper(BaseScraper):
-    
-    def login_and_download(self, usuario: str, password: str) -> dict:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=False)
-            page = browser.new_page()
-            
-            self.log("Navegando al portal...")
-            page.goto("https://portal.mieps.com")
-            
-            self.log("Iniciando sesión...")
-            page.fill("#usuario", usuario)
-            page.fill("#password", password)
-            page.click("#btnLogin")
-            
-            self.log("Descargando archivos...")
-            # Tu lógica de descarga...
-            
-            browser.close()
-            
-        return {"success": True, "files": 5, "message": "Descarga exitosa"}
-```
-
----
-
-## 🖼️ Interfaz de Usuario (Flet)
-
-### Archivo Principal - `app/ui/app.py`
-
-Contiene la función `main(page)` y toda la navegación:
-
-```python
-def main(page: ft.Page):
-    # Configuración inicial
-    page.title = "Glosaap"
-    page.bgcolor = COLORS["bg_white"]
-    
-    # Servicios
-    email_service = EmailService()
-    
-    # Funciones de navegación
-    def go_to_login(): ...
-    def go_to_dashboard(): ...
-    def go_to_tools(): ...
-    # ... más funciones go_to_*
-    
-    # Instanciar vistas
-    login_view = LoginView(page, ...)
-    dashboard_view = DashboardView(page, ...)
-    # ... más vistas
-    
-    # Agregar todo a la página
-    page.add(login_view.container, dashboard_view.container, ...)
-```
-
-### Crear una Nueva Vista
-
-1. **Crear archivo** `app/ui/views/mi_vista.py`:
-
-```python
-import flet as ft
-from app.ui.styles import COLORS, FONT_SIZES
-
-class MiVista:
-    """Descripción de la vista"""
-    
-    def __init__(self, page: ft.Page, on_back=None, on_action=None):
-        self.page = page
-        self.on_back = on_back
-        self.on_action = on_action
-        self.container = self.build()
-    
-    def build(self) -> ft.Container:
-        return ft.Container(
-            content=ft.Column([
-                ft.Text("Mi Vista", size=24, weight=ft.FontWeight.BOLD),
-                ft.ElevatedButton("Acción", on_click=self._handle_action),
-                ft.TextButton("Volver", on_click=lambda _: self.on_back())
-            ]),
-            visible=False,  # Inicialmente oculta
-            padding=20
-        )
-    
-    def _handle_action(self, e):
-        if self.on_action:
-            self.on_action()
-    
-    def show(self):
-        self.container.visible = True
-    
-    def hide(self):
-        self.container.visible = False
-```
-
----
-
-## 🧪 Testing y Cobertura de Código
-
-### Estado Actual de Tests
-- **Total de tests:** 431 tests pasando ✅
-- **Cobertura actual:** 31.02%
-- **Archivos de test:** 23 archivos
-
-### Estructura de Tests
-
-```
-tests/
-├── test_app.py                    # Tests de la aplicación principal
-├── test_app_state.py             # Tests del estado global
-├── test_attachment_service.py    # Tests del servicio de adjuntos
-├── test_auth_service.py          # Tests del servicio de autenticación
-├── test_base_scraper.py          # Tests del scraper base
-├── test_business_logic.py        # Tests de lógica de negocio
-├── test_coosalud_processor.py    # Tests del procesador Coosalud
-├── test_credential_manager.py    # Tests del gestor de credenciales
-├── test_email_service.py         # Tests del servicio de email
-├── test_eps_config.py            # Tests de configuración EPS
-├── test_homologacion_service.py  # Tests del servicio de homologación
-├── test_homologar_observacion.py # Tests del homologador observación
-├── test_imap_client.py           # Tests del cliente IMAP
-├── test_mix_excel_service.py     # Tests del servicio Mix Excel
-├── test_mutualser_processor.py   # Tests del procesador Mutualser
-├── test_navigation.py            # Tests de navegación UI
-├── test_processors.py            # Tests de procesadores generales
-├── test_session_manager.py       # Tests del gestor de sesiones
-├── test_settings.py              # Tests de configuración
-├── test_styles.py                # Tests de estilos UI
-└── test_update_service.py        # Tests del servicio de actualización
-```
-
-### Comandos de Testing
-
-```bash
-# Ejecutar todos los tests
-pytest tests/
-
-# Ejecutar con cobertura
-pytest tests/ --cov=app --cov-report=html
-
-# Ejecutar tests específicos
-pytest tests/test_coosalud_processor.py -v
-
-# Ejecutar tests con patrón
-pytest tests/ -k "test_login" -v
-
-# Ver reporte de cobertura
-pytest tests/ --cov=app --cov-report=term-missing
-```
-
-### Configuración de Pytest (pytest.ini)
-```ini
-[tool:pytest]
-testpaths = tests
-python_files = test_*.py
-python_functions = test_*
-python_classes = Test*
-addopts = 
-    -v 
-    --tb=short 
-    --strict-markers
-    --disable-warnings
-    --cov=app
-    --cov-report=html:htmlcov
-    --cov-report=term-missing
-    --cov-fail-under=15
-```
-
-### Buenas Prácticas para Tests
-
-#### 1. Estructura de Test
-```python
-class TestComponentName:
-    """Tests para ComponentName."""
-    
-    def test_creation(self):
-        """El componente se crea correctamente"""
-        component = ComponentName()
-        assert component is not None
-    
-    def test_functionality(self):
-        """La funcionalidad principal funciona"""
-        component = ComponentName()
-        result = component.do_something()
-        assert result == expected_value
-```
-
-#### 2. Usar Mocking para Dependencias
-```python
-from unittest.mock import Mock, patch, MagicMock
-
-@patch('app.service.external_service.ExternalAPI')
-def test_with_external_dependency(self, mock_api):
-    mock_api.return_value.fetch_data.return_value = {"data": "test"}
-    
-    service = MyService()
-    result = service.process_data()
-    
-    assert result["data"] == "test"
-    mock_api.return_value.fetch_data.assert_called_once()
-```
-
-#### 3. Tests Parametrizados
-```python
-import pytest
-
-@pytest.mark.parametrize("input_value,expected", [
-    ("test@gmail.com", "imap.gmail.com"),
-    ("user@outlook.com", "outlook.office365.com"),
-    ("admin@empresa.com", "mail.empresa.com"),
-])
-def test_detect_imap_server(self, input_value, expected):
-    client = ImapClient()
-    result = client._detect_imap_server(input_value)
-    assert result == expected
-```
-
-#### 4. Fixtures para Setup/Teardown
-```python
-import pytest
-import tempfile
-
-@pytest.fixture
-def temp_excel_file(tmp_path):
-    """Crea archivo Excel temporal para tests"""
-    file_path = tmp_path / "test.xlsx"
-    df = pd.DataFrame({'col1': [1, 2], 'col2': ['a', 'b']})
-    df.to_excel(file_path, index=False)
-    return str(file_path)
-
-def test_load_excel(self, temp_excel_file):
-    service = ExcelService()
-    result = service.load_file(temp_excel_file)
-    assert result.success is True
-```
-
-### Cobertura por Módulos
-
-| Módulo | Cobertura | Estado |
-|--------|-----------|--------|
-| app_state.py | 100% | ✅ Completo |
-| eps_config.py | 100% | ✅ Completo |
-| styles.py | 100% | ✅ Completo |
-| settings.py | 92% | ✅ Alto |
-| base_scraper.py | 93% | ✅ Alto |
-| session_manager.py | 78% | ⚠️ Bueno |
-| navigation.py | 69% | ⚠️ Bueno |
-| auth_service.py | 64% | ⚠️ Medio |
-| credential_manager.py | 61% | ⚠️ Medio |
-| update_service.py | 52% | ⚠️ Medio |
-| coosalud_processor.py | 43% | ❌ Bajo |
-| homologacion_service.py | 18% | ❌ Muy bajo |
-
-### Objetivos de Cobertura
-- **Meta actual:** 31% → 50%
-- **Prioridad 1:** Servicios principales (email, auth, attachment)
-- **Prioridad 2:** Procesadores (coosalud, mutualser)
-- **Prioridad 3:** UI components y navegación
-
----
-
-## 📚 Documentación y Docstrings
-
-### Formato de Docstrings
-Seguimos el estilo Google para docstrings:
-
-```python
-def process_file(self, file_path: str, options: dict = None) -> dict:
-    """
-    Procesa un archivo Excel y extrae datos relevantes.
-    
-    Este método analiza un archivo Excel, valida su estructura,
-    extrae los datos según las opciones proporcionadas y retorna
-    un diccionario con el resultado del procesamiento.
-    
-    Args:
-        file_path (str): Ruta absoluta al archivo Excel a procesar.
-        options (dict, optional): Opciones de configuración.
-            - validate_columns (bool): Si validar columnas requeridas.
-            - skip_empty_rows (bool): Si saltar filas vacías.
-            Default: {"validate_columns": True, "skip_empty_rows": True}
-    
-    Returns:
-        dict: Resultado del procesamiento con las siguientes claves:
-            - success (bool): Si el procesamiento fue exitoso.
-            - data (pd.DataFrame): Datos extraídos del archivo.
-            - errors (list): Lista de errores encontrados.
-            - warnings (list): Lista de advertencias.
-    
-    Raises:
-        FileNotFoundError: Si el archivo no existe.
-        PermissionError: Si no hay permisos para leer el archivo.
-        ValueError: Si el archivo no tiene el formato esperado.
-    
-    Example:
-        >>> processor = FileProcessor()
-        >>> result = processor.process_file("/path/to/file.xlsx")
-        >>> if result["success"]:
-        ...     print(f"Procesados {len(result['data'])} registros")
-        ... else:
-        ...     print(f"Errores: {result['errors']}")
-    
-    Note:
-        - El archivo debe estar en formato .xlsx o .xls
-        - Las columnas requeridas son: 'Código', 'Descripción', 'Valor'
-        - El procesamiento puede tardar varios segundos para archivos grandes
-    
-    Todo:
-        - Agregar soporte para archivos CSV
-        - Implementar cache para archivos grandes
-        - Mejorar validación de tipos de datos
-    """
-    # Implementación del método
-```
-
-### Estado de Documentación
-
-| Componente | Docstrings | Estado |
-|------------|------------|--------|
-| base_processor.py | ✅ Completo | Documentación completa con ejemplos |
-| loading_overlay.py | ✅ Completo | Documentación completa con ejemplos |
-| email_service.py | ⚠️ Parcial | Faltan ejemplos en algunos métodos |
-| coosalud_processor.py | ⚠️ Parcial | Métodos complejos sin documentar |
-| imap_client.py | ❌ Básico | Solo docstrings básicos |
-
----
-
-## 🚀 Proceso de Release y Versionado
-
-### Versioning Scheme
-Seguimos Semantic Versioning (SemVer): `MAJOR.MINOR.PATCH`
-
-- **MAJOR:** Cambios incompatibles de API
-- **MINOR:** Nueva funcionalidad compatible hacia atrás  
-- **PATCH:** Bug fixes compatibles
-
-### Proceso de Release
-
-1. **Preparar Release:**
-```bash
-# Actualizar versión en settings.py
-APP_VERSION = "0.11.8"
-
-# Ejecutar tests
-pytest tests/ --cov=app
-
-# Verificar que todos los tests pasen
-```
-
-2. **Crear Release:**
-```bash
-# Ejecutar script de release
-python release.py
-
-# Se crean automáticamente:
-# - Tag en Git
-# - Build con PyInstaller  
-# - Release en GitHub con assets
-```
-
-3. **Estructura de Build:**
-```
-release/
-└── Glosaap_v0.11.8/
-    ├── Glosaapp.exe          # Aplicación principal
-    ├── updater.exe           # Actualizador automático
-    └── Glosaap_v0.11.8.zip   # Package para distribución
-```
-
----
-
-## 🛠️ Desarrollo Local
-```
-
-2. **Agregar a `app/ui/views/__init__.py`**:
-```python
-from .mi_vista import MiVista
-```
-
-3. **Integrar en `app.py`**:
-```python
-# En main():
-mi_vista = MiVista(
-    page=page,
-    on_back=go_to_dashboard,
-    on_action=lambda: print("Acción!")
-)
-
-def go_to_mi_vista():
-    # Ocultar otras vistas...
-    mi_vista.show()
+    # Mostrar destino
+    dashboard_view.show()
     page.update()
 
-# Agregar a la página
-page.add(..., mi_vista.container)
+def go_to_tools():
+    """Navega a herramientas."""
+    current_view["name"] = "tools"
+    
+    # Ocultar todas
+    login_view.hide()
+    dashboard_view.hide()
+    homologacion_view.hide()
+    
+    # Mostrar destino
+    tools_view.show()
+    page.update()
+```
+
+### Navegación con Callback
+
+Las vistas reciben un callback `on_back` para volver:
+
+```python
+# En la vista:
+class MiVista:
+    def __init__(self, page, on_back=None):
+        self.on_back = on_back
+        
+    def _build(self):
+        return ft.IconButton(
+            icon=ft.Icons.ARROW_BACK,
+            on_click=lambda e: self.on_back() if self.on_back else None
+        )
+
+# En app.py:
+mi_vista = MiVista(
+    page=page,
+    on_back=go_to_dashboard  # ← Callback inyectado
+)
 ```
 
 ---
 
-## 📋 Estilos - `app/ui/styles.py`
+## ✅ Buenas Prácticas
 
-Colores y tamaños centralizados:
+### 1. Colores - NUNCA Hardcodear
 
 ```python
-COLORS = {
-    "primary": "#6366F1",       # Morado principal
-    "primary_light": "#818CF8",
-    "bg_white": "#FFFFFF",
-    "bg_gray": "#F8FAFC",
-    "text_primary": "#1E293B",
-    "text_secondary": "#64748B",
-    "success": "#10B981",
-    "error": "#EF4444",
-    "warning": "#F59E0B",
-}
+# ✅ CORRECTO
+ft.Text("Hola", color=ft.Colors.ON_SURFACE)
+ft.Container(bgcolor=ft.Colors.SURFACE)
 
-FONT_SIZES = {
-    "xs": 12,
-    "sm": 14,
-    "md": 16,
-    "lg": 18,
-    "xl": 24,
-    "xxl": 32,
-}
-
-WINDOW_SIZES = {
-    "login": {"width": 450, "height": 550},
-    "dashboard": {"width": 800, "height": 550},
-    # ...
-}
+# ❌ INCORRECTO  
+ft.Text("Hola", color="#000000")
+ft.Container(bgcolor="#ffffff")
 ```
 
-**USAR SIEMPRE** estos valores en lugar de hardcodear:
-```python
-# ✅ Correcto
-ft.Text("Título", color=COLORS["primary"], size=FONT_SIZES["xl"])
+### 2. Contenedores - SIEMPRE con bgcolor
 
-# ❌ Incorrecto
-ft.Text("Título", color="#6366F1", size=24)
+```python
+# ✅ CORRECTO - No se ve contenido detrás
+ft.Container(
+    content=...,
+    bgcolor=ft.Colors.SURFACE,  # ← OBLIGATORIO
+    expand=True
+)
+
+# ❌ INCORRECTO - Transparente, se ve contenido detrás
+ft.Container(
+    content=...,
+    expand=True
+)
 ```
 
----
+### 3. Callbacks - Verificar None
 
-## ⚠️ Reglas de Oro - NO ROMPER
-
-### 1. Rutas de Red
 ```python
-# SIEMPRE verificar si la ruta existe antes de usarla
-if os.path.exists(NETWORK_PATHS["homologador"]):
-    # usar ruta de red
-else:
-    # usar fallback local
+# ✅ CORRECTO
+on_click=lambda e: self.on_back() if self.on_back else None
+
+# ❌ INCORRECTO - Puede crashear
+on_click=lambda e: self.on_back()
 ```
 
-### 2. DataFrames de Pandas
+### 4. Type Hints
+
 ```python
-# SIEMPRE limpiar columnas después de leer Excel
-df = pd.read_excel(path)
-df.columns = df.columns.str.strip()  # Quitar espacios
-
-# SIEMPRE verificar si columna existe
-if 'MiColumna' in df.columns:
-    # usar columna
-```
-
-### 3. Hilos y Async
-```python
-# Las operaciones de red/archivo van en hilos separados
-import threading
-
-def tarea_lenta():
-    # Operación que toma tiempo...
+# ✅ CORRECTO
+def process_file(self, filepath: str) -> Optional[pd.DataFrame]:
+    """Procesa archivo y retorna DataFrame o None."""
     pass
 
-threading.Thread(target=tarea_lenta).start()
+# ❌ INCORRECTO
+def process_file(self, filepath):
+    pass
 ```
 
-### 4. Actualizar UI
+### 5. Docstrings
+
 ```python
-# SIEMPRE llamar page.update() después de cambios visuales
-self.container.visible = True
-self.page.update()  # ¡No olvidar!
+# ✅ CORRECTO
+def calculate_total(items: list[dict]) -> float:
+    """
+    Calcula el total de una lista de items.
+    
+    Args:
+        items: Lista de diccionarios con key 'valor'
+        
+    Returns:
+        Suma total de valores
+        
+    Raises:
+        ValueError: Si algún item no tiene key 'valor'
+    """
+    return sum(item['valor'] for item in items)
 ```
 
-### 5. Manejo de Errores
+### 6. Manejo de Errores
+
 ```python
+# ✅ CORRECTO
 try:
-    resultado = operacion_riesgosa()
+    df = pd.read_excel(filepath)
+except FileNotFoundError:
+    self.logger.error(f"Archivo no encontrado: {filepath}")
+    return None
 except Exception as e:
-    print(f"❌ Error: {e}")
-    self.errors.append(str(e))
-    # NO dejar que la app crashee
+    self.logger.error(f"Error inesperado: {e}")
+    return None
+
+# ❌ INCORRECTO
+df = pd.read_excel(filepath)  # Puede crashear
 ```
 
 ---
 
 ## 🧪 Testing
 
-### Configuración de Pruebas
+### Ejecutar Tests
 
-El proyecto utiliza **pytest** para las pruebas unitarias con configuración en `pytest.ini`:
-
-```ini
-[tool:pytest]
-testpaths = tests
-python_files = test_*.py
-python_classes = Test*
-python_functions = test_*
-addopts = --verbose --tb=short --cov=app --cov-report=html --cov-report=term
-```
-
-### Ejecutar Pruebas
-
-```bash
-# Ejecutar todas las pruebas
-python -m pytest
-
-# Con cobertura detallada
-python -m pytest --cov=app --cov-report=html
+```powershell
+# Todos los tests
+pytest tests/
 
 # Test específico
-python -m pytest tests/test_processors.py -v
+pytest tests/test_processors.py
 
-# Ver reporte de cobertura en navegador
-# Abrir htmlcov/index.html
+# Con cobertura
+pytest --cov=app tests/
 ```
 
-### Estructura de Tests
-
-**Total de pruebas:** 431 tests pasando
-**Cobertura actual:** 31.02%
-
-#### Tests por Módulo
-
-```
-tests/
-├── test_app_state.py (46 tests)            # Estados de aplicación
-├── test_attachment_service.py (11 tests)   # Manejo de archivos adjuntos
-├── test_auth_service.py (37 tests)         # Autenticación
-├── test_base_processor.py (18 tests)       # Procesador base
-├── test_base_scraper.py (19 tests)         # Scraper base
-├── test_business_logic.py (42 tests)       # Lógica de negocio
-├── test_coosalud_processor.py (17 tests)   # Procesador Coosalud
-├── test_credential_manager.py (14 tests)   # Gestión de credenciales
-├── test_email_service.py (25 tests)        # Servicios de email
-├── test_eps_config.py (27 tests)           # Configuración EPS
-├── test_familiar_scraper.py (19 tests)     # Scraper Familiar
-├── test_fomag_scraper.py (19 tests)        # Scraper Fomag
-├── test_homologacion_service.py (25 tests) # Homologación
-├── test_imap_client.py (22 tests)         # Cliente IMAP
-├── test_loading_components.py (29 tests)   # Componentes de UI
-├── test_mix_excel_service.py (19 tests)    # Servicio Mix Excel
-├── test_mutualser_processor.py (17 tests)  # Procesador Mutualser
-├── test_navigation.py (17 tests)          # Navegación
-├── test_processors.py (8 tests)           # Tests originales
-├── test_session_manager.py (20 tests)     # Gestión de sesiones
-├── test_settings.py (13 tests)            # Configuraciones
-├── test_styles.py (8 tests)               # Estilos UI
-└── test_web_scraper.py (20 tests)         # Web scraping
-```
-
-#### Escribir Nuevos Tests
-
-**Ejemplo de test para un procesador:**
+### Estructura de Test
 
 ```python
+# tests/test_mi_modulo.py
 import pytest
-from unittest.mock import Mock, patch
 from app.service.processors.nueva_eps_processor import NuevaEpsProcessor
 
+
 class TestNuevaEpsProcessor:
+    """Tests para NuevaEpsProcessor."""
     
     @pytest.fixture
-    def processor(self):
-        return NuevaEpsProcessor("test_output")
+    def processor(self, tmp_path):
+        """Fixture que crea un procesador para testing."""
+        return NuevaEpsProcessor(
+            homologacion_path=str(tmp_path / "homo.xlsx"),
+            output_path=str(tmp_path)
+        )
     
-    def test_identify_files_success(self, processor):
-        """Test identificación exitosa de archivos"""
-        files = ["detalle_nueva.xlsx", "other_file.txt"]
-        result = processor.identify_files(files)
-        
+    def test_process_file_valid(self, processor, tmp_path):
+        """Test procesar archivo válido."""
+        # Crear archivo de prueba
+        # ...
+        result = processor.process_file(str(tmp_path / "test.xlsx"))
         assert result is not None
-        assert "detalle" in result
-        assert result["detalle"] == "detalle_nueva.xlsx"
     
-    def test_identify_files_missing(self, processor):
-        """Test cuando falta archivo requerido"""
-        files = ["wrong_file.txt"]
-        result = processor.identify_files(files)
-        
+    def test_process_file_missing_columns(self, processor, tmp_path):
+        """Test con columnas faltantes."""
+        # ...
+        result = processor.process_file(str(tmp_path / "invalid.xlsx"))
         assert result is None
-    
-    @patch('pandas.read_excel')
-    def test_extract_data(self, mock_read_excel, processor):
-        """Test extracción de datos con mock"""
-        # Setup mock
-        mock_df = Mock()
-        mock_read_excel.return_value = mock_df
-        
-        identified_files = {"detalle": "test.xlsx"}
-        result = processor.extract_data(identified_files)
-        
-        assert "detalle" in result
-        mock_read_excel.assert_called_once_with("test.xlsx")
-```
-
-**Ejemplo de test para componente UI:**
-
-```python
-import pytest
-import flet as ft
-from unittest.mock import Mock, patch
-from app.ui.components.loading_overlay import LoadingOverlay
-
-class TestLoadingOverlay:
-    
-    @pytest.fixture
-    def mock_page(self):
-        page = Mock(spec=ft.Page)
-        page.overlay = []
-        page.update = Mock()
-        return page
-    
-    def test_initialization(self, mock_page):
-        """Test inicialización correcta"""
-        overlay = LoadingOverlay(mock_page)
-        
-        assert overlay.page == mock_page
-        assert overlay.is_visible is False
-        assert overlay.overlay_container is not None
-    
-    def test_show_loading(self, mock_page):
-        """Test mostrar loading"""
-        overlay = LoadingOverlay(mock_page)
-        
-        overlay.show("Test message")
-        
-        assert overlay.is_visible is True
-        assert len(mock_page.overlay) == 1
-        mock_page.update.assert_called()
-    
-    def test_hide_loading(self, mock_page):
-        """Test ocultar loading"""
-        overlay = LoadingOverlay(mock_page)
-        overlay.show("Test")
-        
-        overlay.hide()
-        
-        assert overlay.is_visible is False
-        assert len(mock_page.overlay) == 0
-        mock_page.update.assert_called()
-```
-
-### Mejores Prácticas para Tests
-
-1. **Usar fixtures** para setup común
-2. **Mock dependencias externas** (archivos, APIs, base de datos)
-3. **Nombres descriptivos** para tests
-4. **Separar casos de éxito y error**
-5. **Tests independientes** (no dependen entre sí)
-6. **Cobertura mínima 80%** para código crítico
-
-### Tests de Integración
-
-```python
-# Ejemplo de test de integración para flujo completo
-def test_complete_processing_flow():
-    """Test del flujo completo de procesamiento"""
-    # Setup
-    processor = CoosaludProcessor("test_output")
-    test_files = ["rips_detalle.xlsx", "glosas_coosalud.xlsx"]
-    
-    # Execute
-    identified = processor.identify_files(test_files)
-    assert identified is not None
-    
-    valid = processor.validate_files(identified)
-    assert valid is True
-    
-    data = processor.extract_data(identified)
-    assert data is not None
-    
-    result = processor.homologate(data)
-    assert result is not None
 ```
 
 ---
 
-## 📋 Integración de Componentes Loading en Vistas
+## 🐛 Debugging
 
-### Patrón de Integración Estándar
+### Logs
 
-#### 1. Importaciones Necesarias
 ```python
-from app.ui.components.loading_overlay import LoadingOverlay, ToastNotification, LoadingButton
+import logging
+
+# Configurar logger
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+# Usar en código
+logger.debug("Variable x = %s", x)
+logger.info("Proceso completado")
+logger.warning("Archivo no encontrado, usando default")
+logger.error("Error al procesar: %s", e)
 ```
 
-#### 2. Inicialización en Constructor
+### Inspeccionar Estado de Flet
+
 ```python
-class MyView:
-    def __init__(self, page: ft.Page, ...):
-        self.page = page
-        
-        # Componentes de loading
-        self.loading_overlay = LoadingOverlay(page)
-        self.toast = ToastNotification(page)
-        
-        self.container = self.build()
+# En cualquier evento handler
+def on_click(e):
+    print(f"Page theme mode: {self.page.theme_mode}")
+    print(f"Vista visible: {self.container.visible}")
+    print(f"Current view: {current_view}")
 ```
 
-#### 3. Métodos de Control de Loading
-```python
-def show_loading(self, message="Cargando..."):
-    """Muestra el overlay de carga"""
-    if self.loading_overlay:
-        self.loading_overlay.show(message)
+### Hot Reload
 
-def hide_loading(self):
-    """Oculta el overlay de carga"""
-    if self.loading_overlay:
-        self.loading_overlay.hide()
+Flet soporta hot reload durante desarrollo:
 
-def show_toast(self, message, toast_type="success"):
-    """Muestra una notificación toast"""
-    if self.toast:
-        self.toast.show(message, toast_type)
-```
+```powershell
+# Con hot reload
+flet run main.py --hot
 
-#### 4. Uso en Event Handlers
-```python
-def _handle_action(self):
-    """Maneja una acción con feedback visual"""
-    try:
-        self.show_loading("Procesando...")
-        # Realizar operación
-        result = self._perform_operation()
-        self.show_toast("Operación completada exitosamente", "success")
-    except Exception as ex:
-        self.show_toast(f"Error: {str(ex)}", "error")
-    finally:
-        self.hide_loading()
-```
-
-### Ejemplos de Implementación Actual
-
-#### DashboardView
-- **LoadingOverlay**: Durante navegación entre cards
-- **ToastNotification**: Para notificaciones de estado y verificación de actualizaciones
-- **Feedback en Cards**: Loading al hacer click con mensaje personalizado
-
-#### MessagesView
-- **LoadingOverlay**: Durante búsqueda de mensajes
-- **ToastNotification**: Para resultados de búsqueda y errores de conexión
-- **ProgressIndicator**: Para descarga de archivos adjuntos
-
-#### LoginView
-- **LoadingButton**: Para botón de conexión con estado de carga
-- **ToastNotification**: Para resultados de autenticación
-- **LoadingOverlay**: Para validación de credenciales
-
-#### ToolsView
-- **LoadingOverlay**: Para navegación a herramientas específicas
-- **ToastNotification**: Para funciones en desarrollo y feedback
-- **Feedback Visual**: En todas las cards de herramientas con mensajes descriptivos
-
-### Componentes Disponibles Integrados
-
-1. **LoadingOverlay**: Overlay modal con spinner y mensaje personalizable
-2. **ToastNotification**: Notificaciones no invasivas con tipos (success, error, warning, info)
-3. **LoadingButton**: Botón con estado de carga integrado y spinner
-4. **ProgressIndicator**: Barra de progreso para operaciones largas
-
-### Patrones de Uso Recomendados
-
-#### Para Operaciones de Red
-```python
-def _fetch_data(self):
-    """Obtener datos de API con feedback"""
-    try:
-        self.show_loading("Conectando con servidor...")
-        data = api_call()
-        self.show_toast("Datos actualizados", "success")
-        return data
-    except ConnectionError:
-        self.show_toast("Error de conexión", "error")
-    except Exception as ex:
-        self.show_toast(f"Error inesperado: {str(ex)}", "error")
-    finally:
-        self.hide_loading()
-```
-
-#### Para Procesamiento de Archivos
-```python
-def _process_file(self, file_path):
-    """Procesar archivo con progreso"""
-    try:
-        self.show_loading("Procesando archivo...")
-        # Si hay progreso conocido, usar ProgressIndicator
-        result = process_file(file_path)
-        self.show_toast("Archivo procesado exitosamente", "success")
-    except FileNotFoundError:
-        self.show_toast("Archivo no encontrado", "error")
-    finally:
-        self.hide_loading()
-```
-
-#### Para Navegación Entre Vistas
-```python
-def _navigate_to_view(self, view_name):
-    """Navegar con feedback visual"""
-    self.show_loading(f"Cargando {view_name}...")
-    # La vista de destino se encarga de ocultar el loading
-    self.navigation_controller.navigate_to(view_name)
+# Sin hot reload (producción)
+python main.py
 ```
 
 ---
 
-## 🚀 Compilar Ejecutable
+## 📚 Recursos Adicionales
 
-```bash
-# Usar PyInstaller con el spec existente
-pyinstaller glosaapp.spec
-
-# El ejecutable estará en dist/glosaapp.exe
-```
+- [Documentación de Flet](https://flet.dev/docs/)
+- [Flet Controls Gallery](https://flet.dev/docs/controls)
+- [Python Type Hints Cheatsheet](https://mypy.readthedocs.io/en/stable/cheat_sheet_py3.html)
 
 ---
 
-## 📞 Contacto / Soporte
+<div align="center">
 
-Si tienes dudas sobre alguna parte del código, revisa:
+**¿Tienes dudas? Contacta al equipo de desarrollo.**
 
-1. Los comentarios en el código (docstrings)
-2. Este documento
-3. El README.md principal
-
----
-
-**Recuerda:** Si no entiendes algo, **no lo modifiques**. Pregunta primero. 🙏
+</div>

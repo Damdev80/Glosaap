@@ -7,8 +7,9 @@
 **Sistema integral para la gestión, procesamiento y respuesta de glosas médicas**
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Flet](https://img.shields.io/badge/Flet-0.9.0+-green.svg)](https://flet.dev/)
+[![Flet](https://img.shields.io/badge/Flet-0.27.6-green.svg)](https://flet.dev/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub Release](https://img.shields.io/github/v/release/Damdev80/Glosaap)](https://github.com/Damdev80/Glosaap/releases)
 
 </div>
 
@@ -22,11 +23,12 @@
 - [Instalación](#-instalación)
 - [Uso](#-uso)
 - [Estructura del Proyecto](#-estructura-del-proyecto)
-- [Módulos Principales](#-módulos-principales)
+- [Guía de Desarrollo](#-guía-de-desarrollo)
+- [Sistema de Temas](#-sistema-de-temas)
+- [Actualizaciones Automáticas](#-actualizaciones-automáticas)
 - [Configuración](#-configuración)
 - [Herramientas](#-herramientas)
 - [Procesadores de EPS](#-procesadores-de-eps)
-- [Rutas de Red](#-rutas-de-red)
 - [Compilación](#-compilación)
 - [Solución de Problemas](#-solución-de-problemas)
 
@@ -54,38 +56,40 @@
 
 ### 🏠 Dashboard Principal
 - **Evitar Glosa**: Prevención y validación antes de facturar
-- **Manejar Glosa**: Gestión y seguimiento de glosas activas
+- **Manejar Glosa**: Gestión y seguimiento de glosas activas (búsqueda de correos)
 - **Responder Glosa**: Respuesta a objeciones y documentación
 
-### 📧 Gestión de Correos
+### 📧 Métodos de Obtención de Glosas
+
+#### Glosa por Correo
 - Búsqueda de correos por palabra clave "glosa"
 - Filtrado por EPS (MUTUALSER, COOSALUD, etc.)
 - Filtrado por rango de fechas
 - Descarga automática de adjuntos Excel
-- Límite configurable (hasta 1000 correos)
+
+#### Glosa por Web
+- **Familiar de Colombia**: Automatización con Playwright
+- **Fomag (Horus)**: Descarga desde portal web
+- Guardado seguro de credenciales
 
 ### 🔄 Homologación de Códigos
 - Homologación automática usando archivos maestros
 - Validación de códigos contra COD_SERV_FACT
 - Soporte multi-EPS
-- Reglas de homologación:
-  1. Buscar código en `Código Servicio de la ERP`
-  2. Obtener `Código producto en DGH`
-  3. Validar que DGH exista en `COD_SERV_FACT`
-  4. Si no existe → dejar en blanco
-
-### 📊 Procesamiento de Archivos
-- Consolidación de múltiples archivos Excel
-- Generación de archivo de objeciones
-- Formato de fechas configurable (D/M/A)
-- Procesamiento de filas AU/TA
+- CRUD completo para gestionar códigos
+- Carga masiva desde Excel
 
 ### 🎨 Interfaz Moderna
-- Diseño limpio y minimalista
+- **Tema Claro/Oscuro** con persistencia (toggle en el dashboard)
+- Diseño minimalista con Flet
 - Cards con efectos hover
-- Diálogos de alerta visuales
 - Indicadores de progreso
-- Temas de colores personalizados
+- Notificaciones toast
+
+### 🔄 Actualizaciones Automáticas
+- Verificación automática desde GitHub Releases
+- Descarga e instalación en segundo plano
+- Updater independiente para evitar conflictos
 
 ---
 
@@ -98,9 +102,12 @@
 
 ### Dependencias Python
 ```
-flet>=0.9.0
+flet>=0.27.6
 pandas>=2.0.0
 openpyxl>=3.0.0
+playwright>=1.40.0
+python-dotenv>=1.0.0
+requests>=2.31.0
 ```
 
 ---
@@ -124,7 +131,12 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-### 4. Verificar instalación
+### 4. Instalar navegadores de Playwright (para descarga web)
+```powershell
+playwright install chromium
+```
+
+### 5. Verificar instalación
 ```powershell
 python -c "import flet; import pandas; print('✅ Dependencias instaladas correctamente')"
 ```
@@ -135,38 +147,42 @@ python -c "import flet; import pandas; print('✅ Dependencias instaladas correc
 
 ### Ejecutar la aplicación
 ```powershell
-# Método recomendado (como módulo)
-python -m app.ui.app
-
-# O directamente
 python main.py
 ```
 
 ### Flujo de trabajo típico
 
 #### 1️⃣ **Iniciar sesión**
-- Ingresar correo electrónico
-- Ingresar contraseña
-- El servidor IMAP se auto-detecta o puedes especificarlo
-- Marcar "Recordar sesión" para auto-login futuro
+```
+┌─────────────────────────────────────┐
+│           🔐 Glosaap               │
+│                                     │
+│  Correo: usuario@empresa.com       │
+│  Contraseña: ********              │
+│  Servidor IMAP: (auto-detecta)     │
+│                                     │
+│  ☑️ Recordar sesión                 │
+│                                     │
+│       [ Iniciar Sesión ]            │
+└─────────────────────────────────────┘
+```
 
-#### 2️⃣ **Seleccionar acción**
-- Elegir entre: Evitar, Manejar o Responder Glosa
+#### 2️⃣ **Seleccionar método**
+- **📧 Glosa por Correo**: Busca en tu bandeja de entrada
+- **🌐 Glosa por Web**: Descarga desde portales EPS
 
-#### 3️⃣ **Configurar búsqueda**
-- Seleccionar rango de fechas (obligatorio)
+#### 3️⃣ **Dashboard principal**
+- Seleccionar acción (Evitar/Manejar/Responder)
+- O usar Herramientas para funciones adicionales
+- Toggle de tema claro/oscuro disponible
+
+#### 4️⃣ **Configurar búsqueda**
+- Seleccionar rango de fechas
 - Elegir EPS a procesar
 
-#### 4️⃣ **Procesar correos**
-- Los correos se buscan automáticamente
-- Los adjuntos Excel se descargan automáticamente
-- Click en "Procesar [EPS]" para generar archivos
-
-#### 5️⃣ **Revisar resultados**
-- Se abre automáticamente la carpeta con los archivos generados
-- Archivos generados:
-  - `[EPS]_consolidado_[fecha].xlsx` - Datos consolidados
-  - `Objeciones_[fecha].xlsx` - Archivo para cargar en sistema
+#### 5️⃣ **Procesar y revisar resultados**
+- Los archivos se generan en la carpeta de red
+- Se abre automáticamente la carpeta de salida
 
 ---
 
@@ -174,99 +190,137 @@ python main.py
 
 ```
 Glosaap/
-├── 📁 app/
-│   ├── 📁 api/                    # APIs externas (futuro)
+├── 📁 app/                           # Código fuente principal
+│   ├── 📁 api/                       # APIs externas (futuro)
 │   ├── 📁 config/
-│   │   └── eps_config.py          # Configuración de EPS
+│   │   ├── eps_config.py             # Configuración de EPS
+│   │   └── settings.py               # Settings globales (versión, rutas)
 │   ├── 📁 core/
-│   │   ├── homologacion_service.py    # Servicio CRUD de homologación
-│   │   ├── imap_client.py             # Cliente IMAP
-│   │   ├── mix_excel_service.py       # Servicio Mix Excel
-│   │   ├── mutualser_processor.py     # Procesador MUTUALSER
-│   │   ├── coosalud_processor.py      # Procesador COOSALUD
-│   │   └── session_manager.py         # Gestión de sesiones
+│   │   ├── homologacion_service.py   # CRUD de homologación
+│   │   ├── imap_client.py            # Cliente IMAP
+│   │   ├── mix_excel_service.py      # Servicio Mix Excel
+│   │   ├── mutualser_processor.py    # Procesador MUTUALSER
+│   │   └── session_manager.py        # Gestión de sesiones
 │   ├── 📁 service/
-│   │   ├── attachment_service.py      # Servicio de adjuntos
-│   │   ├── auth_service.py            # Autenticación
-│   │   └── email_service.py           # Servicio de correo
+│   │   ├── attachment_service.py     # Servicio de adjuntos
+│   │   ├── auth_service.py           # Autenticación
+│   │   ├── email_service.py          # Servicio de correo
+│   │   ├── 📁 processors/            # Procesadores por EPS
+│   │   │   ├── base_processor.py     # Clase base
+│   │   │   └── coosalud_processor.py # Procesador COOSALUD
+│   │   └── 📁 web_scraper/           # Scrapers web
+│   │       ├── base_scraper.py       # Scraper base
+│   │       ├── familiar_scraper.py   # Scraper Familiar
+│   │       └── fomag_scraper.py      # Scraper Fomag
 │   └── 📁 ui/
-│       ├── 📁 components/
-│       │   ├── alert_dialog.py        # Diálogos de alerta
-│       │   ├── date_range_picker.py   # Selector de fechas
-│       │   ├── eps_card.py            # Tarjetas de EPS
-│       │   └── message_row.py         # Filas de mensajes
+│       ├── app.py                    # Aplicación principal
+│       ├── styles.py                 # ThemeManager y estilos
+│       ├── navigation.py             # Control de navegación
+│       ├── 📁 components/            # Componentes reutilizables
+│       │   ├── alert_dialog.py       # Diálogos de alerta
+│       │   ├── date_range_picker.py  # Selector de fechas
+│       │   ├── eps_card.py           # Tarjetas de EPS
+│       │   └── message_row.py        # Filas de mensajes
 │       ├── 📁 screens/
-│       │   └── eps_screen.py          # Pantalla de selección EPS
-│       ├── 📁 views/
-│       │   ├── dashboard_view.py      # Vista del dashboard
-│       │   ├── homologacion_view.py   # Gestión de homologación
-│       │   ├── homologador_manual_view.py  # Homologador manual
-│       │   ├── login_view.py          # Vista de login
-│       │   ├── messages_view.py       # Vista de mensajes
-│       │   ├── mix_excel_view.py      # Herramienta Mix Excel
-│       │   └── tools_view.py          # Menú de herramientas
-│       ├── app.py                     # Aplicación principal
-│       └── styles.py                  # Estilos centralizados
+│       │   └── eps_screen.py         # Pantalla selección EPS
+│       └── 📁 views/
+│           ├── dashboard_view.py     # Dashboard principal
+│           ├── login_view.py         # Vista de login
+│           ├── method_selection_view.py # Selección método (correo/web)
+│           ├── tools_view.py         # Menú de herramientas
+│           ├── homologacion_view.py  # Gestión homologación
+│           ├── homologador_manual_view.py  # Homologador manual
+│           ├── mix_excel_view.py     # Herramienta Mix Excel
+│           ├── web_download_view.py  # Descarga web
+│           └── messages_view.py      # Vista de mensajes
 ├── 📁 assets/
 │   ├── 📁 icons/
-│   │   ├── app_logo.png               # Logo de la aplicación
-│   │   └── utils.png                  # Icono de utilidades
+│   │   ├── app_logo.png              # Logo aplicación
+│   │   └── app_logo.ico              # Icono para .exe
 │   └── 📁 img/
-│       ├── 📁 eps/
-│       │   ├── mutualser.png          # Logo MUTUALSER
-│       │   └── coosalud.png           # Logo COOSALUD
-│       ├── evitar_glosa.png           # Icono evitar glosa
-│       ├── manejar_glosa.png          # Icono manejar glosa
-│       ├── responder_glosa.png        # Icono responder glosa
-│       ├── homologar.png              # Icono homologación
-│       ├── homologador_manual.png     # Icono homologador manual
-│       └── mix_excel.png              # Icono mix excel
-├── .gitignore
-├── .session.json                      # Sesión guardada (auto-generado)
-├── glosaap.spec                       # Configuración PyInstaller
-├── main.py                            # Punto de entrada
-├── README.md                          # Este archivo
-└── requirements.txt                   # Dependencias
+│       └── 📁 eps/                   # Logos de EPS
+├── 📁 temp/                          # Archivos temporales
+│   ├── 📁 config/                    # Credenciales guardadas
+│   └── 📁 perfil_chrome/             # Perfil de Playwright
+├── 📁 tests/                         # Tests unitarios
+├── build.py                          # Script de compilación
+├── glosaap.spec                      # Config PyInstaller
+├── main.py                           # Punto de entrada
+├── release.py                        # Script para crear releases
+├── updater.py                        # Actualizador independiente
+└── requirements.txt                  # Dependencias
 ```
 
 ---
 
-## 🔧 Módulos Principales
+## 👨‍💻 Guía de Desarrollo
 
-### 📧 `imap_client.py`
-Cliente IMAP para conexión y búsqueda de correos.
-- Conexión SSL a servidores IMAP
-- Búsqueda por asunto y fechas
-- Descarga de adjuntos Excel
-- Timeout configurable (30s por defecto)
+Para desarrolladores que quieran contribuir al proyecto, consulta la **[Guía de Desarrollo](DEVELOPER_GUIDE.md)** que incluye:
 
-### 🔄 `mutualser_processor.py`
-Procesador específico para archivos de MUTUALSER.
-- Extracción de datos de glosas
-- Homologación de códigos
-- Generación de archivo de objeciones
-- Procesamiento AU/TA
+- 🏗️ Arquitectura del proyecto
+- 🎨 Sistema de temas (claro/oscuro)
+- 📄 Cómo crear una nueva vista
+- 🧩 Cómo crear un componente
+- 🏥 Cómo crear un procesador de EPS
+- ✅ Buenas prácticas
+- 🧪 Testing
+- 🐛 Debugging
 
-### 🏥 `homologacion_service.py`
-Servicio CRUD para gestión de códigos de homologación.
-- Soporte multi-EPS
-- Agregar/Editar/Eliminar códigos
-- Listado con filtros
-- Persistencia en archivos Excel de red
+---
 
-### 📊 `mix_excel_service.py`
-Servicio para transferir datos entre archivos Excel.
-- Mapeo de columnas entre archivos
-- Transferencia por coincidencia de valores
-- Preservación de datos originales
+## 🌓 Sistema de Temas
+
+La aplicación soporta **tema claro y oscuro** que se aplica a toda la interfaz.
+
+### Cómo cambiar el tema
+- En el **dashboard**, usa el botón de toggle (sol/luna) en la esquina superior
+- El tema se guarda automáticamente y persiste entre sesiones
+
+### Para desarrolladores
+Los componentes usan `ft.Colors.*` que se adaptan automáticamente al tema:
+
+```python
+# ✅ CORRECTO - Se adapta al tema
+ft.Container(bgcolor=ft.Colors.SURFACE)
+ft.Text(color=ft.Colors.ON_SURFACE)
+
+# ❌ INCORRECTO - No se adapta
+ft.Container(bgcolor="#ffffff")
+ft.Text(color="#000000")
+```
+
+Ver [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md#-sistema-de-temas) para más detalles.
+
+---
+
+## 🔄 Actualizaciones Automáticas
+
+### Cómo funciona
+1. Al iniciar, la app verifica si hay actualizaciones en GitHub Releases
+2. Si hay una versión nueva, muestra un diálogo
+3. Al aceptar, descarga el ZIP de la nueva versión
+4. Ejecuta `updater.exe` que instala la actualización
+
+### Verificar manualmente
+Click en el número de versión en la esquina inferior izquierda del dashboard.
 
 ---
 
 ## ⚙️ Configuración
 
-### `app/config/eps_config.py`
-Configuración de las EPS disponibles:
+### `app/config/settings.py`
+```python
+# Versión de la aplicación
+APP_VERSION = "1.3.8"
 
+# Rutas de red
+NETWORK_PATHS = {
+    "homologacion_mutualser": r"\\MINERVA\Cartera\GLOSAAP\HOMOLOGADOR\mutualser_homologacion.xlsx",
+    "output_mutualser": r"\\MINERVA\Cartera\GLOSAAP\MUTUALSER\OUTPUTS",
+}
+```
+
+### `app/config/eps_config.py`
 ```python
 EPS_CONFIG = [
     {
@@ -276,50 +330,24 @@ EPS_CONFIG = [
         "description": "Mutual SER EPS",
         "image_path": "assets/img/eps/mutualser.png"
     },
-    {
-        "name": "COOSALUD",
-        "filter": "coosalud",
-        "filter_type": "keyword",
-        "description": "Coosalud EPS",
-        "image_path": "assets/img/eps/coosalud.png"
-    }
+    # ... más EPS
 ]
 ```
-
-### `app/ui/styles.py`
-Colores y estilos centralizados:
-
-```python
-COLORS = {
-    "primary": "#2563EB",        # Azul principal
-    "primary_dark": "#1E40AF",   # Azul oscuro
-    "success": "#10B981",        # Verde éxito
-    "error": "#EF4444",          # Rojo error
-    "warning": "#F59E0B",        # Amarillo advertencia
-    "text_primary": "#1F2937",   # Texto principal
-    "text_secondary": "#6B7280", # Texto secundario
-    "bg_white": "#FFFFFF",       # Fondo blanco
-    "bg_light": "#F9FAFB",       # Fondo claro
-}
-```
-
 ---
 
 ## 🛠️ Herramientas
 
 ### 📋 Gestión de Homologación
-Ubicación: **Herramientas → Gestión Homologación**
+**Ubicación:** Herramientas → Gestión Homologación
 
-- Agregar nuevos códigos de homologación
-- Editar códigos existentes
-- Eliminar códigos
-- Buscar por ERP, Descripción o DGH
+- Agregar/Editar/Eliminar códigos de homologación
+- Búsqueda por código o descripción
+- Carga masiva desde archivo Excel
 - Selector de EPS (MUTUALSER, COOSALUD)
 
 ### 🔄 Homologador Manual
-Ubicación: **Herramientas → Homologador Manual**
+**Ubicación:** Herramientas → Homologador Manual
 
-Permite homologar cualquier archivo Excel:
 1. Seleccionar EPS
 2. Cargar archivo Excel
 3. Seleccionar columna a homologar
@@ -328,12 +356,12 @@ Permite homologar cualquier archivo Excel:
 **Ruta de salida:** `\\MINERVA\Cartera\GLOSAAP\RESULTADO DE HOMOLAGADOR MANUAL`
 
 ### 📊 Mix Excel
-Ubicación: **Herramientas → Mix Excel**
+**Ubicación:** Herramientas → Mix Excel
 
 Transfiere datos entre dos archivos Excel:
-1. Seleccionar archivo origen
-2. Seleccionar archivo destino
-3. Configurar mapeo de columnas
+1. Seleccionar archivo origen y destino
+2. Configurar columnas de referencia y destino
+3. Establecer tolerancia de coincidencia
 4. Ejecutar transferencia
 
 ---
@@ -343,38 +371,20 @@ Transfiere datos entre dos archivos Excel:
 ### MUTUALSER ✅
 **Estado:** Completamente implementado
 
-**Columnas procesadas:**
-- Número de factura
-- Número de glosa
-- Tecnología (código de servicio)
-- Cantidad facturada/glosada
-- Valor facturado/glosado
-- Concepto de glosa
-- Código de glosa
-- Observación
-- Fecha
-
-**Archivo de objeciones generado:**
-| Columna | Descripción |
-|---------|-------------|
-| CDCONSEC | Consecutivo por factura |
-| CDFECDOC | Fecha documento (D/M/A) |
-| CRNCXC | Número factura formateado |
-| CROFECOBJ | Fecha objeción |
-| CROOBSERV | Observación REG GLOSA |
-| CRNCONOBJ | Código de glosa |
-| SLNSERPRO | Código homologado DGH |
-| CROVALOBJ | Valor glosado |
-| CRDOBSERV | Concepto + Observación |
+| Columna Entrada | Columna Salida |
+|-----------------|----------------|
+| Número factura | CRNCXC |
+| Código servicio | SLNSERPRO (homologado) |
+| Valor glosado | CROVALOBJ |
+| Concepto glosa | CRDOBSERV |
+| Código glosa | CRNCONOBJ |
 
 ### COOSALUD ⏳
-**Estado:** Pendiente de implementar
+**Estado:** En desarrollo
 
 ---
 
 ## 🌐 Rutas de Red
-
-La aplicación utiliza rutas de red UNC para acceder a archivos compartidos:
 
 | Propósito | Ruta |
 |-----------|------|
@@ -389,25 +399,29 @@ La aplicación utiliza rutas de red UNC para acceder a archivos compartidos:
 
 ## 📦 Compilación
 
-### Generar ejecutable con PyInstaller
+### Generar ejecutable
 
 ```powershell
-# Instalar PyInstaller
-pip install pyinstaller
+# Activar entorno virtual
+.\.venv\Scripts\Activate.ps1
 
-# Compilar (usando spec existente)
-pyinstaller glosaap.spec
-
-# O compilar manualmente
-pyinstaller --onefile --windowed --name=Glosaap --add-data="assets;assets" main.py
+# Ejecutar script de build
+python build.py
 ```
 
-El ejecutable se genera en `dist/Glosaap.exe`
+Genera:
+- `release/Glosaap_vX.X.X_YYYYMMDD.zip`
+- Contiene: `Glosaap.exe`, `updater.exe`, `README.txt`
 
-### Opciones de compilación
-- `--onefile`: Genera un único archivo .exe
-- `--windowed`: Sin ventana de consola
-- `--add-data`: Incluye carpeta de assets
+### Crear release en GitHub
+
+```powershell
+# Configurar token en .env
+# GITHUB_TOKEN=ghp_xxx
+
+# Ejecutar release
+python release.py
+```
 
 ---
 
@@ -415,40 +429,20 @@ El ejecutable se genera en `dist/Glosaap.exe`
 
 ### Error: "No se puede conectar al servidor IMAP"
 - Verificar credenciales
-- Verificar que el servidor IMAP esté correcto
-- Para Gmail: habilitar "Acceso de apps menos seguras" o usar contraseña de aplicación
+- Para Gmail: usar contraseña de aplicación
+- Verificar servidor IMAP correcto
 
 ### Error: "Ruta de red no accesible"
-- Verificar conexión a la red corporativa
-- Verificar permisos de acceso a `\\MINERVA\`
-- Ejecutar como administrador si es necesario
+- Verificar conexión VPN/red corporativa
+- Verificar permisos en `\\MINERVA\`
 
-### Error: "No se encontró archivo de homologación"
-- Verificar que exista el archivo en la ruta de red
-- Verificar nombre exacto del archivo
+### Pantalla negra al cambiar tema
+- Actualizar Flet a versión >= 0.27.6
+- Verificar que todas las vistas tengan `bgcolor=ft.Colors.SURFACE`
 
-### Los códigos no se homologan
-Posibles causas:
-1. El código no existe en `Código Servicio de la ERP`
-2. El `Código producto en DGH` no existe en `COD_SERV_FACT`
-3. El archivo de homologación está desactualizado
-
-### La aplicación se congela durante la búsqueda
-- Esperar el timeout (30 segundos)
-- Reducir el rango de fechas
+### La aplicación se congela
+- Reducir rango de fechas de búsqueda
 - Verificar conexión a internet
-
----
-
-## 🔜 Próximas Funcionalidades
-
-- [ ] Procesador COOSALUD
-- [ ] Exportación a PDF
-- [ ] Dashboard con estadísticas
-- [ ] Notificaciones de escritorio
-- [ ] Modo oscuro
-- [ ] Respaldo automático de configuración
-- [ ] Integración con API REST
 
 ---
 
@@ -456,9 +450,19 @@ Posibles causas:
 
 1. Fork el repositorio
 2. Crear rama feature (`git checkout -b feature/NuevaFuncionalidad`)
-3. Commit cambios (`git commit -m 'Agregar nueva funcionalidad'`)
-4. Push a la rama (`git push origin feature/NuevaFuncionalidad`)
-5. Crear Pull Request
+3. Seguir las [Buenas Prácticas](DEVELOPER_GUIDE.md#-buenas-prácticas)
+4. Commit cambios (`git commit -m 'feat: agregar nueva funcionalidad'`)
+5. Push a la rama (`git push origin feature/NuevaFuncionalidad`)
+6. Crear Pull Request
+
+### Convención de commits
+
+- `feat:` Nueva funcionalidad
+- `fix:` Corrección de bug
+- `docs:` Documentación
+- `style:` Formato (no afecta código)
+- `refactor:` Refactorización
+- `test:` Tests
 
 ---
 
@@ -468,14 +472,10 @@ Este proyecto es de uso interno corporativo.
 
 ---
 
-## 📞 Soporte
-
-Para reportar bugs o solicitar funcionalidades, crear un issue en el repositorio.
-
----
-
 <div align="center">
 
-**Desarrollado con amor para la gestión eficiente de glosas médicas**
+**Desarrollado con ❤️ para la gestión eficiente de glosas médicas**
+
+[⬆️ Volver arriba](#-glosaap--sistema-de-gestión-de-glosas)
 
 </div>
