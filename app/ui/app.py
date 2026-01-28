@@ -5,6 +5,7 @@ import flet as ft
 import os
 import sys
 import threading
+from typing import Optional, List
 
 # Configurar ruta de navegadores de Playwright ANTES de cualquier import
 if sys.platform == 'win32':
@@ -132,9 +133,6 @@ def main(page: ft.Page):
         mix_excel_view.hide()
         homologador_manual_view.hide()
         web_download_view.hide()
-        if not page.window.full_screen:
-            page.window.width = WINDOW_SIZES["main"]["width"]
-            page.window.height = WINDOW_SIZES["main"]["height"]
         page.update()
     
     def go_to_tools():
@@ -289,10 +287,32 @@ def main(page: ft.Page):
     
     def on_dashboard_action(action_key):
         """Callback cuando se selecciona una acción del dashboard"""
+        # Verificar si la funcionalidad está implementada
+        funciones_en_desarrollo = {
+            "evitar": "Evitar Glosa",
+            "responder": "Responder Glosa"
+        }
+        
+        if action_key in funciones_en_desarrollo:
+            nombre_funcion = funciones_en_desarrollo[action_key]
+            
+            def _cerrar_dialogo(e):
+                page.close(dialog)
+            
+            # Mostrar alerta usando overlay (Flet moderno)
+            dialog = ft.AlertDialog(
+                modal=True,
+                title=ft.Text("🚧 En Desarrollo"),
+                content=ft.Text(f"'{nombre_funcion}' estará disponible próximamente."),
+                actions=[ft.TextButton("OK", on_click=_cerrar_dialogo)]
+            )
+            
+            page.open(dialog)
+            return
+        
+        # Funcionalidad implementada - continuar normalmente
         app_state["dashboard_action"] = action_key
         go_to_eps_selection()
-        # Ocultar loading del dashboard después de navegar
-        dashboard_view.hide_loading()
     
     def on_eps_selected(eps_info, date_from, date_to):
         """Callback cuando se selecciona una EPS"""
@@ -869,8 +889,8 @@ def main(page: ft.Page):
     
     # Exponer función para verificar actualizaciones desde otras vistas
     page.data = page.data if hasattr(page, 'data') and page.data else {}
-    page.data['check_updates'] = update_checker.check_updates
-    page.data['app_version'] = APP_VERSION
+    page.data['check_updates' ] = update_checker.check_updates # type: ignore
+    page.data['app_version'] = APP_VERSION # type: ignore
     
     # ==================== AUTO-LOGIN ====================
     

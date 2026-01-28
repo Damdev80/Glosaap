@@ -1,4 +1,4 @@
-"""
+﻿"""
 Componente de diálogos de alerta reutilizables
 """
 import flet as ft
@@ -13,6 +13,10 @@ class AlertDialog:
         """Muestra un diálogo de éxito"""
         def close_dialog(e):
             dialog.open = False
+            try:
+                page.overlay.clear()
+            except:
+                pass
             page.update()
             if on_close:
                 on_close()
@@ -50,6 +54,10 @@ class AlertDialog:
         """Muestra un diálogo de error"""
         def close_dialog(e):
             dialog.open = False
+            try:
+                page.overlay.clear()
+            except:
+                pass
             page.update()
             if on_close:
                 on_close()
@@ -87,6 +95,10 @@ class AlertDialog:
         """Muestra un diálogo informativo"""
         def close_dialog(e):
             dialog.open = False
+            try:
+                page.overlay.clear()
+            except:
+                pass
             page.update()
             if on_close:
                 on_close()
@@ -124,6 +136,10 @@ class AlertDialog:
         """Muestra un diálogo de advertencia"""
         def close_dialog(e):
             dialog.open = False
+            try:
+                page.overlay.clear()
+            except:
+                pass
             page.update()
             if on_close:
                 on_close()
@@ -161,12 +177,20 @@ class AlertDialog:
         """Muestra un diálogo detallado cuando termina el procesamiento"""
         def close_dialog(e):
             dialog.open = False
+            try:
+                page.overlay.clear()
+            except:
+                pass
             page.update()
             if on_close:
                 on_close()
         
         def open_folder(e):
             dialog.open = False
+            try:
+                page.overlay.clear()
+            except:
+                pass
             page.update()
             if on_open_folder:
                 on_open_folder()
@@ -174,18 +198,18 @@ class AlertDialog:
         # Construir mensaje con estadísticas
         stats_text = []
         if stats.get('total_registros'):
-            stats_text.append(f"📊 {stats['total_registros']} registros procesados")
+            stats_text.append(f" {stats['total_registros']} registros procesados")
         if stats.get('facturas_unicas'):
-            stats_text.append(f"🧾 {stats['facturas_unicas']} facturas únicas")
+            stats_text.append(f" {stats['facturas_unicas']} facturas únicas")
         if stats.get('codigos_homologados'):
-            stats_text.append(f"✅ {stats['codigos_homologados']} códigos homologados")
+            stats_text.append(f" {stats['codigos_homologados']} códigos homologados")
         if stats.get('archivos_procesados'):
-            stats_text.append(f"📁 {stats['archivos_procesados']} archivos procesados")
+            stats_text.append(f" {stats['archivos_procesados']} archivos procesados")
         
         # Lista de archivos generados
         files_list = ft.Column([
             ft.Text(
-                "📄 " + file.split("\\")[-1] if "\\" in file else "📄 " + file.split("/")[-1],
+                " " + file.split("\\")[-1] if "\\" in file else " " + file.split("/")[-1],
                 size=13,
                 color=COLORS["text_primary"],
                 weight=ft.FontWeight.W_500
@@ -221,7 +245,7 @@ class AlertDialog:
                     style=ft.ButtonStyle(color=COLORS["text_secondary"])
                 ),
                 ft.ElevatedButton(
-                    "📂 Abrir carpeta",
+                    " Abrir carpeta",
                     on_click=open_folder,
                     bgcolor=COLORS["success"],
                     color=COLORS["bg_white"]
@@ -242,6 +266,10 @@ class AlertDialog:
         """Muestra un diálogo cuando termina la búsqueda de correos"""
         def close_dialog(e):
             dialog.open = False
+            try:
+                page.overlay.clear()
+            except:
+                pass
             page.update()
             if on_close:
                 on_close()
@@ -256,9 +284,9 @@ class AlertDialog:
                 ft.Text(f"EPS: {eps_name}", size=14, color=COLORS["text_primary"], weight=ft.FontWeight.W_500),
                 ft.Text(date_range, size=13, color=COLORS["text_secondary"]),
                 ft.Divider(height=16),
-                ft.Text(f"📧 {total_found} correos encontrados", size=13, color=COLORS["text_secondary"]),
-                ft.Text(f"🎯 {filtered_count} correos de {eps_name}", size=13, color=COLORS["text_secondary"]),
-                ft.Text(f"📊 {excel_count} archivos Excel descargados", size=13, color=COLORS["success"] if excel_count > 0 else COLORS["text_light"]),
+                ft.Text(f" {total_found} correos encontrados", size=13, color=COLORS["text_secondary"]),
+                ft.Text(f" {filtered_count} correos de {eps_name}", size=13, color=COLORS["text_secondary"]),
+                ft.Text(f" {excel_count} archivos Excel descargados", size=13, color=COLORS["success"] if excel_count > 0 else COLORS["text_light"]),
             ], spacing=4, tight=True),
             actions=[
                 ft.TextButton(

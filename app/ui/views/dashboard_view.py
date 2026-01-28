@@ -58,20 +58,10 @@ class DashboardView:
             self.page.update()
         
         def on_click(e):
-            """Maneja el click en la card con feedback visual"""
+            """Maneja el click en la card"""
             if self.on_card_click:
-                import threading
-                self.show_loading(f"Cargando {title}...")
-                
-                def navigate():
-                    try:
-                        self.on_card_click(action_key)
-                    finally:
-                        # Asegurarse de ocultar el loading aunque haya errores
-                        self.hide_loading()
-                
-                # Usar thread para evitar congelar la UI
-                threading.Thread(target=navigate, daemon=True).start()
+                # Llamar directamente sin loading (el callback decide qué hacer)
+                self.on_card_click(action_key)
         
         card_content = ft.Column([
                 visual_element,
@@ -254,6 +244,22 @@ class DashboardView:
                 ),
                 left=10,
                 bottom=10,
+            ),
+            # Botón de Configuración (esquina inferior derecha)
+            ft.Container(
+                content=ft.IconButton(
+                    icon=ft.Icons.SETTINGS,
+                    icon_color=COLORS["text_secondary"],
+                    icon_size=22,
+                    tooltip="Configuración",
+                    on_click=lambda e: self._open_settings(e),
+                    style=ft.ButtonStyle(
+                        bgcolor=ft.Colors.with_opacity(0.1, COLORS["text_secondary"]),
+                        shape=ft.CircleBorder(),
+                    )
+                ),
+                right=15,
+                bottom=10,
             )
         ], expand=True, visible=False)
         
@@ -272,7 +278,14 @@ class DashboardView:
     def show_toast(self, message, toast_type="success"):
         """Muestra una notificación toast"""
         if self.toast:
-            self.toast.show(message, toast_type)
+            if toast_type == "success":
+                self.toast.success(message)
+            elif toast_type == "error":
+                self.toast.error(message)
+            elif toast_type == "warning":
+                self.toast.warning(message)
+            else:
+                self.toast.info(message)
     
     def _check_updates(self, e):
         """Abre el diálogo de verificación de actualizaciones con loading"""
@@ -294,14 +307,89 @@ class DashboardView:
         finally:
             self.hide_loading()
     
+    def _open_settings(self, e):
+        """Abre el panel de configuración simple"""
+        # Obtener versión de la app
+        try:
+            from app.config.settings import APP_VERSION
+        except:
+            APP_VERSION = "1.0.0"
+        
+        # Crear diálogo de configuración simple
+        settings_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("⚙️ Configuración", size=18, weight=ft.FontWeight.W_600),
+            content=ft.Container(
+                content=ft.Column([
+                    # Sección de Apariencia
+                    ft.Text("Apariencia", size=14, weight=ft.FontWeight.W_500, color=COLORS["text_secondary"]),
+                    ft.Container(height=10),
+                    ft.Row([
+                        ft.Icon(ft.Icons.DARK_MODE, size=20, color=COLORS["text_secondary"]),
+                        ft.Text("Tema oscuro", size=13),
+                        ft.Container(expand=True),
+                        ft.Switch(
+                            value=self.page.theme_mode == ft.ThemeMode.DARK if hasattr(self.page, 'theme_mode') else False,
+                            on_change=lambda e: self._toggle_theme(e),
+                            active_color=COLORS["primary"]
+                        )
+                    ], alignment=ft.MainAxisAlignment.START),
+                    
+                    ft.Divider(height=20),
+                    
+                    # Sección de Información
+                    ft.Text("Información", size=14, weight=ft.FontWeight.W_500, color=COLORS["text_secondary"]),
+                    ft.Container(height=10),
+                    ft.Row([
+                        ft.Icon(ft.Icons.INFO_OUTLINE, size=20, color=COLORS["text_secondary"]),
+                        ft.Column([
+                            ft.Text(f"Versión: {APP_VERSION}", size=12),
+                            ft.Text("Desarrollado por Glosaap Team", size=11, color=COLORS["text_light"]),
+                        ], spacing=2)
+                    ], alignment=ft.MainAxisAlignment.START, spacing=10),
+                    
+                ], spacing=5, tight=True),
+                width=320,
+                padding=ft.padding.only(top=10)
+            ),
+            actions=[
+                ft.TextButton("Cerrar", on_click=lambda e: self.page.close(settings_dialog))
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+        
+        self.page.open(settings_dialog)
+    
+    def _close_settings_dialog(self, dialog):
+        """Cierra el diálogo de configuración"""
+        dialog.open = False
+        self.page.update()
+    
+    def _close_overlay_dialog(self, dialog):
+        """Cierra un diálogo del overlay"""
+        dialog.open = False
+        try:
+            self.page.overlay.clear()
+        except:
+            pass
+        self.page.update()
+    
+    def _toggle_theme(self, e):
+        """Cambia el tema de la aplicación"""
+        if e.control.value:
+            self.page.theme_mode = ft.ThemeMode.DARK
+        else:
+            self.page.theme_mode = ft.ThemeMode.LIGHT
+        self.page.update()
+    
     def show(self):
-        """Muestra la vista"""
+        """Muestra el dashboard"""
         if self.container:
             self.container.visible = True
             self.page.update()
     
     def hide(self):
-        """Oculta la vista"""
+        """Oculta el dashboard"""
         if self.container:
             self.container.visible = False
             self.page.update()

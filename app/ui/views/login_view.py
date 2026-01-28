@@ -205,7 +205,7 @@ class LoginView:
                     self.email_service.connect(email, password, server)
                     
                     self.loading_overlay.hide()
-                    self.toast_notification.show("¡Reconectado exitosamente!")
+                    self.toast_notification.success("¡Reconectado exitosamente!")
                     
                     # Callback de éxito
                     if self.on_login_success:
@@ -213,7 +213,7 @@ class LoginView:
                         
                 except Exception as ex:
                     self.loading_overlay.hide()
-                    self.toast_notification.show(f"Error de reconexión: {str(ex)}", False)
+                    self.toast_notification.error(f"Error de reconexión: {str(ex)}")
                     
             threading.Thread(target=auto_connect, daemon=True).start()
             
@@ -282,4 +282,7 @@ class LoginView:
     
     def show_toast(self, message: str, is_success: bool = True):
         """Muestra notificación toast"""
-        self.toast_notification.show(message, is_success)
+        if is_success:
+            self.toast_notification.success(message)
+        else:
+            self.toast_notification.error(message)

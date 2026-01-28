@@ -149,7 +149,14 @@ class ToolsView:
     def show_toast(self, message, toast_type="success"):
         """Muestra una notificación toast"""
         if self.toast:
-            self.toast.show(message, toast_type)
+            if toast_type == "success":
+                self.toast.success(message)
+            elif toast_type == "error":
+                self.toast.error(message)
+            elif toast_type == "warning":
+                self.toast.warning(message)
+            else:
+                self.toast.info(message)
     
     def _handle_homologacion(self):
         """Maneja la navegación a homologación con loading"""

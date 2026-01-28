@@ -22,7 +22,6 @@ from app.ui.components.loading_overlay import (
     LoadingOverlay,
     LoadingButton,
     ToastNotification,
-    ProgressIndicator,
 )
 
 __all__ = [

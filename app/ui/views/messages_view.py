@@ -260,7 +260,10 @@ class MessagesView:
     
     def show_toast(self, message: str, is_success: bool = True):
         """Muestra notificación toast"""
-        self.toast_notification.show(message, is_success)
+        if is_success:
+            self.toast_notification.success(message)
+        else:
+            self.toast_notification.error(message)
     
     def set_loading_progress(self, current: int, total: int, message: str = ""):
         """Actualiza progreso de carga"""

@@ -55,6 +55,27 @@ class EpsScreen:
     
     def _on_eps_click(self, eps_info):
         """Maneja el click en una tarjeta de EPS"""
+        
+        # Verificar si la EPS tiene procesador implementado
+        if not eps_info.get("processor_class"):
+            eps_name = eps_info.get("name", "Esta EPS")
+            
+            def close_dialog(e):
+                self.page.close(dialog)
+            
+            # Crear alerta simple
+            dialog = ft.AlertDialog(
+                modal=True,
+                title=ft.Text(f"🚧 {eps_name} en Desarrollo"),
+                content=ft.Text(f"El procesador automático para {eps_name} aún no está disponible.\n\nEstamos trabajando en integrar esta EPS al sistema."),
+                actions=[
+                    ft.TextButton("Entendido", on_click=close_dialog)
+                ]
+            )
+            
+            self.page.open(dialog)
+            return
+        
         date_from, date_to = self.date_picker.get_dates()
         
         # Validar que se hayan seleccionado AMBAS fechas (obligatorio)
@@ -86,6 +107,21 @@ class EpsScreen:
             "Rango de fechas inválido",
             "La fecha 'Desde' no puede ser mayor que la fecha 'Hasta'.\n\nPor favor, corrige el rango de fechas antes de continuar."
         )
+    
+    def _close_dialog(self, dialog):
+        """Cierra un diálogo"""
+        dialog.open = False
+        self.page.update()
+    
+    def _close_overlay_dialog(self, dialog):
+        """Cierra un diálogo del overlay"""
+        dialog.open = False
+        try:
+            # Limpiar todos los diálogos del overlay para evitar problemas
+            self.page.overlay.clear()
+        except:
+            pass
+        self.page.update()
     
     def _handle_back(self, e):
         """Maneja el regreso al menú anterior"""

@@ -33,7 +33,7 @@ import flet as ft
 from typing import Optional, Callable
 from contextlib import contextmanager
 from app.ui.styles import COLORS, FONT_SIZES, SPACING
-
+from typing  import Optional, Callable
 
 class LoadingOverlay:
     """
@@ -155,7 +155,7 @@ class LoadingOverlay:
         
         self.page.update()
     
-    def update_progress(self, value: float, message: str = None, sub_message: str = None) -> None:
+    def update_progress(self, value: float, message: Optional[str] = None, sub_message: Optional[str] = None) -> None:
         """
         Actualiza el progreso del overlay.
         
@@ -180,28 +180,12 @@ class LoadingOverlay:
     
     @property
     def is_visible(self) -> bool:
-        """Retorna si el overlay está visible."""
+        """Retorna el estado de visibilidad del overlay."""
         return self._is_visible
     
     @contextmanager
     def context(self, message: str = "Cargando...", sub_message: str = ""):
-        """
-        Context manager para mostrar/ocultar automáticamente.
-        
-        Args:
-            message: Mensaje a mostrar durante la operación.
-            sub_message: Mensaje secundario opcional.
-        
-        Yields:
-            None
-        
-        Example:
-            ```python
-            with loading.context("Procesando archivos..."):
-                process_files()
-            # El overlay se oculta automáticamente
-            ```
-        """
+        """Context manager para mostrar/ocultar loading automáticamente."""
         try:
             self.show(message, sub_message)
             yield
@@ -283,7 +267,7 @@ class LoadingButton(ft.ElevatedButton):
         if self._on_click_callback:
             self._on_click_callback(e)
     
-    def set_loading(self, loading: bool, text: str = None) -> None:
+    def set_loading(self, loading: bool, text: Optional[str] = None) -> None:
         """
         Establece el estado de carga del botón.
         
@@ -348,6 +332,7 @@ class ToastNotification:
             page: Instancia de ft.Page donde se mostrarán los toasts.
         """
         self.page = page
+        self._snack_bar = None
     
     def _show(
         self, 
@@ -365,7 +350,7 @@ class ToastNotification:
             bgcolor: Color de fondo.
             duration: Duración en milisegundos.
         """
-        self.page.snack_bar = ft.SnackBar(
+        self._snack_bar = ft.SnackBar(
             content=ft.Row(
                 controls=[
                     ft.Icon(icon, color=COLORS["bg_white"], size=20),
@@ -379,7 +364,8 @@ class ToastNotification:
             shape=ft.RoundedRectangleBorder(radius=8),
             margin=SPACING["md"],
         )
-        self.page.snack_bar.open = True
+        self.page.overlay.append(self._snack_bar)
+        self._snack_bar.open = True
         self.page.update()
     
     def success(self, message: str, duration: int = 3000) -> None:
@@ -493,8 +479,8 @@ class ProgressIndicator(ft.Container):
     def update_progress(
         self, 
         value: float, 
-        stage: str = None, 
-        detail: str = None
+        stage: Optional[str] = None, 
+        detail: Optional[str] = None
     ) -> None:
         """
         Actualiza el progreso mostrado.
@@ -516,5 +502,5 @@ class ProgressIndicator(ft.Container):
         self.update()
     
     def reset(self) -> None:
-        """Reinicia el indicador a su estado inicial."""
-        self.update_progress(0, "Preparando...", "")
+        """Resetea el indicador de progreso."""
+        self.update_progress(0, "Iniciando...", "")
