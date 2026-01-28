@@ -155,11 +155,11 @@ python main.py
 #### 1️⃣ **Iniciar sesión**
 ```
 ┌─────────────────────────────────────┐
-│           🔐 Glosaap               │
+│           🔐 Glosaap                │
 │                                     │
-│  Correo: usuario@empresa.com       │
-│  Contraseña: ********              │
-│  Servidor IMAP: (auto-detecta)     │
+│  Correo: usuario@empresa.com        │
+│  Contraseña: ********               │
+│  Servidor IMAP: (auto-detecta)      │
 │                                     │
 │  ☑️ Recordar sesión                 │
 │                                     │
@@ -450,7 +450,7 @@ python release.py
 
 1. Fork el repositorio
 2. Crear rama feature (`git checkout -b feature/NuevaFuncionalidad`)
-3. Seguir las [Buenas Prácticas](DEVELOPER_GUIDE.md#-buenas-prácticas)
+3. Seguir las [Buenas Prácticas](/docs/DEVELOPER_GUIDE.md#-buenas-prácticas)
 4. Commit cambios (`git commit -m 'feat: agregar nueva funcionalidad'`)
 5. Push a la rama (`git push origin feature/NuevaFuncionalidad`)
 6. Crear Pull Request
