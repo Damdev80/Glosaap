@@ -32,7 +32,7 @@ Version: 1.0.0
 import flet as ft
 from typing import Optional, Callable
 from contextlib import contextmanager
-from app.ui.styles import COLORS, FONT_SIZES, SPACING
+from app.ui.styles import FONT_SIZES, SPACING
 from typing  import Optional, Callable
 
 class LoadingOverlay:
@@ -70,19 +70,19 @@ class LoadingOverlay:
         self._message = ft.Text(
             "Cargando...",
             size=FONT_SIZES["body"],
-            color=COLORS["text_primary"],
+            color=ft.Colors.ON_SURFACE,
             weight=ft.FontWeight.W_500
         )
         self._sub_message = ft.Text(
             "",
             size=FONT_SIZES["small"],
-            color=COLORS["text_secondary"],
+            color=ft.Colors.ON_SURFACE_VARIANT,
         )
         self._progress = ft.ProgressRing(
             width=48,
             height=48,
             stroke_width=4,
-            color=COLORS["primary"]
+            color=ft.Colors.PRIMARY
         )
         self._overlay = self._build_overlay()
     
@@ -107,7 +107,7 @@ class LoadingOverlay:
                     spacing=SPACING["xs"],
                 ),
                 padding=SPACING["xl"],
-                bgcolor=COLORS["bg_white"],
+                bgcolor=ft.Colors.SURFACE,
                 border_radius=16,
                 shadow=ft.BoxShadow(
                     blur_radius=24,
@@ -280,7 +280,7 @@ class LoadingButton(ft.ElevatedButton):
         if loading:
             self.content = ft.Row(
                 controls=[
-                    ft.ProgressRing(width=16, height=16, stroke_width=2, color=COLORS["bg_white"]),
+                    ft.ProgressRing(width=16, height=16, stroke_width=2, color=ft.Colors.SURFACE),
                     ft.Text(text or self._loading_text, size=FONT_SIZES["button"]),
                 ],
                 spacing=SPACING["sm"],
@@ -353,8 +353,8 @@ class ToastNotification:
         self._snack_bar = ft.SnackBar(
             content=ft.Row(
                 controls=[
-                    ft.Icon(icon, color=COLORS["bg_white"], size=20),
-                    ft.Text(message, color=COLORS["bg_white"], size=14),
+                    ft.Icon(icon, color=ft.Colors.SURFACE, size=20),
+                    ft.Text(message, color=ft.Colors.SURFACE, size=14),
                 ],
                 spacing=SPACING["sm"],
             ),
@@ -376,7 +376,7 @@ class ToastNotification:
             message: Mensaje a mostrar.
             duration: Duración en milisegundos (default: 3000).
         """
-        self._show(message, ft.Icons.CHECK_CIRCLE, COLORS["success"], duration)
+        self._show(message, ft.Icons.CHECK_CIRCLE, ft.Colors.GREEN, duration)
     
     def error(self, message: str, duration: int = 4000) -> None:
         """
@@ -386,7 +386,7 @@ class ToastNotification:
             message: Mensaje a mostrar.
             duration: Duración en milisegundos (default: 4000).
         """
-        self._show(message, ft.Icons.ERROR, COLORS["error"], duration)
+        self._show(message, ft.Icons.ERROR, ft.Colors.RED, duration)
     
     def warning(self, message: str, duration: int = 3500) -> None:
         """
@@ -396,7 +396,7 @@ class ToastNotification:
             message: Mensaje a mostrar.
             duration: Duración en milisegundos (default: 3500).
         """
-        self._show(message, ft.Icons.WARNING, COLORS["warning"], duration)
+        self._show(message, ft.Icons.WARNING, ft.Colors.ORANGE, duration)
     
     def info(self, message: str, duration: int = 3000) -> None:
         """
@@ -406,7 +406,7 @@ class ToastNotification:
             message: Mensaje a mostrar.
             duration: Duración en milisegundos (default: 3000).
         """
-        self._show(message, ft.Icons.INFO, COLORS["primary"], duration)
+        self._show(message, ft.Icons.INFO, ft.Colors.PRIMARY, duration)
 
 
 class ProgressIndicator(ft.Container):
@@ -435,26 +435,26 @@ class ProgressIndicator(ft.Container):
             value=0,
             width=400,
             height=8,
-            color=COLORS["primary"],
-            bgcolor=COLORS["bg_input"],
+            color=ft.Colors.PRIMARY,
+            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
             border_radius=4,
         )
         self._percentage_text = ft.Text(
             "0%",
             size=FONT_SIZES["heading"],
             weight=ft.FontWeight.BOLD,
-            color=COLORS["primary"],
+            color=ft.Colors.PRIMARY,
         )
         self._stage_text = ft.Text(
             "Preparando...",
             size=FONT_SIZES["body"],
-            color=COLORS["text_primary"],
+            color=ft.Colors.ON_SURFACE,
             weight=ft.FontWeight.W_500,
         )
         self._detail_text = ft.Text(
             "",
             size=FONT_SIZES["small"],
-            color=COLORS["text_secondary"],
+            color=ft.Colors.ON_SURFACE_VARIANT,
         )
         
         super().__init__(
@@ -471,9 +471,9 @@ class ProgressIndicator(ft.Container):
                 spacing=SPACING["xs"],
             ),
             padding=SPACING["lg"],
-            bgcolor=COLORS["bg_white"],
+            bgcolor=ft.Colors.SURFACE,
             border_radius=12,
-            border=ft.border.all(1, COLORS["border_light"]),
+            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
         )
     
     def update_progress(

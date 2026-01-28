@@ -8,7 +8,7 @@ import threading
 import logging
 from typing import List, Dict, Any, Callable, Optional
 
-from app.ui.styles import COLORS
+import flet as ft
 
 logger = logging.getLogger(__name__)
 
@@ -247,7 +247,7 @@ class EPSProcessor:
             except Exception as ex:
                 logger.error(f"Error procesando {eps_type}: {ex}")
                 self.messages_view.set_processing(False, f"❌ Error: {str(ex)}")
-                self.messages_view.processing_status.color = COLORS["error"]
+                self.messages_view.processing_status.color = ft.Colors.RED
                 self.messages_view.process_eps_btn.disabled = False
                 
                 self.alert_dialog.show_error(
@@ -352,7 +352,7 @@ class EPSProcessor:
         
         if result_data:
             self.messages_view.set_processing(False, f"✅ {message}")
-            self.messages_view.processing_status.color = COLORS["success"]
+            self.messages_view.processing_status.color = ft.Colors.GREEN
             self.alert_dialog.show_success(
                 page=self.page,
                 title="Procesamiento completado",
@@ -360,7 +360,7 @@ class EPSProcessor:
             )
         else:
             self.messages_view.set_processing(False, f"❌ {message}")
-            self.messages_view.processing_status.color = COLORS["error"]
+            self.messages_view.processing_status.color = ft.Colors.RED
             self.alert_dialog.show_error(
                 page=self.page,
                 title="Error al procesar",
@@ -389,7 +389,7 @@ class EPSProcessor:
         msg += f"📊 {resumen['total_registros']} registros | {resumen['codigos_homologados']} homologados"
         
         self.messages_view.set_processing(False, msg)
-        self.messages_view.processing_status.color = COLORS["success"]
+        self.messages_view.processing_status.color = ft.Colors.GREEN
         
         output_files = [resultado['output_file']]
         if resultado.get('objeciones_file'):
@@ -411,7 +411,7 @@ class EPSProcessor:
     def _show_processing_error(self, message: str):
         """Muestra error de procesamiento"""
         self.messages_view.set_processing(False, f"❌ Error: {message}")
-        self.messages_view.processing_status.color = COLORS["error"]
+        self.messages_view.processing_status.color = ft.Colors.RED
         self.alert_dialog.show_error(
             page=self.page,
             title="Error al procesar",

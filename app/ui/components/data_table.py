@@ -1,8 +1,9 @@
 """
 Componente de tabla de datos con pandas
+Con soporte de temas claro/oscuro
 """
 import flet as ft
-from app.ui.styles import COLORS, FONT_SIZES
+from app.ui.styles import FONT_SIZES
 
 
 class DataTable:
@@ -18,7 +19,7 @@ class DataTable:
             return ft.Text(
                 "No hay datos para mostrar", 
                 size=FONT_SIZES["body"], 
-                color=COLORS["text_secondary"]
+                color=ft.Colors.ON_SURFACE_VARIANT
             )
         
         # Limitar filas
@@ -53,10 +54,10 @@ class DataTable:
         return ft.DataTable(
             columns=columns,
             rows=rows,
-            border=ft.border.all(1, COLORS["border"]),
+            border=ft.border.all(1, ft.Colors.OUTLINE),
             border_radius=10,
-            horizontal_lines=ft.BorderSide(1, COLORS["border_light"]),
-            heading_row_color=COLORS["bg_light"],
+            horizontal_lines=ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+            heading_row_color=ft.Colors.SURFACE_CONTAINER_HIGHEST,
             heading_row_height=50,
             data_row_max_height=40,
         )
@@ -75,10 +76,10 @@ class DataTable:
             content=ft.Text(
                 info_text,
                 size=FONT_SIZES["small"],
-                color=COLORS["primary"],
+                color=ft.Colors.PRIMARY,
                 weight=ft.FontWeight.W_500
             ),
             padding=10,
-            bgcolor=COLORS["primary_light"],
+            bgcolor=ft.Colors.PRIMARY_CONTAINER,
             border_radius=5
         )

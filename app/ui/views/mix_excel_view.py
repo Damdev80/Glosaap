@@ -1,10 +1,10 @@
 """
 Vista Mix Excel - Transferencia de datos entre archivos Excel
-Estilo Minimalista
+Estilo Minimalista con soporte de temas
 """
 import flet as ft
 from pathlib import Path
-from app.ui.styles import COLORS, FONT_SIZES, SPACING
+from app.ui.styles import FONT_SIZES, SPACING
 from app.ui.components.navigation_header import NavigationHeader
 from app.core.mix_excel_service import MixExcelService
 
@@ -28,12 +28,12 @@ class MixExcelView:
         self.source_file_text = ft.Text(
             "Ningún archivo seleccionado", 
             size=12, 
-            color=COLORS["text_secondary"]
+            color=ft.Colors.ON_SURFACE_VARIANT
         )
         self.dest_file_text = ft.Text(
             "Ningún archivo seleccionado", 
             size=12, 
-            color=COLORS["text_secondary"]
+            color=ft.Colors.ON_SURFACE_VARIANT
         )
         
         # Dropdowns - Origen
@@ -50,8 +50,8 @@ class MixExcelView:
             label="Tolerancia %",
             value="5",
             width=100,
-            border_color=COLORS["border"],
-            focused_border_color=COLORS["primary"],
+            border_color=ft.Colors.OUTLINE,
+            focused_border_color=ft.Colors.PRIMARY,
             border_radius=8,
             content_padding=ft.padding.symmetric(horizontal=12, vertical=10),
             text_size=14,
@@ -59,7 +59,7 @@ class MixExcelView:
         )
         
         # Status
-        self.status_text = ft.Text("", size=13, color=COLORS["text_secondary"])
+        self.status_text = ft.Text("", size=13, color=ft.Colors.ON_SURFACE_VARIANT)
         
         # Construir vista
         self.container = self._build()
@@ -70,8 +70,8 @@ class MixExcelView:
             label=label,
             hint_text="Selecciona...",
             disabled=True,
-            border_color=COLORS["border"],
-            focused_border_color=COLORS["primary"],
+            border_color=ft.Colors.OUTLINE,
+            focused_border_color=ft.Colors.PRIMARY,
             border_radius=8,
             content_padding=ft.padding.symmetric(horizontal=12, vertical=8),
             text_size=13,
@@ -85,13 +85,13 @@ class MixExcelView:
                 ft.Icon(ft.Icons.FOLDER_OPEN, size=16),
                 ft.Text(label, size=13)
             ], spacing=8),
-            bgcolor=COLORS["bg_light"],
-            color=COLORS["text_primary"],
+            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
+            color=ft.Colors.ON_SURFACE,
             elevation=0,
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=8),
                 padding=ft.padding.symmetric(horizontal=16, vertical=12),
-                side=ft.BorderSide(1, COLORS["border"])
+                side=ft.BorderSide(1, ft.Colors.OUTLINE)
             ),
             on_click=lambda e: self._pick_file(picker_type)
         )
@@ -105,7 +105,7 @@ class MixExcelView:
                     content=ft.Row([
                         ft.IconButton(
                             icon=ft.Icons.ARROW_BACK_IOS_NEW,
-                            icon_color=COLORS["text_secondary"],
+                            icon_color=ft.Colors.ON_SURFACE_VARIANT,
                             icon_size=18,
                             tooltip="Volver",
                             on_click=lambda e: self.on_back()
@@ -113,11 +113,11 @@ class MixExcelView:
                         ft.Text("Mix Excel", 
                                size=18,
                                weight=ft.FontWeight.W_500,
-                               color=COLORS["text_primary"]),
+                               color=ft.Colors.ON_SURFACE),
                         ft.Container(expand=True),
                         ft.Text("Transferencia de datos", 
                                size=12,
-                               color=COLORS["text_secondary"])
+                               color=ft.Colors.ON_SURFACE_VARIANT)
                     ], alignment=ft.MainAxisAlignment.START, spacing=8),
                     padding=ft.padding.symmetric(horizontal=24, vertical=16),
                 ),
@@ -129,11 +129,11 @@ class MixExcelView:
                         ft.Container(
                             content=ft.Column([
                                 ft.Row([
-                                    ft.Icon(ft.Icons.FILE_UPLOAD, size=20, color=COLORS["primary"]),
+                                    ft.Icon(ft.Icons.FILE_UPLOAD, size=20, color=ft.Colors.PRIMARY),
                                     ft.Text("Archivo Origen", 
                                            size=14, 
                                            weight=ft.FontWeight.W_500,
-                                           color=COLORS["text_primary"])
+                                           color=ft.Colors.ON_SURFACE)
                                 ], spacing=8),
                                 ft.Container(height=12),
                                 ft.Row([
@@ -142,15 +142,15 @@ class MixExcelView:
                                     self.source_file_text
                                 ], alignment=ft.MainAxisAlignment.START),
                                 ft.Container(height=16),
-                                ft.Divider(height=1, color=COLORS["border"]),
+                                ft.Divider(height=1, color=ft.Colors.OUTLINE),
                                 ft.Container(height=12),
                                 self.source_ref_dropdown,
                                 ft.Container(height=12),
                                 self.source_col_dropdown,
                             ], spacing=0),
-                            bgcolor=COLORS["bg_white"],
+                            bgcolor=ft.Colors.SURFACE,
                             border_radius=12,
-                            border=ft.border.all(1, COLORS["border"]),
+                            border=ft.border.all(1, ft.Colors.OUTLINE),
                             padding=24
                         ),
                         
@@ -160,11 +160,11 @@ class MixExcelView:
                         ft.Container(
                             content=ft.Column([
                                 ft.Row([
-                                    ft.Icon(ft.Icons.FILE_DOWNLOAD, size=20, color=COLORS["success"]),
+                                    ft.Icon(ft.Icons.FILE_DOWNLOAD, size=20, color=ft.Colors.GREEN),
                                     ft.Text("Archivo Destino", 
                                            size=14, 
                                            weight=ft.FontWeight.W_500,
-                                           color=COLORS["text_primary"])
+                                           color=ft.Colors.ON_SURFACE)
                                 ], spacing=8),
                                 ft.Container(height=12),
                                 ft.Row([
@@ -173,7 +173,7 @@ class MixExcelView:
                                     self.dest_file_text
                                 ], alignment=ft.MainAxisAlignment.START),
                                 ft.Container(height=16),
-                                ft.Divider(height=1, color=COLORS["border"]),
+                                ft.Divider(height=1, color=ft.Colors.OUTLINE),
                                 ft.Container(height=12),
                                 self.dest_ref_dropdown,
                                 ft.Container(height=12),
@@ -181,9 +181,9 @@ class MixExcelView:
                                 ft.Container(height=12),
                                 self.dest_col_dropdown,
                             ], spacing=0),
-                            bgcolor=COLORS["bg_white"],
+                            bgcolor=ft.Colors.SURFACE,
                             border_radius=12,
-                            border=ft.border.all(1, COLORS["border"]),
+                            border=ft.border.all(1, ft.Colors.OUTLINE),
                             padding=24
                         ),
                         
@@ -197,12 +197,12 @@ class MixExcelView:
                                 ft.Text(
                                     "Tolerancia para comparación de valores",
                                     size=12,
-                                    color=COLORS["text_secondary"]
+                                    color=ft.Colors.ON_SURFACE_VARIANT
                                 )
                             ], alignment=ft.MainAxisAlignment.START),
-                            bgcolor=COLORS["bg_white"],
+                            bgcolor=ft.Colors.SURFACE,
                             border_radius=12,
-                            border=ft.border.all(1, COLORS["border"]),
+                            border=ft.border.all(1, ft.Colors.OUTLINE),
                             padding=20
                         ),
                         
@@ -214,11 +214,11 @@ class MixExcelView:
                             ft.Container(expand=True),
                             ft.ElevatedButton(
                                 content=ft.Row([
-                                    ft.Icon(ft.Icons.SYNC_ALT, size=18, color=COLORS["bg_white"]),
+                                    ft.Icon(ft.Icons.SYNC_ALT, size=18, color=ft.Colors.SURFACE),
                                     ft.Text("Transferir Datos", size=14, weight=ft.FontWeight.W_500)
                                 ], spacing=8),
-                                bgcolor=COLORS["primary"],
-                                color=COLORS["bg_white"],
+                                bgcolor=ft.Colors.PRIMARY,
+                                color=ft.Colors.SURFACE,
                                 elevation=0,
                                 style=ft.ButtonStyle(
                                     shape=ft.RoundedRectangleBorder(radius=10),
@@ -233,7 +233,7 @@ class MixExcelView:
                     padding=ft.padding.symmetric(horizontal=24, vertical=0)
                 )
             ], expand=True, spacing=0),
-            bgcolor=COLORS["bg_light"],
+            bgcolor=ft.Colors.SURFACE,
             expand=True,
             visible=False
         )
@@ -261,14 +261,14 @@ class MixExcelView:
                 
                 if self.current_picker_type == "source":
                     self.source_file_text.value = Path(file_path).name
-                    self.source_file_text.color = COLORS["primary"]
+                    self.source_file_text.color = ft.Colors.PRIMARY
                     self.source_ref_dropdown.options = options
                     self.source_ref_dropdown.disabled = False
                     self.source_col_dropdown.options = options
                     self.source_col_dropdown.disabled = False
                 else:
                     self.dest_file_text.value = Path(file_path).name
-                    self.dest_file_text.color = COLORS["success"]
+                    self.dest_file_text.color = ft.Colors.GREEN
                     self.dest_ref_dropdown.options = options
                     self.dest_ref_dropdown.disabled = False
                     self.dest_adjacent_dropdown.options = options
@@ -276,9 +276,9 @@ class MixExcelView:
                     self.dest_col_dropdown.options = options
                     self.dest_col_dropdown.disabled = False
                 
-                self._show_status(message, COLORS["text_secondary"])
+                self._show_status(message, ft.Colors.ON_SURFACE_VARIANT)
             else:
-                self._show_status(message, COLORS["error"])
+                self._show_status(message, ft.Colors.RED)
             
             self.page.update()
     
@@ -286,11 +286,11 @@ class MixExcelView:
         """Ejecuta la transferencia de datos"""
         # Validaciones
         if not self.source_ref_dropdown.value or not self.source_col_dropdown.value:
-            self._show_status("Selecciona las columnas del archivo origen", COLORS["warning"])
+            self._show_status("Selecciona las columnas del archivo origen", ft.Colors.ORANGE)
             return
         
         if not self.dest_ref_dropdown.value or not self.dest_adjacent_dropdown.value or not self.dest_col_dropdown.value:
-            self._show_status("Selecciona las columnas del archivo destino", COLORS["warning"])
+            self._show_status("Selecciona las columnas del archivo destino", ft.Colors.ORANGE)
             return
         
         try:
@@ -298,7 +298,7 @@ class MixExcelView:
         except:
             tolerance = 0.05
         
-        self._show_status("Procesando...", COLORS["primary"])
+        self._show_status("Procesando...", ft.Colors.PRIMARY)
         self.page.update()
         
         # Transferir
@@ -315,11 +315,11 @@ class MixExcelView:
             # Guardar
             save_success, save_message = self.service.guardar_destino()
             if save_success:
-                self._show_status(f"✅ {message}", COLORS["success"])
+                self._show_status(f"✅ {message}", ft.Colors.GREEN)
             else:
-                self._show_status(f"⚠️ {save_message}", COLORS["error"])
+                self._show_status(f"⚠️ {save_message}", ft.Colors.RED)
         else:
-            self._show_status(f"❌ {message}", COLORS["error"])
+            self._show_status(f"❌ {message}", ft.Colors.RED)
         
         self.page.update()
     
@@ -333,9 +333,9 @@ class MixExcelView:
         """Muestra la vista"""
         self.service.reset()
         self.source_file_text.value = "Ningún archivo seleccionado"
-        self.source_file_text.color = COLORS["text_secondary"]
+        self.source_file_text.color = ft.Colors.ON_SURFACE_VARIANT
         self.dest_file_text.value = "Ningún archivo seleccionado"
-        self.dest_file_text.color = COLORS["text_secondary"]
+        self.dest_file_text.color = ft.Colors.ON_SURFACE_VARIANT
         self.source_ref_dropdown.value = None
         self.source_ref_dropdown.disabled = True
         self.source_col_dropdown.value = None

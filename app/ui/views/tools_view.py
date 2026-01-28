@@ -1,9 +1,9 @@
 """
-Vista de Herramientas
+Vista de Herramientas - Con soporte de temas
 """
 import flet as ft
 import os
-from app.ui.styles import COLORS, FONT_SIZES
+from app.ui.styles import FONT_SIZES
 from app.ui.components.navigation_header import NavigationHeader
 from app.ui.components.loading_overlay import LoadingOverlay, ToastNotification, LoadingButton
 
@@ -28,45 +28,38 @@ class ToolsView:
         self.container = self.build()
         
     def _create_tool_card(self, icon, title, description, color, on_click_action, image_src=None):
-        """Crea una card de herramienta"""
-        def on_hover(e):
-            tool_card.scale = 1.02 if e.data == "true" else 1.0
-            self.page.update()
-        
+        """Crea una card de herramienta usando Card de Flet (respeta temas)"""
         # Contenido del icono: imagen o icono
-        if image_src:
+        if image_src and os.path.exists(image_src):
             icon_content = ft.Image(src=image_src, width=36, height=36, fit=ft.ImageFit.CONTAIN)
         else:
-            icon_content = ft.Icon(icon, size=30, color=COLORS["bg_white"])
+            icon_content = ft.Icon(icon, size=30, color=ft.Colors.ON_PRIMARY)
         
-        tool_card = ft.Container(
-            content=ft.Row([
-                ft.Container(
-                    content=icon_content,
-                    width=60,
-                    height=60,
-                    border_radius=12,
-                    bgcolor=color if not image_src else COLORS["bg_light"],
-                    alignment=ft.alignment.center
-                ),
-                ft.Container(width=15),
-                ft.Column([
-                    ft.Text(title, size=16, weight=ft.FontWeight.W_600, color=COLORS["text_primary"]),
-                    ft.Text(description, size=12, color=COLORS["text_secondary"])
-                ], spacing=2, alignment=ft.MainAxisAlignment.CENTER)
-            ]),
-            padding=20,
-            bgcolor=COLORS["bg_white"],
-            border_radius=12,
-            border=ft.border.all(1, COLORS["border"]),
-            animate_scale=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
-            scale=1.0,
-            on_hover=on_hover,
-            on_click=on_click_action,
-            ink=True,
-            width=350
+        card = ft.Card(
+            content=ft.Container(
+                content=ft.Row([
+                    ft.Container(
+                        content=icon_content,
+                        width=60,
+                        height=60,
+                        border_radius=12,
+                        bgcolor=color if not image_src else ft.Colors.SURFACE_CONTAINER_HIGHEST,
+                        alignment=ft.alignment.center
+                    ),
+                    ft.Container(width=15),
+                    ft.Column([
+                        ft.Text(title, size=16, weight=ft.FontWeight.W_600),
+                        ft.Text(description, size=12)
+                    ], spacing=2, alignment=ft.MainAxisAlignment.CENTER)
+                ]),
+                padding=20,
+                on_click=on_click_action,
+                ink=True,
+                width=350
+            ),
+            elevation=2,
         )
-        return tool_card
+        return card
     
     def build(self):
         """Construye la vista de herramientas"""
@@ -129,7 +122,7 @@ class ToolsView:
                     expand=True
                 )
             ], spacing=0),
-            bgcolor=COLORS["bg_light"],
+            bgcolor=ft.Colors.SURFACE,
             expand=True,
             visible=False
         )

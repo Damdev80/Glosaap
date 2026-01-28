@@ -129,6 +129,7 @@ class LoginView:
                 login_card,
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
             alignment=ft.alignment.center,
+            bgcolor=ft.Colors.SURFACE,
             expand=True
         )
         

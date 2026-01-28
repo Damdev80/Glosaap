@@ -1,9 +1,10 @@
 """
 Componente de selector de rango de fechas
+Con soporte de temas claro/oscuro
 """
 import flet as ft
 from datetime import datetime
-from app.ui.styles import COLORS, FONT_SIZES, SPACING
+from app.ui.styles import FONT_SIZES, SPACING
 
 
 class DateRangePicker:
@@ -26,13 +27,13 @@ class DateRangePicker:
         self.date_from_text = ft.Text(
             "Seleccionar", 
             size=14, 
-            color=COLORS["text_secondary"],
+            color=ft.Colors.ON_SURFACE_VARIANT,
             weight=ft.FontWeight.W_500
         )
         self.date_to_text = ft.Text(
             "Seleccionar", 
             size=14, 
-            color=COLORS["text_secondary"],
+            color=ft.Colors.ON_SURFACE_VARIANT,
             weight=ft.FontWeight.W_500
         )
         
@@ -40,7 +41,7 @@ class DateRangePicker:
         self.error_text = ft.Text(
             "",
             size=12,
-            color=COLORS["error"],
+            color=ft.Colors.RED,
             text_align=ft.TextAlign.CENTER,
             visible=False
         )
@@ -74,7 +75,7 @@ class DateRangePicker:
         if e.control.value:
             self.date_from = e.control.value
             self.date_from_text.value = self.date_from.strftime("%d/%m/%Y")
-            self.date_from_text.color = COLORS["text_primary"]
+            self.date_from_text.color = ft.Colors.ON_SURFACE
             self.date_from_text.weight = ft.FontWeight.W_600
             self._validate_dates()
         self.page.update()
@@ -86,7 +87,7 @@ class DateRangePicker:
         if e.control.value:
             self.date_to = e.control.value
             self.date_to_text.value = self.date_to.strftime("%d/%m/%Y")
-            self.date_to_text.color = COLORS["text_primary"]
+            self.date_to_text.color = ft.Colors.ON_SURFACE
             self.date_to_text.weight = ft.FontWeight.W_600
             self._validate_dates()
         self.page.update()
@@ -100,8 +101,8 @@ class DateRangePicker:
         self.error_text.visible = False
         
         # Resetear estilos de los botones
-        self.btn_from.border = ft.border.all(1, COLORS["border"])
-        self.btn_to.border = ft.border.all(1, COLORS["border"])
+        self.btn_from.border = ft.border.all(1, ft.Colors.OUTLINE)
+        self.btn_to.border = ft.border.all(1, ft.Colors.OUTLINE)
         
         if self.date_from and self.date_to:
             if self.date_from > self.date_to:
@@ -111,8 +112,8 @@ class DateRangePicker:
                 self.error_text.visible = True
                 
                 # Resaltar campos con error
-                self.btn_from.border = ft.border.all(2, COLORS["error"])
-                self.btn_to.border = ft.border.all(2, COLORS["error"])
+                self.btn_from.border = ft.border.all(2, ft.Colors.RED)
+                self.btn_to.border = ft.border.all(2, ft.Colors.RED)
                 
                 # Notificar error si hay callback
                 if self.on_validation_error:
@@ -135,18 +136,18 @@ class DateRangePicker:
         self.date_from = None
         self.date_to = None
         self.date_from_text.value = "Seleccionar"
-        self.date_from_text.color = COLORS["text_secondary"]
+        self.date_from_text.color = ft.Colors.ON_SURFACE_VARIANT
         self.date_from_text.weight = ft.FontWeight.W_500
         self.date_to_text.value = "Seleccionar"
-        self.date_to_text.color = COLORS["text_secondary"]
+        self.date_to_text.color = ft.Colors.ON_SURFACE_VARIANT
         self.date_to_text.weight = ft.FontWeight.W_500
         
         # Limpiar estado de validación
         self.is_valid = True
         self.validation_error = None
         self.error_text.visible = False
-        self.btn_from.border = ft.border.all(1, COLORS["border"])
-        self.btn_to.border = ft.border.all(1, COLORS["border"])
+        self.btn_from.border = ft.border.all(1, ft.Colors.OUTLINE)
+        self.btn_to.border = ft.border.all(1, ft.Colors.OUTLINE)
         
         self.page.update()
         if self.on_change:
@@ -158,12 +159,12 @@ class DateRangePicker:
         # Botón de fecha desde
         self.btn_from = ft.Container(
             content=ft.Row([
-                ft.Icon(ft.Icons.CALENDAR_TODAY, size=20, color=COLORS["primary"]),
+                ft.Icon(ft.Icons.CALENDAR_TODAY, size=20, color=ft.Colors.PRIMARY),
                 self.date_from_text
             ], spacing=10),
             padding=ft.padding.symmetric(horizontal=18, vertical=14),
-            bgcolor=COLORS["bg_white"],
-            border=ft.border.all(1.5, COLORS["border"]),
+            bgcolor=ft.Colors.SURFACE,
+            border=ft.border.all(1.5, ft.Colors.OUTLINE),
             border_radius=10,
             on_click=self._open_picker_from,
             ink=True,
@@ -171,7 +172,7 @@ class DateRangePicker:
             shadow=ft.BoxShadow(
                 spread_radius=0,
                 blur_radius=4,
-                color=ft.Colors.with_opacity(0.05, COLORS["text_primary"]),
+                color=ft.Colors.with_opacity(0.05, ft.Colors.ON_SURFACE),
                 offset=ft.Offset(0, 2)
             )
         )
@@ -179,12 +180,12 @@ class DateRangePicker:
         # Botón de fecha hasta
         self.btn_to = ft.Container(
             content=ft.Row([
-                ft.Icon(ft.Icons.CALENDAR_TODAY, size=20, color=COLORS["primary"]),
+                ft.Icon(ft.Icons.CALENDAR_TODAY, size=20, color=ft.Colors.PRIMARY),
                 self.date_to_text
             ], spacing=10),
             padding=ft.padding.symmetric(horizontal=18, vertical=14),
-            bgcolor=COLORS["bg_white"],
-            border=ft.border.all(1.5, COLORS["border"]),
+            bgcolor=ft.Colors.SURFACE,
+            border=ft.border.all(1.5, ft.Colors.OUTLINE),
             border_radius=10,
             on_click=self._open_picker_to,
             ink=True,
@@ -192,7 +193,7 @@ class DateRangePicker:
             shadow=ft.BoxShadow(
                 spread_radius=0,
                 blur_radius=4,
-                color=ft.Colors.with_opacity(0.05, COLORS["text_primary"]),
+                color=ft.Colors.with_opacity(0.05, ft.Colors.ON_SURFACE),
                 offset=ft.Offset(0, 2)
             )
         )
@@ -202,16 +203,16 @@ class DateRangePicker:
             content=ft.Column([
                 ft.Row([
                     ft.Column([
-                        ft.Text("Desde:", size=13, weight=ft.FontWeight.BOLD, color=COLORS["text_primary"]),
+                        ft.Text("Desde:", size=13, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
                         ft.Container(height=6),
                         self.btn_from
                     ], horizontal_alignment=ft.CrossAxisAlignment.START, spacing=0),
                     ft.Container(
-                        content=ft.Icon(ft.Icons.ARROW_FORWARD, size=24, color=COLORS["primary"]),
+                        content=ft.Icon(ft.Icons.ARROW_FORWARD, size=24, color=ft.Colors.PRIMARY),
                         padding=ft.padding.only(top=26)
                     ),
                     ft.Column([
-                        ft.Text("Hasta:", size=13, weight=ft.FontWeight.BOLD, color=COLORS["text_primary"]),
+                        ft.Text("Hasta:", size=13, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
                         ft.Container(height=6),
                         self.btn_to
                     ], horizontal_alignment=ft.CrossAxisAlignment.START, spacing=0),
@@ -219,11 +220,11 @@ class DateRangePicker:
                         content=ft.IconButton(
                             icon=ft.Icons.CLEAR,
                             icon_size=22,
-                            icon_color=COLORS["text_secondary"],
+                            icon_color=ft.Colors.ON_SURFACE_VARIANT,
                             tooltip="Limpiar fechas",
                             on_click=self.clear,
                             style=ft.ButtonStyle(
-                                overlay_color=ft.Colors.with_opacity(0.1, COLORS["error"])
+                                overlay_color=ft.Colors.with_opacity(0.1, ft.Colors.RED)
                             )
                         ),
                         padding=ft.padding.only(top=20)
@@ -234,13 +235,13 @@ class DateRangePicker:
                 self.error_text,
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
             padding=20,
-            bgcolor=COLORS["bg_white"],
+            bgcolor=ft.Colors.SURFACE,
             border_radius=16,
-            border=ft.border.all(1.5, COLORS["border_light"]),
+            border=ft.border.all(1.5, ft.Colors.OUTLINE_VARIANT),
             shadow=ft.BoxShadow(
                 spread_radius=0,
                 blur_radius=10,
-                color=ft.Colors.with_opacity(0.05, COLORS["text_primary"]),
+                color=ft.Colors.with_opacity(0.05, ft.Colors.ON_SURFACE),
                 offset=ft.Offset(0, 3)
             )
         )

@@ -3,7 +3,7 @@ Vista de mensajes - Muestra y gestiona los correos encontrados
 Soporte completo de temas claro/oscuro
 """
 import flet as ft
-from app.ui.styles import COLORS, FONT_SIZES, SPACING, WINDOW_SIZES
+from app.ui.styles import FONT_SIZES, SPACING, WINDOW_SIZES
 from app.ui.components.message_row import MessageRow
 from app.ui.components.loading_overlay import LoadingOverlay, ToastNotification, LoadingButton
 
@@ -74,12 +74,16 @@ class MessagesView:
         
         self.search_info_text = ft.Text("", size=12)
         
-        # Botones - sin colores hardcodeados
+        # Botones con colores visibles en ambos temas
         self.process_eps_btn = ft.ElevatedButton(
             "📊 Procesar",
             icon=ft.Icons.TABLE_CHART,
             visible=False,
-            on_click=lambda e: self.on_process()
+            on_click=lambda e: self.on_process(),
+            style=ft.ButtonStyle(
+                color=ft.Colors.WHITE,
+                bgcolor=ft.Colors.PRIMARY,
+            )
         )
         
         self.download_selected_btn = ft.ElevatedButton(
@@ -87,7 +91,11 @@ class MessagesView:
             icon=ft.Icons.DOWNLOAD,
             visible=False,
             disabled=True,
-            on_click=lambda e: self.on_download_selected()
+            on_click=lambda e: self.on_download_selected(),
+            style=ft.ButtonStyle(
+                color=ft.Colors.WHITE,
+                bgcolor=ft.Colors.SECONDARY,
+            )
         )
         
         self.select_all_checkbox = ft.Checkbox(
@@ -137,77 +145,82 @@ class MessagesView:
         ], spacing=0)
         
         # Usar Card para el header - soporte de temas automático
-        return ft.Column([
-            # Header
-            ft.Card(
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.Row([
+        return ft.Container(
+            content=ft.Column([
+                # Header
+                ft.Card(
+                    content=ft.Container(
+                        content=ft.Column([
                             ft.Row([
-                                back_btn,
-                                ft.Text("Correos con 'glosa'", size=FONT_SIZES["heading"], 
-                                       weight=ft.FontWeight.W_400),
-                            ], spacing=0),
-                            refresh_btn
-                        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                        # Breadcrumb
-                        ft.Container(
-                            content=breadcrumb,
-                            padding=ft.padding.only(left=45, top=5)
-                        )
-                    ], spacing=5),
-                    padding=SPACING["md"],
+                                ft.Row([
+                                    back_btn,
+                                    ft.Text("Correos con 'glosa'", size=FONT_SIZES["heading"], 
+                                           weight=ft.FontWeight.W_400),
+                                ], spacing=0),
+                                refresh_btn
+                            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                            # Breadcrumb
+                            ft.Container(
+                                content=breadcrumb,
+                                padding=ft.padding.only(left=45, top=5)
+                            )
+                        ], spacing=5),
+                        padding=SPACING["md"],
+                    ),
+                    elevation=0,
+                    margin=0,
                 ),
-                elevation=0,
-                margin=0,
-            ),
-            # Info de búsqueda
-            ft.Container(
-                content=ft.Row([
-                    ft.Icon(ft.Icons.INFO_OUTLINE, size=14),
-                    self.search_info_text
-                ], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
-                padding=ft.padding.symmetric(horizontal=SPACING["md"], vertical=8),
-            ),
-            self.loading_bar,
-            ft.Container(
-                content=self.messages_list,
-                expand=True,
-                padding=0,
-            ),
-            # Barra de selección y descarga manual
-            ft.Card(
-                content=ft.Container(
+                # Info de búsqueda
+                ft.Container(
                     content=ft.Row([
-                        self.select_all_checkbox,
-                        self.selected_count_text,
-                        ft.Container(expand=True),
-                        self.download_selected_btn
-                    ], spacing=15, alignment=ft.MainAxisAlignment.START),
-                    padding=ft.padding.symmetric(horizontal=15, vertical=10),
+                        ft.Icon(ft.Icons.INFO_OUTLINE, size=14),
+                        self.search_info_text
+                    ], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
+                    padding=ft.padding.symmetric(horizontal=SPACING["md"], vertical=8),
                 ),
-                elevation=0,
-                margin=0,
-            ),
-            # Procesamiento
-            ft.Card(
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.Row([self.process_eps_btn], spacing=SPACING["md"], 
-                              alignment=ft.MainAxisAlignment.CENTER),
-                        # Indicador de progreso mejorado
-                        self.processing_container,
-                    ], spacing=SPACING["sm"]),
+                self.loading_bar,
+                ft.Container(
+                    content=self.messages_list,
+                    expand=True,
+                    padding=0,
+                ),
+                # Barra de selección y descarga manual
+                ft.Card(
+                    content=ft.Container(
+                        content=ft.Row([
+                            self.select_all_checkbox,
+                            self.selected_count_text,
+                            ft.Container(expand=True),
+                            self.download_selected_btn
+                        ], spacing=15, alignment=ft.MainAxisAlignment.START),
+                        padding=ft.padding.symmetric(horizontal=15, vertical=10),
+                    ),
+                    elevation=0,
+                    margin=0,
+                ),
+                # Procesamiento
+                ft.Card(
+                    content=ft.Container(
+                        content=ft.Column([
+                            ft.Row([self.process_eps_btn], spacing=SPACING["md"], 
+                                  alignment=ft.MainAxisAlignment.CENTER),
+                            # Indicador de progreso mejorado
+                            self.processing_container,
+                        ], spacing=SPACING["sm"]),
+                        padding=SPACING["md"],
+                    ),
+                    elevation=0,
+                    margin=0,
+                ),
+                ft.Container(
+                    content=self.messages_status,
                     padding=SPACING["md"],
-                ),
-                elevation=0,
-                margin=0,
-            ),
-            ft.Container(
-                content=self.messages_status,
-                padding=SPACING["md"],
-            )
-        ], expand=True, spacing=0, visible=False)
+                )
+            ], expand=True, spacing=0),
+            bgcolor=ft.Colors.SURFACE,  # Fondo sólido para cubrir vistas detrás
+            expand=True,
+            visible=False
+        )
     
     def _on_select_all_changed(self, e):
         """Maneja el cambio del checkbox de seleccionar todos"""
@@ -294,10 +307,9 @@ class MessagesView:
             self.messages_list.controls.append(
                 ft.Container(
                     content=ft.Column([
-                        ft.Icon(ft.Icons.INBOX, size=64, color=COLORS["border"]),
+                        ft.Icon(ft.Icons.INBOX, size=64, color=ft.Colors.OUTLINE),
                         ft.Text("No se encontraron mensajes", 
-                               size=FONT_SIZES["body"], 
-                               color=COLORS["text_secondary"])
+                               size=FONT_SIZES["body"])
                     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=SPACING["md"]),
                     padding=SPACING["xxl"],
                     alignment=ft.alignment.center

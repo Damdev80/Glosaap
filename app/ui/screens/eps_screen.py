@@ -1,8 +1,9 @@
 """
 Pantalla de selección de EPS y rango de fechas
+Con soporte de temas claro/oscuro
 """
 import flet as ft
-from app.ui.styles import COLORS, FONT_SIZES, SPACING
+from app.ui.styles import FONT_SIZES, SPACING
 from app.ui.components.date_range_picker import DateRangePicker
 from app.ui.components.eps_card import EpsCard
 from app.ui.components.alert_dialog import AlertDialog
@@ -39,7 +40,7 @@ class EpsScreen:
         self.warning_text = ft.Text(
             "",
             size=12,
-            color=COLORS["error"],
+            color=ft.Colors.RED,
             text_align=ft.TextAlign.CENTER,
             visible=False
         )
@@ -150,7 +151,7 @@ class EpsScreen:
             content=ft.Row([
                 ft.IconButton(
                     icon=ft.Icons.ARROW_BACK,
-                    icon_color=COLORS["primary"],
+                    icon_color=ft.Colors.PRIMARY,
                     icon_size=24,
                     tooltip="Volver al Dashboard",
                     on_click=self._handle_back
@@ -159,13 +160,13 @@ class EpsScreen:
                     "Gestor de Glosas",
                     size=20,
                     weight=ft.FontWeight.W_600,
-                    color=COLORS["text_primary"]
+                    color=ft.Colors.ON_SURFACE
                 ),
                 ft.Container(expand=True),  # Espaciador
             ], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER),
             padding=ft.padding.symmetric(horizontal=20, vertical=10),
-            bgcolor=COLORS["bg_white"],
-            border=ft.border.only(bottom=ft.BorderSide(1, COLORS["border"]))
+            bgcolor=ft.Colors.SURFACE,
+            border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.OUTLINE))
         )
         
         # Contenedor principal
@@ -180,7 +181,7 @@ class EpsScreen:
                 ft.Text(
                     "Busca y procesa notificaciones de glosas por EPS",
                     size=15,
-                    color=COLORS["text_secondary"],
+                    color=ft.Colors.ON_SURFACE_VARIANT,
                     text_align=ft.TextAlign.CENTER,
                     weight=ft.FontWeight.W_400
                 ),
@@ -192,16 +193,16 @@ class EpsScreen:
                     content=ft.Column([
                         ft.Row([
                             ft.Container(
-                                content=ft.Text("1", size=15, weight=ft.FontWeight.BOLD, color=COLORS["bg_white"]),
+                                content=ft.Text("1", size=15, weight=ft.FontWeight.BOLD, color=ft.Colors.SURFACE),
                                 width=32,
                                 height=32,
                                 border_radius=16,
-                                bgcolor=COLORS["primary"],
+                                bgcolor=ft.Colors.PRIMARY,
                                 alignment=ft.alignment.center,
                                 shadow=ft.BoxShadow(
                                     spread_radius=0,
                                     blur_radius=8,
-                                    color=ft.Colors.with_opacity(0.3, COLORS["primary"]),
+                                    color=ft.Colors.with_opacity(0.3, ft.Colors.PRIMARY),
                                     offset=ft.Offset(0, 2)
                                 )
                             ),
@@ -209,7 +210,7 @@ class EpsScreen:
                                 "Selecciona el rango de fechas",
                                 size=16,
                                 weight=ft.FontWeight.BOLD,
-                                color=COLORS["text_primary"]
+                                color=ft.Colors.ON_SURFACE
                             )
                         ], spacing=12, alignment=ft.MainAxisAlignment.CENTER),
                         ft.Container(height=8),
@@ -224,16 +225,16 @@ class EpsScreen:
                     content=ft.Column([
                         ft.Row([
                             ft.Container(
-                                content=ft.Text("2", size=15, weight=ft.FontWeight.BOLD, color=COLORS["bg_white"]),
+                                content=ft.Text("2", size=15, weight=ft.FontWeight.BOLD, color=ft.Colors.SURFACE),
                                 width=32,
                                 height=32,
                                 border_radius=16,
-                                bgcolor=COLORS["primary"],
+                                bgcolor=ft.Colors.PRIMARY,
                                 alignment=ft.alignment.center,
                                 shadow=ft.BoxShadow(
                                     spread_radius=0,
                                     blur_radius=8,
-                                    color=ft.Colors.with_opacity(0.3, COLORS["primary"]),
+                                    color=ft.Colors.with_opacity(0.3, ft.Colors.PRIMARY),
                                     offset=ft.Offset(0, 2)
                                 )
                             ),
@@ -241,7 +242,7 @@ class EpsScreen:
                                 "Selecciona una EPS para buscar",
                                 size=16,
                                 weight=ft.FontWeight.BOLD,
-                                color=COLORS["text_primary"]
+                                color=ft.Colors.ON_SURFACE
                             )
                         ], spacing=10, alignment=ft.MainAxisAlignment.CENTER),
                         ft.Container(height=12),
@@ -249,7 +250,7 @@ class EpsScreen:
                         ft.Container(
                             content=eps_cards,
                             padding=SPACING["md"],
-                            bgcolor=COLORS["bg_light"],
+                            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
                             border_radius=12
                         )
                     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
@@ -257,7 +258,7 @@ class EpsScreen:
                 
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO),
             padding=ft.padding.all(SPACING["lg"]),
-            bgcolor=COLORS["bg_light"],
+            bgcolor=ft.Colors.SURFACE,
             alignment=ft.alignment.top_center,
             expand=True,
             visible=False

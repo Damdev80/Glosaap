@@ -12,7 +12,7 @@ from pathlib import Path
 
 # Versión actual de la aplicación (seguir semver: MAJOR.MINOR.PATCH)
 # Actualizar manualmente en cada release
-APP_VERSION = "0.11.9"
+APP_VERSION = "0.11.10"
 
 # Nombre de la aplicación
 APP_NAME = "Glosaap"
@@ -90,7 +90,8 @@ ALLOWED_EXTENSIONS = {
 ALL_ALLOWED_EXTENSIONS = (
     ALLOWED_EXTENSIONS["excel"] + 
     ALLOWED_EXTENSIONS["word"] + 
-    ALLOWED_EXTENSIONS["pdf"]
+    ALLOWED_EXTENSIONS["pdf"] + 
+    ALLOWED_EXTENSIONS["csv"]
 )
 
 # ==================== CONFIGURACIÓN DE LOGGING ====================

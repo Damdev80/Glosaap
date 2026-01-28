@@ -1,9 +1,10 @@
 """
 Componente de fila de mensaje en lista
+Con soporte de temas claro/oscuro
 """
 import flet as ft
 import os
-from app.ui.styles import COLORS, FONT_SIZES
+from app.ui.styles import FONT_SIZES
 
 
 class MessageRow:
@@ -16,8 +17,8 @@ class MessageRow:
         # Checkbox para selección (oculto - ya no es necesario)
         self.checkbox = ft.Checkbox(
             value=False,
-            fill_color=COLORS["primary"],
-            check_color=COLORS["bg_white"],
+            fill_color=ft.Colors.PRIMARY,
+            check_color=ft.Colors.SURFACE,
             visible=False,  # Ocultar checkbox
             on_change=self._on_checkbox_change
         )
@@ -26,11 +27,11 @@ class MessageRow:
         self.status_icon = ft.Icon(
             ft.Icons.EMAIL_OUTLINED,
             size=18,
-            color=COLORS["text_secondary"]
+            color=ft.Colors.ON_SURFACE_VARIANT
         )
         
         # Estado de descarga (texto)
-        self.status_text = ft.Text("", size=11, color=COLORS["text_secondary"])
+        self.status_text = ft.Text("", size=11, color=ft.Colors.ON_SURFACE_VARIANT)
         
         # Construir UI
         self.container = self._build()
@@ -55,14 +56,14 @@ class MessageRow:
                         ft.Text(
                             subject[:80] + "..." if len(subject) > 80 else subject,
                             size=FONT_SIZES["small"],
-                            color=COLORS["text_primary"],
+                            color=ft.Colors.ON_SURFACE,
                             weight=ft.FontWeight.W_400
                         ),
                         ft.Row([
                             ft.Text(
                                 str(date) if date else "",
                                 size=FONT_SIZES["caption"],
-                                color=COLORS["text_secondary"]
+                                color=ft.Colors.ON_SURFACE_VARIANT
                             ),
                             self.status_text
                         ], spacing=10)
@@ -71,8 +72,8 @@ class MessageRow:
                 )
             ], spacing=8),
             padding=ft.padding.symmetric(horizontal=10, vertical=10),
-            border=ft.border.only(bottom=ft.BorderSide(1, COLORS["border"])),
-            bgcolor=COLORS["bg_white"]
+            border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.OUTLINE)),
+            bgcolor=ft.Colors.SURFACE
         )
     
     def update_status(self, text, is_error=False):
@@ -81,17 +82,17 @@ class MessageRow:
         
         if is_error:
             self.status_icon.name = ft.Icons.ERROR_OUTLINE
-            self.status_icon.color = COLORS["error"]
-            self.status_text.color = COLORS["error"]
+            self.status_icon.color = ft.Colors.RED
+            self.status_text.color = ft.Colors.RED
         elif "✅" in text or "descargado" in text.lower() or "archivo" in text.lower():
             self.status_icon.name = ft.Icons.CHECK_CIRCLE
-            self.status_icon.color = COLORS["success"]
-            self.status_text.color = COLORS["success"]
+            self.status_icon.color = ft.Colors.GREEN
+            self.status_text.color = ft.Colors.GREEN
         elif "descargando" in text.lower() or "procesando" in text.lower():
             self.status_icon.name = ft.Icons.DOWNLOADING
-            self.status_icon.color = COLORS["primary"]
-            self.status_text.color = COLORS["primary"]
+            self.status_icon.color = ft.Colors.PRIMARY
+            self.status_text.color = ft.Colors.PRIMARY
         else:
             self.status_icon.name = ft.Icons.EMAIL_OUTLINED
-            self.status_icon.color = COLORS["text_secondary"]
-            self.status_text.color = COLORS["text_secondary"]
+            self.status_icon.color = ft.Colors.ON_SURFACE_VARIANT
+            self.status_text.color = ft.Colors.ON_SURFACE_VARIANT

@@ -1,9 +1,10 @@
 """
 Componente de header con navegación reutilizable
 Integrado con NavigationController existente
+Con soporte de temas claro/oscuro
 """
 import flet as ft
-from app.ui.styles import COLORS, FONT_SIZES, SPACING
+from app.ui.styles import FONT_SIZES, SPACING
 from typing import Callable, List, Optional
 
 
@@ -52,7 +53,7 @@ class NavigationHeader:
                 title,
                 size=FONT_SIZES["heading"],
                 weight=ft.FontWeight.BOLD,
-                color=COLORS["text_primary"]
+                color=ft.Colors.ON_SURFACE
             )
         ], spacing=SPACING["xs"])
         
@@ -77,9 +78,9 @@ class NavigationHeader:
                 vertical_alignment=ft.CrossAxisAlignment.CENTER
             ),
             padding=ft.padding.all(SPACING["lg"]),
-            bgcolor=COLORS["bg_white"],
+            bgcolor=ft.Colors.SURFACE,
             border=ft.border.only(
-                bottom=ft.border.BorderSide(1, COLORS["border_light"])
+                bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)
             )
         )
     
@@ -96,8 +97,8 @@ class NavigationHeader:
             text=text,
             icon=ft.Icons.ARROW_BACK,
             on_click=on_click,
-            bgcolor=COLORS["bg_light"],
-            color=COLORS["text_primary"],
+            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
+            color=ft.Colors.ON_SURFACE,
             elevation=1
         )
     
@@ -113,26 +114,26 @@ class NavigationHeader:
                         text=crumb["text"],
                         on_click=crumb["action"],
                         style=ft.ButtonStyle(
-                            color=COLORS["primary"],
+                            color=ft.Colors.PRIMARY,
                             padding=ft.padding.symmetric(horizontal=4, vertical=2)
                         )
                     )
                     items.append(link)
                 else:
                     items.append(
-                        ft.Text(crumb["text"], color=COLORS["text_secondary"], size=FONT_SIZES["small"])
+                        ft.Text(crumb["text"], color=ft.Colors.ON_SURFACE_VARIANT, size=FONT_SIZES["small"])
                     )
                 
                 # Separador
                 items.append(
-                    ft.Text(" > ", color=COLORS["text_secondary"], size=FONT_SIZES["small"])
+                    ft.Text(" > ", color=ft.Colors.ON_SURFACE_VARIANT, size=FONT_SIZES["small"])
                 )
             else:
                 # Último elemento (actual)
                 items.append(
                     ft.Text(
                         crumb["text"],
-                        color=COLORS["text_primary"],
+                        color=ft.Colors.ON_SURFACE,
                         size=FONT_SIZES["small"],
                         weight=ft.FontWeight.W_500
                     )

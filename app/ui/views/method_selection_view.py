@@ -3,7 +3,6 @@ Vista de selección de método: Correo vs Web
 """
 import flet as ft
 import os
-from app.ui.styles import COLORS
 
 
 class MethodSelectionView:
@@ -17,18 +16,8 @@ class MethodSelectionView:
         self.on_logout = on_logout
         self.container = self._build()
     
-    def _create_method_card(self, title, description, action_key, is_primary=True):
-        """Crea una card de método"""
-        
-        def on_hover(e):
-            card_container.scale = 1.02 if e.data == "true" else 1.0
-            card_container.shadow = ft.BoxShadow(
-                spread_radius=0,
-                blur_radius=30 if e.data == "true" else 20,
-                color=ft.Colors.with_opacity(0.12 if e.data == "true" else 0.08, COLORS["text_primary"]),
-                offset=ft.Offset(0, 8 if e.data == "true" else 4)
-            )
-            self.page.update()
+    def _create_method_card(self, title, description, action_key, icon, is_primary=True):
+        """Crea una card de método usando Card de Flet (respeta temas)"""
         
         def on_click(e):
             if action_key == "email" and self.on_email_method:
@@ -36,57 +25,42 @@ class MethodSelectionView:
             elif action_key == "web" and self.on_web_method:
                 self.on_web_method()
         
-        card_content = ft.Column([
-            ft.Text(
-                title,
-                size=24,
-                weight=ft.FontWeight.BOLD,
-                color=COLORS["text_primary"],
-                text_align=ft.TextAlign.CENTER
+        card = ft.Card(
+            content=ft.Container(
+                content=ft.Column([
+                    ft.Icon(icon, size=48, color=ft.Colors.PRIMARY if is_primary else ft.Colors.GREEN),
+                    ft.Container(height=15),
+                    ft.Text(
+                        title,
+                        size=20,
+                        weight=ft.FontWeight.BOLD,
+                        text_align=ft.TextAlign.CENTER
+                    ),
+                    ft.Container(height=10),
+                    ft.Text(
+                        description,
+                        size=13,
+                        text_align=ft.TextAlign.CENTER,
+                    ),
+                    ft.Container(height=20),
+                    ft.ElevatedButton(
+                        "Seleccionar",
+                        icon=ft.Icons.ARROW_FORWARD,
+                        on_click=on_click,
+                        color=ft.Colors.ON_PRIMARY if is_primary else ft.Colors.WHITE,
+                        bgcolor=ft.Colors.PRIMARY if is_primary else ft.Colors.GREEN,
+                    )
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0),
+                padding=30,
+                width=300,
+                height=280,
+                on_click=on_click,
+                ink=True,
             ),
-            ft.Container(height=15),
-            ft.Text(
-                description,
-                size=14,
-                color=COLORS["text_secondary"],
-                text_align=ft.TextAlign.CENTER,
-                weight=ft.FontWeight.W_400
-            ),
-            ft.Container(height=25),
-            ft.Container(
-                content=ft.Text(
-                    "Seleccionar →",
-                    size=13,
-                    weight=ft.FontWeight.W_500,
-                    color=COLORS["primary"] if is_primary else "#4CAF50"
-                ),
-                alignment=ft.alignment.center
-            )
-        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0)
-        
-        card_container = ft.Container(
-            content=card_content,
-            width=320,
-            height=220,
-            bgcolor=COLORS["bg_white"],
-            border_radius=16,
-            padding=35,
-            shadow=ft.BoxShadow(
-                spread_radius=0,
-                blur_radius=20,
-                color=ft.Colors.with_opacity(0.08, COLORS["text_primary"]),
-                offset=ft.Offset(0, 4)
-            ),
-            border=ft.border.all(1.5, COLORS["border_light"]),
-            animate=ft.Animation(250, ft.AnimationCurve.EASE_OUT),
-            animate_scale=ft.Animation(250, ft.AnimationCurve.EASE_OUT),
-            scale=1.0,
-            on_hover=on_hover,
-            on_click=on_click,
-            ink=True
+            elevation=3,
         )
         
-        return card_container
+        return card
     
     def _build(self):
         """Construye la interfaz"""
@@ -95,57 +69,57 @@ class MethodSelectionView:
         header = ft.Column([
             ft.Text(
                 "Selecciona el método de descarga",
-                size=32,
+                size=28,
                 weight=ft.FontWeight.BOLD,
-                color=COLORS["text_primary"],
                 text_align=ft.TextAlign.CENTER
             ),
             ft.Container(height=8),
             ft.Text(
                 "Elige cómo quieres obtener los archivos de glosas",
-                size=15,
-                color=COLORS["text_secondary"],
+                size=14,
                 text_align=ft.TextAlign.CENTER
             )
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER)
         
         # Cards de métodos
         email_card = self._create_method_card(
-            title="Glosa por Correo",
-            description="Descarga archivos desde tu bandeja de entrada usando IMAP. Ideal para glosas recibidas vía email.",
+            title="📧 Glosa por Correo",
+            description="Descarga archivos desde tu bandeja de entrada usando IMAP.\nIdeal para glosas recibidas vía email.",
             action_key="email",
+            icon=ft.Icons.EMAIL_OUTLINED,
             is_primary=True
         )
         
         web_card = self._create_method_card(
-            title="Glosa por Web",
-            description="Descarga automática desde portales web de EPS (Familiar, Fomag). Acceso directo a las plataformas.",
+            title="🌐 Glosa por Web",
+            description="Descarga automática desde portales web de EPS.\nAcceso directo a Familiar, Fomag, etc.",
             action_key="web",
+            icon=ft.Icons.LANGUAGE,
             is_primary=False
         )
         
         # Layout
         content = ft.Column([
-            ft.Container(height=80),
+            ft.Container(height=40),
             header,
-            ft.Container(height=50),
+            ft.Container(height=40),
             ft.Row([
                 email_card,
-                ft.Container(width=40),
+                ft.Container(width=30),
                 web_card
             ], alignment=ft.MainAxisAlignment.CENTER),
-            ft.Container(height=50),
-            ft.TextButton(
+            ft.Container(height=30),
+            ft.OutlinedButton(
                 "Cerrar sesión",
+                icon=ft.Icons.LOGOUT,
                 on_click=lambda e: self.on_logout() if self.on_logout else None,
-                style=ft.ButtonStyle(color=COLORS["text_secondary"])
             )
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True)
         
         return ft.Container(
             content=content,
+            bgcolor=ft.Colors.SURFACE,  # Fondo sólido
             expand=True,
-            bgcolor=COLORS["bg_light"],
             visible=False
         )
     

@@ -227,12 +227,12 @@ class TestMessageFilterByEmail:
 
 
 class TestBusinessLogicColors:
-    """Tests para importación de colores."""
+    """Tests para importación de funciones de negocio."""
     
-    def test_colors_imported(self):
-        """COLORS se importa en business_logic"""
-        from app.ui.business_logic import COLORS
-        assert COLORS is not None
+    def test_business_logic_imported(self):
+        """business_logic se importa correctamente"""
+        from app.ui import business_logic
+        assert business_logic is not None
 
 
 class TestBusinessLogicModule:

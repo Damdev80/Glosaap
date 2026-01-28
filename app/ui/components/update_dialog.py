@@ -3,12 +3,13 @@ Componente de diálogo de actualización para Glosaap
 
 Este módulo proporciona un diálogo de actualización integrado
 con el sistema de UI de Flet existente.
+Con soporte de temas claro/oscuro
 """
 import flet as ft
 import threading
 from typing import Optional, Callable
 
-from app.ui.styles import COLORS, FONT_SIZES
+from app.ui.styles import FONT_SIZES
 from app.service.update_service import (
     UpdateService,
     ReleaseInfo,
@@ -105,18 +106,18 @@ class UpdateDialog:
         self._close_dialog()
         
         content = ft.Column([
-            ft.ProgressRing(width=40, height=40, color=COLORS["primary"]),
+            ft.ProgressRing(width=40, height=40, color=ft.Colors.PRIMARY),
             ft.Container(height=16),
             ft.Text(
                 "Verificando actualizaciones...",
                 size=14,
-                color=COLORS["text_secondary"],
+                color=ft.Colors.ON_SURFACE_VARIANT,
                 text_align=ft.TextAlign.CENTER
             ),
             ft.Text(
                 f"Versión actual: {self.current_version}",
                 size=12,
-                color=COLORS["text_light"],
+                color=ft.Colors.ON_SURFACE_VARIANT,
                 text_align=ft.TextAlign.CENTER
             )
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8)
@@ -124,12 +125,12 @@ class UpdateDialog:
         self._dialog = ft.AlertDialog(
             modal=True,
             title=ft.Row([
-                ft.Icon(ft.Icons.SYSTEM_UPDATE, color=COLORS["primary"], size=28),
-                ft.Text("Actualización", size=18, weight=ft.FontWeight.BOLD, color=COLORS["text_primary"])
+                ft.Icon(ft.Icons.SYSTEM_UPDATE, color=ft.Colors.PRIMARY, size=28),
+                ft.Text("Actualización", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE)
             ], spacing=10),
             content=ft.Container(content=content, width=300, height=120),
             shape=ft.RoundedRectangleBorder(radius=12),
-            bgcolor=COLORS["bg_white"]
+            bgcolor=ft.Colors.SURFACE
         )
         
         self.page.overlay.append(self._dialog)
@@ -149,15 +150,15 @@ class UpdateDialog:
         self._progress_bar = ft.ProgressBar(
             width=350,
             value=0,
-            color=COLORS["primary"],
-            bgcolor=COLORS["bg_input"],
+            color=ft.Colors.PRIMARY,
+            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
             visible=False
         )
         
         self._progress_text = ft.Text(
             "",
             size=12,
-            color=COLORS["text_secondary"],
+            color=ft.Colors.ON_SURFACE_VARIANT,
             visible=False,
             text_align=ft.TextAlign.CENTER
         )
@@ -168,33 +169,33 @@ class UpdateDialog:
             ft.Container(
                 content=ft.Column([
                     ft.Row([
-                        ft.Text("Nueva versión:", size=13, color=COLORS["text_secondary"]),
+                        ft.Text("Nueva versión:", size=13, color=ft.Colors.ON_SURFACE_VARIANT),
                         ft.Text(
                             f"v{release.version}",
                             size=13,
                             weight=ft.FontWeight.BOLD,
-                            color=COLORS["success"]
+                            color=ft.Colors.GREEN
                         )
                     ], spacing=8),
                     ft.Row([
-                        ft.Text("Versión actual:", size=13, color=COLORS["text_secondary"]),
+                        ft.Text("Versión actual:", size=13, color=ft.Colors.ON_SURFACE_VARIANT),
                         ft.Text(
                             f"v{self.current_version}",
                             size=13,
-                            color=COLORS["text_light"]
+                            color=ft.Colors.ON_SURFACE_VARIANT
                         )
                     ], spacing=8),
                     ft.Row([
-                        ft.Text("Tamaño:", size=13, color=COLORS["text_secondary"]),
+                        ft.Text("Tamaño:", size=13, color=ft.Colors.ON_SURFACE_VARIANT),
                         ft.Text(
                             f"{release.size_mb:.1f} MB",
                             size=13,
-                            color=COLORS["text_light"]
+                            color=ft.Colors.ON_SURFACE_VARIANT
                         )
                     ], spacing=8),
                 ], spacing=6),
                 padding=12,
-                bgcolor=COLORS["bg_light"],
+                bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
                 border_radius=8
             ),
             
@@ -205,7 +206,7 @@ class UpdateDialog:
                 "Novedades:",
                 size=14,
                 weight=ft.FontWeight.W_500,
-                color=COLORS["text_primary"]
+                color=ft.Colors.ON_SURFACE
             ),
             ft.Container(
                 content=ft.Column([
@@ -219,9 +220,9 @@ class UpdateDialog:
                 height=150,
                 width=350,
                 padding=10,
-                bgcolor=COLORS["bg_input"],
+                bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
                 border_radius=8,
-                border=ft.border.all(1, COLORS["border_light"])
+                border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT)
             ),
             
             ft.Container(height=8),
@@ -236,8 +237,8 @@ class UpdateDialog:
         self._download_btn = ft.ElevatedButton(
             "⬇️ Actualizar ahora",
             on_click=lambda e: self._start_download(release),
-            bgcolor=COLORS["primary"],
-            color=COLORS["bg_white"],
+            bgcolor=ft.Colors.PRIMARY,
+            color=ft.Colors.SURFACE,
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=8),
                 padding=ft.padding.symmetric(horizontal=20, vertical=12)
@@ -247,25 +248,25 @@ class UpdateDialog:
         self._cancel_btn = ft.TextButton(
             "Más tarde",
             on_click=lambda e: self._close_dialog(),
-            style=ft.ButtonStyle(color=COLORS["text_secondary"])
+            style=ft.ButtonStyle(color=ft.Colors.ON_SURFACE_VARIANT)
         )
         
         self._dialog = ft.AlertDialog(
             modal=True,
             title=ft.Row([
-                ft.Icon(ft.Icons.ROCKET_LAUNCH, color=COLORS["success"], size=28),
+                ft.Icon(ft.Icons.ROCKET_LAUNCH, color=ft.Colors.GREEN, size=28),
                 ft.Text(
                     "¡Actualización disponible!",
                     size=18,
                     weight=ft.FontWeight.BOLD,
-                    color=COLORS["text_primary"]
+                    color=ft.Colors.ON_SURFACE
                 )
             ], spacing=10),
             content=ft.Container(content=content, width=380),
             actions=[self._cancel_btn, self._download_btn],
             actions_alignment=ft.MainAxisAlignment.END,
             shape=ft.RoundedRectangleBorder(radius=12),
-            bgcolor=COLORS["bg_white"]
+            bgcolor=ft.Colors.SURFACE
         )
         
         self.page.overlay.append(self._dialog)
@@ -277,19 +278,19 @@ class UpdateDialog:
         self._close_dialog()
         
         content = ft.Column([
-            ft.Icon(ft.Icons.CHECK_CIRCLE, color=COLORS["success"], size=48),
+            ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.GREEN, size=48),
             ft.Container(height=12),
             ft.Text(
                 "Estás al día",
                 size=16,
                 weight=ft.FontWeight.W_500,
-                color=COLORS["text_primary"],
+                color=ft.Colors.ON_SURFACE,
                 text_align=ft.TextAlign.CENTER
             ),
             ft.Text(
                 f"Versión actual: {self.current_version}",
                 size=13,
-                color=COLORS["text_secondary"],
+                color=ft.Colors.ON_SURFACE_VARIANT,
                 text_align=ft.TextAlign.CENTER
             )
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4)
@@ -297,20 +298,20 @@ class UpdateDialog:
         self._dialog = ft.AlertDialog(
             modal=True,
             title=ft.Row([
-                ft.Icon(ft.Icons.SYSTEM_UPDATE, color=COLORS["primary"], size=28),
-                ft.Text("Actualización", size=18, weight=ft.FontWeight.BOLD, color=COLORS["text_primary"])
+                ft.Icon(ft.Icons.SYSTEM_UPDATE, color=ft.Colors.PRIMARY, size=28),
+                ft.Text("Actualización", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE)
             ], spacing=10),
             content=ft.Container(content=content, width=280, height=140),
             actions=[
                 ft.TextButton(
                     "Cerrar",
                     on_click=lambda e: self._close_dialog(),
-                    style=ft.ButtonStyle(color=COLORS["primary"])
+                    style=ft.ButtonStyle(color=ft.Colors.PRIMARY)
                 )
             ],
             actions_alignment=ft.MainAxisAlignment.END,
             shape=ft.RoundedRectangleBorder(radius=12),
-            bgcolor=COLORS["bg_white"]
+            bgcolor=ft.Colors.SURFACE
         )
         
         self.page.overlay.append(self._dialog)
@@ -322,12 +323,12 @@ class UpdateDialog:
         self._close_dialog()
         
         content = ft.Column([
-            ft.Icon(ft.Icons.ERROR_OUTLINE, color=COLORS["error"], size=48),
+            ft.Icon(ft.Icons.ERROR_OUTLINE, color=ft.Colors.RED, size=48),
             ft.Container(height=12),
             ft.Text(
                 message,
                 size=14,
-                color=COLORS["text_secondary"],
+                color=ft.Colors.ON_SURFACE_VARIANT,
                 text_align=ft.TextAlign.CENTER
             )
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4)
@@ -335,20 +336,20 @@ class UpdateDialog:
         self._dialog = ft.AlertDialog(
             modal=True,
             title=ft.Row([
-                ft.Icon(ft.Icons.SYSTEM_UPDATE, color=COLORS["error"], size=28),
-                ft.Text("Error", size=18, weight=ft.FontWeight.BOLD, color=COLORS["text_primary"])
+                ft.Icon(ft.Icons.SYSTEM_UPDATE, color=ft.Colors.RED, size=28),
+                ft.Text("Error", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE)
             ], spacing=10),
             content=ft.Container(content=content, width=300, height=120),
             actions=[
                 ft.TextButton(
                     "Cerrar",
                     on_click=lambda e: self._close_dialog(),
-                    style=ft.ButtonStyle(color=COLORS["error"])
+                    style=ft.ButtonStyle(color=ft.Colors.RED)
                 )
             ],
             actions_alignment=ft.MainAxisAlignment.END,
             shape=ft.RoundedRectangleBorder(radius=12),
-            bgcolor=COLORS["bg_white"]
+            bgcolor=ft.Colors.SURFACE
         )
         
         self.page.overlay.append(self._dialog)
@@ -437,7 +438,7 @@ class UpdateDialog:
             self._progress_bar.visible = False
         if self._progress_text:
             self._progress_text.value = f"❌ {message}"
-            self._progress_text.color = COLORS["error"]
+            self._progress_text.color = ft.Colors.RED
         if self._download_btn:
             self._download_btn.disabled = False
             self._download_btn.text = "⬇️ Reintentar"
@@ -481,7 +482,7 @@ class UpdateChecker:
         """Crea un item de menú para verificar actualizaciones"""
         return ft.PopupMenuItem(
             content=ft.Row([
-                ft.Icon(ft.Icons.SYSTEM_UPDATE, size=18, color=COLORS["text_secondary"]),
+                ft.Icon(ft.Icons.SYSTEM_UPDATE, size=18, color=ft.Colors.ON_SURFACE_VARIANT),
                 ft.Text("Buscar actualizaciones", size=13)
             ], spacing=8),
             on_click=lambda e: self.check_updates()
@@ -492,7 +493,7 @@ class UpdateChecker:
         if compact:
             return ft.IconButton(
                 icon=ft.Icons.SYSTEM_UPDATE,
-                icon_color=COLORS["text_secondary"],
+                icon_color=ft.Colors.ON_SURFACE_VARIANT,
                 tooltip="Buscar actualizaciones",
                 on_click=lambda e: self.check_updates()
             )

@@ -1,8 +1,9 @@
-﻿"""
+"""
 Dialogos personalizados elegantes para Glosaap
+Con soporte de temas claro/oscuro
 """
 import flet as ft
-from app.ui.styles import COLORS, SPACING
+from app.ui.styles import SPACING
 from typing import Optional
 
 
@@ -53,26 +54,26 @@ class SettingsPanel:
             title=ft.Text("Configuracion", size=18, weight=ft.FontWeight.W_600),
             content=ft.Container(
                 content=ft.Column([
-                    ft.Text("Apariencia", size=14, weight=ft.FontWeight.W_500, color=COLORS["text_secondary"]),
+                    ft.Text("Apariencia", size=14, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT),
                     ft.Container(height=10),
                     ft.Row([
-                        ft.Icon(ft.Icons.DARK_MODE, size=20, color=COLORS["text_secondary"]),
+                        ft.Icon(ft.Icons.DARK_MODE, size=20, color=ft.Colors.ON_SURFACE_VARIANT),
                         ft.Text("Tema oscuro", size=13),
                         ft.Container(expand=True),
                         ft.Switch(
                             value=self.page.theme_mode == ft.ThemeMode.DARK,
                             on_change=lambda e: self._toggle_theme(e),
-                            active_color=COLORS["primary"]
+                            active_color=ft.Colors.PRIMARY
                         )
                     ]),
                     ft.Divider(height=20),
-                    ft.Text("Informacion", size=14, weight=ft.FontWeight.W_500, color=COLORS["text_secondary"]),
+                    ft.Text("Informacion", size=14, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT),
                     ft.Container(height=10),
                     ft.Row([
-                        ft.Icon(ft.Icons.INFO_OUTLINE, size=20, color=COLORS["text_secondary"]),
+                        ft.Icon(ft.Icons.INFO_OUTLINE, size=20, color=ft.Colors.ON_SURFACE_VARIANT),
                         ft.Column([
                             ft.Text(f"Version: {APP_VERSION}", size=12),
-                            ft.Text("Glosaap Team", size=11, color=COLORS["text_light"]),
+                            ft.Text("Glosaap Team", size=11, color=ft.Colors.ON_SURFACE_VARIANT),
                         ], spacing=2)
                     ], spacing=10),
                 ], spacing=5),

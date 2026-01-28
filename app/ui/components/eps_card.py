@@ -1,9 +1,10 @@
 """" 
 Componente de tarjeta de EPS
+Con soporte de temas claro/oscuro
 """
 import flet as ft
 import os
-from app.ui.styles import COLORS, FONT_SIZES, SPACING
+from app.ui.styles import FONT_SIZES, SPACING
 
 
 class EpsCard:
@@ -32,12 +33,12 @@ class EpsCard:
             self.container.shadow = ft.BoxShadow(
                 spread_radius=0,
                 blur_radius=20 if is_hovered else 10,
-                color=ft.Colors.with_opacity(0.15 if is_hovered else 0.06, COLORS["primary"] if is_hovered else COLORS["text_primary"]),
+                color=ft.Colors.with_opacity(0.15 if is_hovered else 0.06, ft.Colors.PRIMARY if is_hovered else ft.Colors.ON_SURFACE),
                 offset=ft.Offset(0, 8 if is_hovered else 3)
             )
             self.container.border = ft.border.all(
                 2 if is_hovered else 1.5, 
-                COLORS["primary"] if is_hovered else COLORS["border_light"]
+                ft.Colors.PRIMARY if is_hovered else ft.Colors.OUTLINE_VARIANT
             )
             self.container.update()
     
@@ -71,33 +72,33 @@ class EpsCard:
                     self.eps_info["name"],
                     size=FONT_SIZES["body"],
                     weight=ft.FontWeight.W_600,
-                    color=COLORS["text_primary"],
+                    color=ft.Colors.ON_SURFACE,
                     text_align=ft.TextAlign.CENTER
                 ),
                 ft.Text(
                     self.eps_info.get("description", ""),
                     size=FONT_SIZES["caption"],
-                    color=COLORS["text_secondary"],
+                    color=ft.Colors.ON_SURFACE_VARIANT,
                     text_align=ft.TextAlign.CENTER,
                     weight=ft.FontWeight.W_400
                 )
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=6, tight=True),
-            bgcolor=COLORS["bg_white"],
+            bgcolor=ft.Colors.SURFACE,
             border_radius=14,
             padding=ft.padding.symmetric(horizontal=16, vertical=14),
             width=150,
             height=135,
             ink=True,
-            ink_color=ft.Colors.with_opacity(0.1, COLORS["primary"]),
+            ink_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
             on_click=self._handle_click,
             on_hover=self._on_hover,
             shadow=ft.BoxShadow(
                 spread_radius=0,
                 blur_radius=10,
-                color=ft.Colors.with_opacity(0.06, COLORS["text_primary"]),
+                color=ft.Colors.with_opacity(0.06, ft.Colors.ON_SURFACE),
                 offset=ft.Offset(0, 3)
             ),
-            border=ft.border.all(1.5, COLORS["border_light"]),
+            border=ft.border.all(1.5, ft.Colors.OUTLINE_VARIANT),
             animate_scale=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
             animate=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
             scale=1.0

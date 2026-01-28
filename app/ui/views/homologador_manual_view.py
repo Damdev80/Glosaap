@@ -1,14 +1,14 @@
 """
 Vista de Homologador Manual
 Permite homologar archivos Excel seleccionando EPS y columna
+Con soporte de temas claro/oscuro
 """
 import flet as ft
 import pandas as pd
 import os
 import threading
 from datetime import datetime
-from app.ui.styles import COLORS
-
+from typing import Optional, List, Tuple
 
 class HomologadorManualView:
     """Vista para homologar archivos Excel manualmente"""
@@ -61,15 +61,15 @@ class HomologadorManualView:
                 ft.dropdown.Option("COOSALUD", "COOSALUD"),
             ],
             on_change=self._on_eps_change,
-            border_color=COLORS["primary"],
-            focused_border_color=COLORS["primary"]
+            border_color=ft.Colors.PRIMARY,
+            focused_border_color=ft.Colors.PRIMARY
         )
         
         # Selector de archivo
         self.archivo_text = ft.Text(
             "Ningún archivo seleccionado",
             size=13,
-            color=COLORS["text_secondary"],
+            color=ft.Colors.ON_SURFACE_VARIANT,
             width=250,
             overflow=ft.TextOverflow.ELLIPSIS
         )
@@ -83,8 +83,8 @@ class HomologadorManualView:
                 allowed_extensions=["xlsx", "xls"],
                 dialog_title="Seleccionar archivo Excel"
             ),
-            bgcolor=COLORS["primary"],
-            color=COLORS["bg_white"],
+            bgcolor=ft.Colors.PRIMARY,
+            color=ft.Colors.SURFACE,
             height=40
         )
         
@@ -95,16 +95,16 @@ class HomologadorManualView:
             options=[],
             on_change=self._on_columna_change,
             disabled=True,
-            border_color=COLORS["primary"],
-            focused_border_color=COLORS["primary"]
+            border_color=ft.Colors.PRIMARY,
+            focused_border_color=ft.Colors.PRIMARY
         )
         
         # Botón homologar
         self.btn_homologar = ft.ElevatedButton(
             "🔄 Homologar",
             on_click=self._on_homologar,
-            bgcolor=COLORS["success"],
-            color=COLORS["bg_white"],
+            bgcolor=ft.Colors.GREEN,
+            color=ft.Colors.SURFACE,
             disabled=True,
             height=45,
             width=200
@@ -114,14 +114,14 @@ class HomologadorManualView:
         self.status_text = ft.Text(
             "",
             size=13,
-            color=COLORS["text_secondary"],
+            color=ft.Colors.ON_SURFACE_VARIANT,
             text_align=ft.TextAlign.CENTER
         )
         
         self.progress_bar = ft.ProgressBar(
             width=400,
             visible=False,
-            color=COLORS["primary"]
+            color=ft.Colors.PRIMARY
         )
         
         # Preview table
@@ -131,7 +131,7 @@ class HomologadorManualView:
                 ft.DataColumn(ft.Text("Homologado", weight=ft.FontWeight.BOLD)),
             ],
             rows=[],
-            border=ft.border.all(1, COLORS["border"]),
+            border=ft.border.all(1, ft.Colors.OUTLINE),
             border_radius=8,
             visible=False,
             column_spacing=50
@@ -153,7 +153,7 @@ class HomologadorManualView:
                     content=ft.Row([
                         ft.IconButton(
                             icon=ft.Icons.ARROW_BACK,
-                            icon_color=COLORS["text_secondary"],
+                            icon_color=ft.Colors.ON_SURFACE_VARIANT,
                             on_click=lambda e: self.on_back() if self.on_back else None
                         ),
                         ft.Image(
@@ -166,14 +166,14 @@ class HomologadorManualView:
                             "Homologador Manual",
                             size=22,
                             weight=ft.FontWeight.W_600,
-                            color=COLORS["text_primary"]
+                            color=ft.Colors.ON_SURFACE
                         ),
                         ft.Container(expand=True),
                         self.eps_logo
                     ], alignment=ft.MainAxisAlignment.START),
                     padding=ft.padding.symmetric(horizontal=20, vertical=15),
-                    bgcolor=COLORS["bg_white"],
-                    border=ft.border.only(bottom=ft.BorderSide(1, COLORS["border"]))
+                    bgcolor=ft.Colors.SURFACE,
+                    border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.OUTLINE))
                 ),
                 
                 # Contenido principal
@@ -184,21 +184,21 @@ class HomologadorManualView:
                             content=ft.Column([
                                 ft.Row([
                                     ft.Container(
-                                        content=ft.Text("1", color=COLORS["bg_white"], size=14, weight=ft.FontWeight.BOLD),
+                                        content=ft.Text("1", color=ft.Colors.SURFACE, size=14, weight=ft.FontWeight.BOLD),
                                         width=28, height=28,
                                         border_radius=14,
-                                        bgcolor=COLORS["primary"],
+                                        bgcolor=ft.Colors.PRIMARY,
                                         alignment=ft.alignment.center
                                     ),
-                                    ft.Text("Seleccionar EPS", size=15, weight=ft.FontWeight.W_600, color=COLORS["text_primary"])
+                                    ft.Text("Seleccionar EPS", size=15, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE)
                                 ], spacing=10),
                                 ft.Container(height=10),
                                 self.eps_dropdown
                             ]),
                             padding=20,
-                            bgcolor=COLORS["bg_white"],
+                            bgcolor=ft.Colors.SURFACE,
                             border_radius=10,
-                            border=ft.border.all(1, COLORS["border"])
+                            border=ft.border.all(1, ft.Colors.OUTLINE)
                         ),
                         
                         # Paso 2: Seleccionar archivo
@@ -206,13 +206,13 @@ class HomologadorManualView:
                             content=ft.Column([
                                 ft.Row([
                                     ft.Container(
-                                        content=ft.Text("2", color=COLORS["bg_white"], size=14, weight=ft.FontWeight.BOLD),
+                                        content=ft.Text("2", color=ft.Colors.SURFACE, size=14, weight=ft.FontWeight.BOLD),
                                         width=28, height=28,
                                         border_radius=14,
-                                        bgcolor=COLORS["primary"],
+                                        bgcolor=ft.Colors.PRIMARY,
                                         alignment=ft.alignment.center
                                     ),
-                                    ft.Text("Cargar archivo Excel", size=15, weight=ft.FontWeight.W_600, color=COLORS["text_primary"])
+                                    ft.Text("Cargar archivo Excel", size=15, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE)
                                 ], spacing=10),
                                 ft.Container(height=10),
                                 ft.Row([
@@ -222,9 +222,9 @@ class HomologadorManualView:
                                 ], alignment=ft.MainAxisAlignment.START)
                             ]),
                             padding=20,
-                            bgcolor=COLORS["bg_white"],
+                            bgcolor=ft.Colors.SURFACE,
                             border_radius=10,
-                            border=ft.border.all(1, COLORS["border"])
+                            border=ft.border.all(1, ft.Colors.OUTLINE)
                         ),
                         
                         # Paso 3: Seleccionar columna
@@ -232,21 +232,21 @@ class HomologadorManualView:
                             content=ft.Column([
                                 ft.Row([
                                     ft.Container(
-                                        content=ft.Text("3", color=COLORS["bg_white"], size=14, weight=ft.FontWeight.BOLD),
+                                        content=ft.Text("3", color=ft.Colors.SURFACE, size=14, weight=ft.FontWeight.BOLD),
                                         width=28, height=28,
                                         border_radius=14,
-                                        bgcolor=COLORS["primary"],
+                                        bgcolor=ft.Colors.PRIMARY,
                                         alignment=ft.alignment.center
                                     ),
-                                    ft.Text("Seleccionar columna a homologar", size=15, weight=ft.FontWeight.W_600, color=COLORS["text_primary"])
+                                    ft.Text("Seleccionar columna a homologar", size=15, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE)
                                 ], spacing=10),
                                 ft.Container(height=10),
                                 self.columna_dropdown
                             ]),
                             padding=20,
-                            bgcolor=COLORS["bg_white"],
+                            bgcolor=ft.Colors.SURFACE,
                             border_radius=10,
-                            border=ft.border.all(1, COLORS["border"])
+                            border=ft.border.all(1, ft.Colors.OUTLINE)
                         ),
                         
                         # Botón y status
@@ -269,7 +269,7 @@ class HomologadorManualView:
                     alignment=ft.alignment.top_center
                 )
             ], spacing=0),
-            bgcolor=COLORS["bg_light"],
+            bgcolor=ft.Colors.SURFACE,
             expand=True,
             visible=False
         )
@@ -298,8 +298,8 @@ class HomologadorManualView:
         
         path = self.HOMOLOGACION_PATHS.get(self.selected_eps)
         if not path or not os.path.exists(path):
-            self.status_text.value = f"❌ Archivo de homologación no encontrado: {path}"
-            self.status_text.color = COLORS["error"]
+            self.status_text.value = f"❌ Archivo de homologación no encontrado: {path}"  # type: ignore
+            self.status_text.color = ft.Colors.RED  # type: ignore
             self.df_homologacion = None
             self.page.update()
             return
@@ -320,12 +320,12 @@ class HomologadorManualView:
                 # COOSALUD no usa COD_SERV_FACT (por ahora)
                 self._todos_cod_serv_fact = None
             
-            self.status_text.value = f"✅ Homologación {self.selected_eps} cargada: {len(self.df_homologacion)} registros"
-            self.status_text.color = COLORS["success"]
+            self.status_text.value = f"✅ Homologación {self.selected_eps} cargada: {len(self.df_homologacion)} registros"  # type: ignore
+            self.status_text.color = ft.Colors.GREEN  # type: ignore
             
         except Exception as ex:
-            self.status_text.value = f"❌ Error cargando homologación: {ex}"
-            self.status_text.color = COLORS["error"]
+            self.status_text.value = f"❌ Error cargando homologación: {ex}"  # type: ignore
+            self.status_text.color = ft.Colors.RED  # type: ignore
             self.df_homologacion = None
     
     def _on_file_selected(self, e: ft.FilePickerResultEvent):
@@ -334,8 +334,8 @@ class HomologadorManualView:
             return
         
         self.archivo_path = e.files[0].path
-        self.archivo_text.value = os.path.basename(self.archivo_path)
-        self.archivo_text.color = COLORS["text_primary"]
+        self.archivo_text.value = os.path.basename(self.archivo_path)  # type: ignore
+        self.archivo_text.color = ft.Colors.ON_SURFACE  # type: ignore
         
         # Cargar archivo y obtener columnas
         try:
@@ -343,20 +343,20 @@ class HomologadorManualView:
             self.columnas_disponibles = list(self.df_archivo.columns)
             
             # Actualizar dropdown de columnas
-            self.columna_dropdown.options = [
+            self.columna_dropdown.options = [  # type: ignore
                 ft.dropdown.Option(col, col) for col in self.columnas_disponibles
             ]
-            self.columna_dropdown.disabled = False
-            self.columna_dropdown.value = None
+            self.columna_dropdown.disabled = False  # type: ignore
+            self.columna_dropdown.value = None  # type: ignore
             self.columna_seleccionada = None
             
-            self.status_text.value = f"📄 Archivo cargado: {len(self.df_archivo)} filas, {len(self.columnas_disponibles)} columnas"
-            self.status_text.color = COLORS["text_secondary"]
+            self.status_text.value = f"📄 Archivo cargado: {len(self.df_archivo)} filas, {len(self.columnas_disponibles)} columnas"  # type: ignore
+            self.status_text.color = ft.Colors.ON_SURFACE_VARIANT  # type: ignore
             
         except Exception as ex:
-            self.status_text.value = f"❌ Error leyendo archivo: {ex}"
-            self.status_text.color = COLORS["error"]
-            self.columna_dropdown.disabled = True
+            self.status_text.value = f"❌ Error leyendo archivo: {ex}"  # type: ignore
+            self.status_text.color = ft.Colors.RED  # type: ignore
+            self.columna_dropdown.disabled = True  # type: ignore
         
         self._update_button_state()
         self.page.update()
@@ -369,7 +369,7 @@ class HomologadorManualView:
     
     def _update_button_state(self):
         """Actualiza el estado del botón de homologar"""
-        self.btn_homologar.disabled = not (
+        self.btn_homologar.disabled = not (  # type: ignore
             self.selected_eps and
             self.archivo_path and
             self.df_archivo is not None and
@@ -437,14 +437,14 @@ class HomologadorManualView:
         """Ejecuta la homologación"""
         def worker():
             try:
-                self.btn_homologar.disabled = True
-                self.progress_bar.visible = True
-                self.status_text.value = "🔄 Homologando..."
-                self.status_text.color = COLORS["text_secondary"]
+                self.btn_homologar.disabled = True  # type: ignore
+                self.progress_bar.visible = True  # type: ignore
+                self.status_text.value = "🔄 Homologando..."  # type: ignore
+                self.status_text.color = ft.Colors.ON_SURFACE_VARIANT  # type: ignore
                 self.page.update()
                 
                 # Hacer copia del dataframe
-                df_resultado = self.df_archivo.copy()
+                df_resultado = self.df_archivo.copy()  # type: ignore
                 
                 # Homologar cada valor de la columna seleccionada
                 total = len(df_resultado)
@@ -456,7 +456,7 @@ class HomologadorManualView:
                     codigo_homologado = self._buscar_codigo_homologado(valor)
                     
                     if codigo_homologado:
-                        df_resultado.at[idx, self.columna_seleccionada] = codigo_homologado
+                        df_resultado.at[idx, self.columna_seleccionada] = codigo_homologado  # type: ignore
                         homologados += 1
                         if len(preview_data) < 5:
                             preview_data.append((str(valor), codigo_homologado))
@@ -467,13 +467,13 @@ class HomologadorManualView:
                     
                     # Actualizar progreso cada 100 registros
                     if idx % 100 == 0:
-                        self.progress_bar.value = idx / total
+                        self.progress_bar.value = idx / total  # type: ignore
                         self.page.update()
                 
                 # Guardar archivo
                 os.makedirs(self.OUTPUT_PATH, exist_ok=True)
                 
-                nombre_original = os.path.splitext(os.path.basename(self.archivo_path))[0]
+                nombre_original = os.path.splitext(os.path.basename(self.archivo_path or "resultado"))[0]  # type: ignore
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                 nombre_salida = f"{nombre_original}_homologado_{self.selected_eps}_{timestamp}.xlsx"
                 ruta_salida = os.path.join(self.OUTPUT_PATH, nombre_salida)
@@ -481,19 +481,19 @@ class HomologadorManualView:
                 df_resultado.to_excel(ruta_salida, index=False)
                 
                 # Mostrar preview
-                self.preview_table.rows = [
+                self.preview_table.rows = [  # type: ignore
                     ft.DataRow(cells=[
                         ft.DataCell(ft.Text(orig, size=12)),
-                        ft.DataCell(ft.Text(hom, size=12, color=COLORS["success"] if "❌" not in hom else COLORS["error"]))
+                        ft.DataCell(ft.Text(hom, size=12, color=ft.Colors.GREEN if "❌" not in hom else ft.Colors.RED))
                     ]) for orig, hom in preview_data
                 ]
-                self.preview_table.visible = True
+                self.preview_table.visible = True  # type: ignore
                 
                 # Status final
-                self.progress_bar.visible = False
-                self.status_text.value = f"✅ ¡Homologación completada!\n📊 {homologados} homologados | {no_homologados} sin homologar\n📁 Guardado en: {nombre_salida}"
-                self.status_text.color = COLORS["success"]
-                self.btn_homologar.disabled = False
+                self.progress_bar.visible = False  # type: ignore
+                self.status_text.value = f"✅ ¡Homologación completada!\n📊 {homologados} homologados | {no_homologados} sin homologar\n📁 Guardado en: {nombre_salida}"  # type: ignore
+                self.status_text.color = ft.Colors.GREEN  # type: ignore
+                self.btn_homologar.disabled = False  # type: ignore
                 self.page.update()
                 
                 # Abrir carpeta de destino
@@ -501,10 +501,10 @@ class HomologadorManualView:
                 subprocess.Popen(f'explorer "{self.OUTPUT_PATH}"')
                 
             except Exception as ex:
-                self.progress_bar.visible = False
-                self.status_text.value = f"❌ Error: {ex}"
-                self.status_text.color = COLORS["error"]
-                self.btn_homologar.disabled = False
+                self.progress_bar.visible = False  # type: ignore
+                self.status_text.value = f"❌ Error: {ex}"  # type: ignore
+                self.status_text.color = ft.Colors.RED  # type: ignore
+                self.btn_homologar.disabled = False  # type: ignore
                 self.page.update()
         
         threading.Thread(target=worker, daemon=True).start()

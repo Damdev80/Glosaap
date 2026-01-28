@@ -1,5 +1,6 @@
 """
 Aplicación Glosaap - Cliente IMAP con Flet (REFACTORIZADO)
+Con soporte completo de temas claro/oscuro
 """
 import flet as ft
 import os
@@ -16,7 +17,7 @@ if PROJECT_ROOT not in sys.path:
 from app.config.settings import PLAYWRIGHT_BROWSERS_PATH
 
 from app.service.email_service import EmailService
-from app.ui.styles import COLORS, WINDOW_SIZES
+from app.ui.styles import WINDOW_SIZES, ThemeManager, update_colors, get_colors
 from app.ui.screens.eps_screen import EpsScreen
 from app.ui.views import DashboardView, LoginView, ToolsView, MessagesView
 from app.ui.views.homologacion_view import HomologacionView
@@ -44,22 +45,20 @@ def main(page: ft.Page):
     # Nota: Flet no soporta window_min_width/height directamente
     # El tamaño mínimo se controla validando en los métodos go_to_*
     
-    # Atajos de teclado para navegación
+    # Atajos de teclado (solo F5 para actualizar)
     def handle_keyboard(e):
         """Maneja los atajos de teclado"""
-        if e.key == "Escape":
-            # ESC para ir hacia atrás
-            go_back()
-        elif e.key == "F5":
+        if e.key == "F5":
             # F5 para actualizar en vista de mensajes
             if current_view["name"] == "messages":
                 load_messages(messages_view.search_info_text.value or "")
     
     page.on_keyboard_event = handle_keyboard
     
-    # FORZAR modo claro (ignorar tema del sistema)
-    page.theme_mode = ft.ThemeMode.LIGHT
-    page.bgcolor = COLORS["bg_white"]
+    # Inicializar el sistema de temas
+    ThemeManager.init(page)
+    update_colors()  # Actualizar diccionario COLORS global
+    
     page.padding = 0
     # Icono de la ventana (ruta absoluta)
     icon_path = os.path.join(ASSETS_DIR, "icons", "app_logo.png")
@@ -344,12 +343,18 @@ def main(page: ft.Page):
         if eps_filter == "mutualser":
             messages_view.show_process_button(True)
             messages_view.process_eps_btn.text = " Procesar MUTUALSER"
-            messages_view.process_eps_btn.bgcolor = COLORS["primary"]
+            messages_view.process_eps_btn.style = ft.ButtonStyle(
+                color=ft.Colors.WHITE,
+                bgcolor="#4488ee",  # Azul vibrante
+            )
             messages_view.process_eps_btn.data = "mutualser"
         elif eps_filter == "coosalud":
             messages_view.show_process_button(True)
             messages_view.process_eps_btn.text = " Procesar COOSALUD"
-            messages_view.process_eps_btn.bgcolor = COLORS["success"]
+            messages_view.process_eps_btn.style = ft.ButtonStyle(
+                color=ft.Colors.WHITE,
+                bgcolor="#4488ee",  # Verde vibrante
+            )
             messages_view.process_eps_btn.data = "coosalud"
         else:
             messages_view.show_process_button(False)
@@ -606,7 +611,7 @@ def main(page: ft.Page):
                             msg += f"📋 {resultado['objeciones_file']}\n"
                         msg += f"📊 {resumen['total_registros']} registros | {resumen['codigos_homologados']} homologados"
                         messages_view.set_processing(False, msg)
-                        messages_view.processing_status.color = COLORS["success"]
+                        messages_view.processing_status.color = ft.Colors.GREEN
                         
                         # Mostrar diálogo de procesamiento completado
                         output_files = [resultado['output_file']]
@@ -627,7 +632,7 @@ def main(page: ft.Page):
                         )
                     else:
                         messages_view.set_processing(False, f"❌ Error: {resultado['message']}")
-                        messages_view.processing_status.color = COLORS["error"]
+                        messages_view.processing_status.color = ft.Colors.RED
                         
                         AlertDialog.show_error(
                             page=page,
@@ -678,7 +683,7 @@ def main(page: ft.Page):
                     
                     if result_data:
                         messages_view.set_processing(False, f"✅ {message}")
-                        messages_view.processing_status.color = COLORS["success"]
+                        messages_view.processing_status.color = ft.Colors.GREEN
                         
                         # Preparar estadísticas desde los DataFrames
                         total_detalles = len(result_data.get('detalle', [])) if isinstance(result_data, dict) else 0
@@ -712,7 +717,7 @@ def main(page: ft.Page):
                         )
                     else:
                         messages_view.set_processing(False, f"❌ {message}")
-                        messages_view.processing_status.color = COLORS["error"]
+                        messages_view.processing_status.color = ft.Colors.RED
                         
                         AlertDialog.show_error(
                             page=page,
@@ -724,7 +729,7 @@ def main(page: ft.Page):
                     
             except Exception as ex:
                 messages_view.set_processing(False, f"❌ Error: {str(ex)}")
-                messages_view.processing_status.color = COLORS["error"]
+                messages_view.processing_status.color = ft.Colors.RED
                 messages_view.process_eps_btn.disabled = False
                 page.update()
                 
@@ -780,7 +785,8 @@ def main(page: ft.Page):
     
     web_download_view = WebDownloadView(
         page=page,
-        assets_dir=ASSETS_DIR
+        assets_dir=ASSETS_DIR,
+        on_back=go_to_method_selection  # Volver a selección de método
     )
     
     homologacion_view = HomologacionView(
@@ -851,6 +857,62 @@ def main(page: ft.Page):
     
     # ==================== CONSTRUIR PÁGINA ====================
     
+    # Función para abrir configuración global
+    def open_global_settings(e):
+        """Abre el diálogo de configuración desde cualquier pantalla"""
+        is_dark = ThemeManager.is_dark()
+        
+        def toggle_theme(ev):
+            ThemeManager.toggle_theme()
+            update_colors()
+            page.close(settings_dialog)
+            # Reconstruir vistas
+            dashboard_view.rebuild()
+        
+        settings_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("⚙️ Configuración", size=18, weight=ft.FontWeight.W_600),
+            content=ft.Container(
+                content=ft.Column([
+                    ft.Text("Apariencia", size=14, weight=ft.FontWeight.W_500),
+                    ft.Container(height=10),
+                    ft.Row([
+                        ft.Icon(ft.Icons.DARK_MODE if is_dark else ft.Icons.LIGHT_MODE, size=20),
+                        ft.Text("Modo oscuro", size=13),
+                        ft.Container(expand=True),
+                        ft.Switch(value=is_dark, on_change=toggle_theme)
+                    ], alignment=ft.MainAxisAlignment.START),
+                    ft.Divider(height=20),
+                    ft.Text("Información", size=14, weight=ft.FontWeight.W_500),
+                    ft.Container(height=10),
+                    ft.Row([
+                        ft.Icon(ft.Icons.INFO_OUTLINE, size=20),
+                        ft.Column([
+                            ft.Text(f"Versión: {APP_VERSION}", size=12),
+                            ft.Text("Glosaap - Gestión de Glosas", size=11),
+                        ], spacing=2)
+                    ], alignment=ft.MainAxisAlignment.START, spacing=10),
+                ], spacing=5, tight=True),
+                width=320,
+                padding=ft.padding.only(top=10)
+            ),
+            actions=[ft.TextButton("Cerrar", on_click=lambda e: page.close(settings_dialog))],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+        page.open(settings_dialog)
+    
+    # Botón de configuración global (visible en todas las pantallas)
+    global_settings_btn = ft.Container(
+        content=ft.IconButton(
+            icon=ft.Icons.SETTINGS,
+            icon_size=22,
+            tooltip="Configuración",
+            on_click=open_global_settings,
+        ),
+        right=15,
+        bottom=10,
+    )
+    
     page.add(
         ft.Stack([
             control for control in [
@@ -863,9 +925,9 @@ def main(page: ft.Page):
                 homologador_manual_view.container,
                 web_download_view.container,
                 eps_screen.build(),
-                messages_view.container
+                messages_view.container,
             ] if control is not None
-        ], expand=True)
+        ] + [global_settings_btn], expand=True)  # Agregar el botón de config al final del Stack
     )
     
     # ==================== VERIFICADOR DE ACTUALIZACIONES ====================
