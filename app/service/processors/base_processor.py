@@ -72,7 +72,7 @@ class BaseProcessor(ABC):
         ```
     """
     
-    def __init__(self, homologador_path: str = None):
+    def __init__(self, homologador_path: Optional[str] = None):
         """
         Inicializa el procesador base.
         
