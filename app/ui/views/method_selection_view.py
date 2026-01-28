@@ -123,6 +123,16 @@ class MethodSelectionView:
             visible=False
         )
     
+    def rebuild(self):
+        """Reconstruye la vista con el tema actual"""
+        was_visible = self.container.visible if self.container else False
+        
+        # El container ya tiene bgcolor=ft.Colors.SURFACE que se adapta automáticamente
+        # Flet se encarga de actualizar los colores del tema
+        if self.container:
+            self.container.visible = was_visible
+        self.page.update()
+    
     def show(self):
         """Muestra la vista"""
         self.container.visible = True

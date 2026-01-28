@@ -832,6 +832,11 @@ def main(page: ft.Page):
             'go_to_mix_excel': go_to_mix_excel,
             'go_to_homologador_manual': go_to_homologador_manual,
             'go_back': go_back
+        },
+        'views': {
+            'login': login_view,
+            'method_selection': method_selection_view,
+            'dashboard': dashboard_view,
         }
     }
     
@@ -863,11 +868,9 @@ def main(page: ft.Page):
         is_dark = ThemeManager.is_dark()
         
         def toggle_theme(ev):
+            page.close(settings_dialog)
             ThemeManager.toggle_theme()
             update_colors()
-            page.close(settings_dialog)
-            # Reconstruir vistas
-            dashboard_view.rebuild()
         
         settings_dialog = ft.AlertDialog(
             modal=True,

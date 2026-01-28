@@ -259,11 +259,9 @@ class DashboardView:
         is_dark = ThemeManager.is_dark()
         
         def toggle_theme(ev):
+            self.page.close(settings_dialog)
             ThemeManager.toggle_theme()
             update_colors()
-            self.page.close(settings_dialog)
-            # Reconstruir el dashboard
-            self.rebuild()
         
         settings_dialog = ft.AlertDialog(
             modal=True,

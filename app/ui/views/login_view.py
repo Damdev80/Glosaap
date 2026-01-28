@@ -250,6 +250,21 @@ class LoginView:
         self.server_input.value = ""
         self.page.update()
     
+    def rebuild(self):
+        """Reconstruye la vista con el tema actual"""
+        was_visible = self.container.visible if self.container else False
+        
+        # Reconstruir componentes UI con nuevos colores
+        self.email_input.border_radius = 12
+        self.password_input.border_radius = 12
+        self.server_input.border_radius = 12
+        
+        # El container ya tiene bgcolor=ft.Colors.SURFACE que se adapta automáticamente
+        # Solo necesitamos hacer update
+        if self.container:
+            self.container.visible = was_visible
+        self.page.update()
+    
     def show(self):
         """Muestra la vista"""
         if self.container:
