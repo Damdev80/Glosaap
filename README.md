@@ -55,9 +55,9 @@
 - Sesiones persistentes cifradas
 
 ### 🏠 Dashboard Principal
-- **Evitar Glosa**: Prevención y validación antes de facturar
+- **Evitar Glosa**: Prevención y validación antes de facturar (Proximamente...)
 - **Manejar Glosa**: Gestión y seguimiento de glosas activas (búsqueda de correos)
-- **Responder Glosa**: Respuesta a objeciones y documentación
+- **Responder Glosa**: Respuesta a objeciones y documentación(Proximamente...)
 
 ### 📧 Métodos de Obtención de Glosas
 

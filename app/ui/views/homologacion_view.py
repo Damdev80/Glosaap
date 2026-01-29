@@ -655,7 +655,7 @@ class HomologacionView:
     
     # ==================== MÉTODOS PARA CARGA MASIVA ====================
     
-    def _on_archivo_seleccionado(self, e: ft.FilePickerResultEvent):
+    def _on_archivo_seleccionado(self, e):
         """Callback cuando se selecciona un archivo para carga masiva"""
         if not e.files or len(e.files) == 0:
             return

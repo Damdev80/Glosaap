@@ -1,8 +1,21 @@
-flet>=0.9.0
-pandas>=2.0.0
-openpyxl>=3.0.0
-playwright==1.56.0
+# ==================== DEPENDENCIAS PRINCIPALES ====================
+# UI Framework
+flet>=0.27.0,<0.28.0
 
+# Manejo de Excel
+pandas>=2.0.0
+openpyxl>=3.1.0
+
+# Web Scraping
+playwright>=1.40.0
+
+# HTTP y APIs
+requests>=2.31.0
+
+# Variables de entorno
+python-dotenv>=1.0.0
+
+# ==================== DEPENDENCIAS DE DESARROLLO ====================
 # Testing
 pytest>=7.0.0
 pytest-cov>=4.0.0

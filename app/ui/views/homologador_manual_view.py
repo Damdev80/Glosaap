@@ -328,7 +328,7 @@ class HomologadorManualView:
             self.status_text.color = ft.Colors.RED  # type: ignore
             self.df_homologacion = None
     
-    def _on_file_selected(self, e: ft.FilePickerResultEvent):
+    def _on_file_selected(self, e):
         """Cuando se selecciona un archivo"""
         if not e.files or len(e.files) == 0:
             return

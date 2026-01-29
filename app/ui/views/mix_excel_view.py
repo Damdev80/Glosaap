@@ -246,7 +246,7 @@ class MixExcelView:
             dialog_title="Selecciona un archivo Excel"
         )
     
-    def _on_file_picked(self, e: ft.FilePickerResultEvent):
+    def _on_file_picked(self, e):
         """Maneja la selección de archivo"""
         if e.files and len(e.files) > 0:
             file_path = e.files[0].path
