@@ -1384,9 +1384,11 @@ class CoosaludProcessor(BaseProcessor):
         # Agregar fecha del correo
         if email_date:
             combined_detalle["fecha_correo"] = email_date
+            print(f"[INFO] ✅ Fecha del correo agregada: {email_date}")
         else:
-            # Fallback a fecha actual si no se proporciona
-            combined_detalle["fecha_correo"] = "No se obtuvo ninguna fecha"
+            # Fallback a fecha actual
+            combined_detalle["fecha_correo"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            print(f"[WARN] ⚠️ No se recibió fecha del correo, usando fecha actual")
         
         # Merge usando columnas comunes para traer codigo_glosa y justificacion_glosa a Detalles
         print(f"\n[PROC] Agregando codigo_glosa y justificacion_glosa a Detalles...")
@@ -1444,15 +1446,31 @@ class CoosaludProcessor(BaseProcessor):
             "glosa": combined_glosa
         }
         
-        # 5. Guardar resultado si hay directorio de salida
+        # 5. Guardar resultados si hay directorio de salida
+        output_files = []
         if output_dir:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            # 5.1 Guardar archivo consolidado de glosas
             output_filename = f"COOSALUD_GLOSAS_{timestamp}.xlsx"
             output_path = os.path.join(output_dir, output_filename)
             
-            print(f"\n[SAVE] Guardando resultado...")
+            print(f"\n[SAVE] Guardando resultado consolidado...")
             if self.save_to_excel(result_data, output_path):
-                return result_data, f"[OK] Procesado exitosamente. Archivo: {output_filename}"
+                output_files.append(output_filename)
+            
+            # 5.2 Generar archivo de objeciones
+            objeciones_path = self._generar_archivo_objeciones(
+                combined_detalle, 
+                output_dir, 
+                email_date
+            )
+            if objeciones_path:
+                output_files.append(os.path.basename(objeciones_path))
+            
+            if output_files:
+                files_str = ", ".join(output_files)
+                return result_data, f"[OK] Procesado exitosamente. Archivos: {files_str}"
             else:
                 return result_data, f"[WARNING] Procesado pero error al guardar: {'; '.join(self.errors)}"
         
@@ -1532,3 +1550,289 @@ class CoosaludProcessor(BaseProcessor):
         result_df["Codigo no homologado"] = codigos_no_homologados
         
         return result_df
+    
+    # ==================== GENERACIÓN DE ARCHIVO OBJECIONES ====================
+    
+    def _find_column(self, df: pd.DataFrame, keywords: List[str], exact_match: Optional[str] = None) -> Optional[str]:
+        """
+        Busca una columna en el DataFrame por nombre exacto o keywords.
+        
+        Args:
+            df: DataFrame donde buscar
+            keywords: Lista de palabras clave (todas deben estar en el nombre)
+            exact_match: Nombre exacto a buscar primero
+            
+        Returns:
+            Nombre de la columna encontrada o None
+        """
+        # Buscar match exacto primero
+        if exact_match:
+            for col in df.columns:
+                if str(col).strip().lower() == exact_match.lower():
+                    return col
+        
+        # Buscar por keywords
+        for col in df.columns:
+            col_lower = str(col).lower()
+            if all(kw.lower() in col_lower for kw in keywords):
+                return col
+        
+        return None
+    
+    def _formatear_crncxc(self, valor) -> str:
+        """
+        Formatea el número de factura al formato CRNCXC.
+        Ej: "12345" -> "FC000012345", "FC12345" -> "FC000012345"
+        """
+        if pd.isna(valor) or not valor:
+            return ''
+        
+        valor_str = str(valor).strip()
+        
+        # Si ya tiene FC, extraer solo los números
+        if valor_str.upper().startswith('FC'):
+            numeros = valor_str[2:]
+        else:
+            numeros = valor_str
+        
+        # Limpiar caracteres no numéricos
+        numeros = ''.join(filter(str.isdigit, numeros))
+        
+        if not numeros:
+            return ''
+        
+        return f"FC0000{numeros}"
+    
+    def _formatear_fecha_dmy(self, fecha) -> str:
+        """Convierte fecha a formato DD/MM/YYYY"""
+        if pd.isna(fecha) or not fecha:
+            return ''
+        try:
+            if isinstance(fecha, (pd.Timestamp, datetime)):
+                return fecha.strftime('%d/%m/%Y')
+            fecha_dt = pd.to_datetime(str(fecha), errors='coerce')
+            return fecha_dt.strftime('%d/%m/%Y') if pd.notna(fecha_dt) else ''
+        except:
+            return ''
+    
+    def _obtener_valor_numerico(self, valor) -> float:
+        """Convierte un valor a float, manejando formatos con $ y separadores, manteniendo decimales"""
+        if pd.isna(valor) or not valor:
+            return 0.0
+        try:
+            if isinstance(valor, (int, float)):
+                return float(valor)
+            
+            # Limpiar formato monetario
+            valor_str = str(valor).strip()
+            valor_str = valor_str.replace('$', '').replace(' ', '')
+            
+            # Manejar separadores: punto para miles, coma para decimales (formato colombiano)
+            # o coma para miles, punto para decimales (formato internacional)
+            if ',' in valor_str and '.' in valor_str:
+                # Determinar cuál es decimal
+                pos_coma = valor_str.rfind(',')
+                pos_punto = valor_str.rfind('.')
+                if pos_punto > pos_coma:
+                    # Formato: 1.234.567,89 -> punto es miles, coma es decimal
+                    valor_str = valor_str.replace('.', '').replace(',', '.')
+                else:
+                    # Formato: 1,234,567.89 -> coma es miles, punto es decimal
+                    valor_str = valor_str.replace(',', '')
+            elif ',' in valor_str:
+                # Solo coma: puede ser miles o decimal
+                # Si hay más de una coma, es separador de miles
+                if valor_str.count(',') > 1:
+                    valor_str = valor_str.replace(',', '')
+                else:
+                    # Una sola coma: verificar posición
+                    partes = valor_str.split(',')
+                    if len(partes[1]) <= 2:
+                        # Probablemente decimal
+                        valor_str = valor_str.replace(',', '.')
+                    else:
+                        # Probablemente miles
+                        valor_str = valor_str.replace(',', '')
+            elif '.' in valor_str:
+                # Solo punto: puede ser miles o decimal
+                if valor_str.count('.') > 1:
+                    valor_str = valor_str.replace('.', '')
+                # Si es un solo punto, asumir que es decimal
+            
+            return float(valor_str) if valor_str else 0.0
+        except:
+            return 0.0
+    
+    def _procesar_au_ta(self, df_obj: pd.DataFrame) -> pd.DataFrame:
+        """
+        Procesa filas AU/TA: Si hay AU y TA para la misma factura+servicio,
+        combina las observaciones en la fila AU y elimina las filas TA.
+        """
+        print("🔄 Procesando AU/TA...")
+        
+        filas_eliminar: List[int] = []
+        procesadas = 0
+        
+        for (factura, tec), grupo in df_obj.groupby(['CRNCXC', 'SLNSERPRO']):
+            if len(grupo) < 2:
+                continue
+            
+            filas_au = [int(i) for i, r in grupo.iterrows() if str(r.get('CRNCONOBJ', '')).upper().startswith('AU')]
+            filas_ta = [int(i) for i, r in grupo.iterrows() if str(r.get('CRNCONOBJ', '')).upper().startswith('TA')]
+            
+            if filas_au and filas_ta:
+                idx_au = filas_au[0]
+                
+                for idx_ta in filas_ta:
+                    obs_ta = str(df_obj.loc[idx_ta, 'CRDOBSERV']).strip()
+                    if obs_ta:
+                        obs_au = str(df_obj.loc[idx_au, 'CRDOBSERV']).strip()
+                        df_obj.loc[idx_au, 'CRDOBSERV'] = f"{obs_au} \\\\ {obs_ta}" if obs_au else f"\\\\ {obs_ta}"
+                    
+                    filas_eliminar.append(idx_ta)
+                    procesadas += 1
+        
+        if filas_eliminar:
+            df_obj = df_obj.drop(filas_eliminar).reset_index(drop=True)
+            print(f"   ✅ {procesadas} filas TA procesadas")
+        
+        return df_obj
+    
+    def _generar_archivo_objeciones(self, detalle_df: pd.DataFrame, output_dir: str, email_date: Optional[str] = None) -> Optional[str]:
+        """
+        Genera archivo Objeciones.xlsx a partir del DataFrame de detalle procesado.
+        
+        Columnas de salida:
+        - CDCONSEC: Consecutivo por factura
+        - CDFECDOC: Fecha del documento (hoy en formato D/M/A)
+        - CRNCXC: Número de factura formateado (FC0000{numero})
+        - CROFECOBJ: Fecha de la objeción (fecha del correo)
+        - CROREFERE: Vacío
+        - CROOBSERV: REG GLOSA según número de glosa
+        - CROCLAOBJ: 0
+        - GENUSUARIO4: 1103858268
+        - CRNCONOBJ: Código de glosa homologado
+        - SLNSERPRO: Código servicio homologado DGH
+        - CTNCENCOS: Vacío
+        - IDRIPS: Vacío  
+        - CROVALOBJ: Valor glosado
+        - CRDOBSERV: Justificación/observaciones de la glosa
+        
+        Args:
+            detalle_df: DataFrame de detalle con homologación aplicada
+            output_dir: Directorio de salida
+            email_date: Fecha del correo (para CROFECOBJ)
+            
+        Returns:
+            Ruta del archivo generado o None si hay error
+        """
+        if detalle_df is None or detalle_df.empty:
+            self.errors.append("No hay datos para generar objeciones")
+            return None
+        
+        try:
+            print("\n📄 Generando Objeciones.xlsx...")
+            
+            df_obj = pd.DataFrame()
+            
+            # Buscar columnas en el detalle
+            col_factura = self._find_column(detalle_df, ['numero', 'factura'], 'numero_factura')
+            col_glosa_num = self._find_column(detalle_df, ['numero', 'glosa'], 'numero_glosa') or self._find_column(detalle_df, ['id', 'glosa'])
+            col_valor_glosado = self._find_column(detalle_df, ['valor', 'glosado'], 'valor_glosado')
+            
+            print(f"   Columna factura: {col_factura}")
+            print(f"   Columna número glosa: {col_glosa_num}")
+            print(f"   Columna valor glosado: {col_valor_glosado}")
+            
+            # CDCONSEC - Consecutivo por factura
+            if col_factura:
+                facturas = detalle_df[col_factura]
+                factura_consecutivo = {f: i+1 for i, f in enumerate(facturas.unique())}
+                df_obj['CDCONSEC'] = facturas.map(factura_consecutivo)
+            else:
+                df_obj['CDCONSEC'] = range(1, len(detalle_df) + 1)
+            
+            # CDFECDOC - Fecha del documento (hoy)
+            df_obj['CDFECDOC'] = datetime.now().strftime('%#d/%#m/%Y') if os.name == 'nt' else datetime.now().strftime('%-d/%-m/%Y')
+            
+            # CRNCXC - Número de factura formateado
+            if col_factura:
+                df_obj['CRNCXC'] = detalle_df[col_factura].apply(self._formatear_crncxc)
+            else:
+                df_obj['CRNCXC'] = ''
+            
+            # CROFECOBJ - Fecha de objeción (fecha del correo)
+            if email_date:
+                try:
+                    # Parsear y formatear la fecha del correo
+                    fecha_correo = pd.to_datetime(email_date)
+                    df_obj['CROFECOBJ'] = fecha_correo.strftime('%d/%m/%Y')
+                except:
+                    df_obj['CROFECOBJ'] = email_date
+            else:
+                df_obj['CROFECOBJ'] = ''
+            
+            # CROREFERE - Vacío
+            df_obj['CROREFERE'] = ''
+            
+            # CROOBSERV - REG GLOSA según número de glosa
+            if col_glosa_num and col_glosa_num in detalle_df.columns:
+                df_obj['CROOBSERV'] = detalle_df[col_glosa_num].apply(
+                    lambda x: f"REG, GLOSA SEGUN RAD N. {x}" if pd.notna(x) else ""
+                )
+            else:
+                df_obj['CROOBSERV'] = ''
+            
+            # CROCLAOBJ - Siempre 0
+            df_obj['CROCLAOBJ'] = 0
+            
+            # GENUSUARIO4 - ID fijo
+            df_obj['GENUSUARIO4'] = 1103858268
+            
+            # CRNCONOBJ - Código de glosa (ya homologado)
+            if 'codigo_glosa' in detalle_df.columns:
+                df_obj['CRNCONOBJ'] = detalle_df['codigo_glosa']
+            else:
+                df_obj['CRNCONOBJ'] = ''
+            
+            # SLNSERPRO - Código servicio homologado DGH
+            if 'Codigo homologado DGH' in detalle_df.columns:
+                df_obj['SLNSERPRO'] = detalle_df['Codigo homologado DGH']
+            else:
+                df_obj['SLNSERPRO'] = ''
+            
+            # CTNCENCOS - Vacío
+            df_obj['CTNCENCOS'] = ''
+            
+            # IDRIPS - Vacío
+            df_obj['IDRIPS'] = ''
+            
+            # CROVALOBJ - Valor glosado (mantener decimales para centavos)
+            if col_valor_glosado and col_valor_glosado in detalle_df.columns:
+                df_obj['CROVALOBJ'] = detalle_df[col_valor_glosado].apply(self._obtener_valor_numerico)
+            else:
+                df_obj['CROVALOBJ'] = 0.0
+            
+            # CRDOBSERV - Justificación/observaciones
+            if 'justificacion_glosa' in detalle_df.columns:
+                df_obj['CRDOBSERV'] = detalle_df['justificacion_glosa'].fillna('')
+            else:
+                df_obj['CRDOBSERV'] = ''
+            
+            # Procesar AU/TA (combinar observaciones)
+            df_obj = self._procesar_au_ta(df_obj)
+            
+            # Exportar
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            output_path = os.path.join(output_dir, f"Objeciones_COOSALUD_{timestamp}.xlsx")
+            
+            with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+                df_obj.to_excel(writer, sheet_name='OBJECIONES', index=False)
+            
+            print(f"✅ Objeciones generadas: {output_path} ({len(df_obj)} registros)")
+            return output_path
+            
+        except Exception as e:
+            self.errors.append(f"Error generando objeciones: {str(e)}")
+            print(f"❌ Error generando objeciones: {e}")
+            return None

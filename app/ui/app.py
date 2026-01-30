@@ -645,6 +645,7 @@ def main(page: ft.Page):
                 
                 elif eps_type == "coosalud":
                     from app.service.processors import CoosaludProcessor
+                    from datetime import datetime as dt
                     
                     # Obtener archivos Excel de ESTA SESIÓN (excluyendo devoluciones)
                     excel_files = email_service.get_excel_files(exclude_devoluciones=True, session_only=True)
@@ -675,8 +676,64 @@ def main(page: ft.Page):
                         except Exception as e:
                             print(f"[COOSALUD] Error al crear directorio: {e}")
                     
+                    # Obtener fecha del correo más reciente de los mensajes encontrados
+                    email_date = None
+                    if app_state.get("found_messages"):
+                        print(f"[COOSALUD] 📧 Extrayendo fecha de {len(app_state['found_messages'])} mensajes...")
+                        dates = []
+                        for i, msg in enumerate(app_state["found_messages"]):
+                            msg_date = msg.get('date')
+                            if msg_date:
+                                # Debug: mostrar primeras 3 fechas
+                                if i < 3:
+                                    print(f"[COOSALUD]   Mensaje {i+1} fecha: {msg_date}")
+                                
+                                try:
+                                    if isinstance(msg_date, str):
+                                        parsed_date = None
+                                        # Probar diferentes formatos de fecha
+                                        date_formats = [
+                                            '%a, %d %b %Y %H:%M:%S %z',  # Thu, 30 Jan 2026 10:30:00 +0000
+                                            '%a, %d %b %Y %H:%M:%S',     # Thu, 30 Jan 2026 10:30:00
+                                            '%d %b %Y %H:%M:%S %z',      # 30 Jan 2026 10:30:00 +0000
+                                            '%d %b %Y %H:%M:%S',         # 30 Jan 2026 10:30:00
+                                            '%Y-%m-%d %H:%M:%S',         # 2026-01-30 10:30:00
+                                            '%d/%m/%Y %H:%M:%S',         # 30/01/2026 10:30:00
+                                        ]
+                                        
+                                        for fmt in date_formats:
+                                            try:
+                                                parsed_date = dt.strptime(msg_date.strip(), fmt)
+                                                if i < 3:
+                                                    print(f"[COOSALUD]   ✅ Parseado con formato: {fmt}")
+                                                break
+                                            except ValueError:
+                                                continue
+                                        
+                                        if parsed_date:
+                                            dates.append(parsed_date)
+                                        elif i < 3:
+                                            print(f"[COOSALUD]   ❌ No se pudo parsear")
+                                    elif hasattr(msg_date, 'strftime'):
+                                        dates.append(msg_date)
+                                        if i < 3:
+                                            print(f"[COOSALUD]   ✅ Ya es objeto datetime")
+                                except Exception as e:
+                                    if i < 3:
+                                        print(f"[COOSALUD]   ⚠️ Error parseando: {e}")
+                                    continue
+                        
+                        if dates:
+                            latest_date = max(dates)
+                            email_date = latest_date.strftime('%Y-%m-%d %H:%M:%S')
+                            print(f"[COOSALUD] ✅ Fecha del correo extraída: {email_date}")
+                        else:
+                            print(f"[COOSALUD] ⚠️ No se pudieron parsear fechas de {len(app_state['found_messages'])} mensajes")
+                    else:
+                        print(f"[COOSALUD] ⚠️ No hay mensajes en app_state['found_messages']")
+                    
                     processor = CoosaludProcessor(homologador_path=homologador_path)
-                    result_data, message = processor.process_glosas(excel_files, output_dir=output_dir)
+                    result_data, message = processor.process_glosas(excel_files, output_dir=output_dir, email_date=email_date)
                     
                     # Rehabilitar botón después de procesar
                     messages_view.process_eps_btn.disabled = False
