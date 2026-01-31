@@ -31,9 +31,11 @@ class NavigationController:
                 view.hide()
     
     def _set_window_size(self, width: int, height: int):
-        """Establece el tamaño de la ventana"""
-        self.page.window.width = width
-        self.page.window.height = height
+        """Establece el tamaño de la ventana solo si NO está maximizada"""
+        # No cambiar tamaño si la ventana está maximizada o en pantalla completa
+        if not self.page.window.maximized and not self.page.window.full_screen:
+            self.page.window.width = width
+            self.page.window.height = height
     
     def go_to(self, view_name: str, **kwargs):
         """

@@ -204,6 +204,7 @@ class HomologacionService:
                 
             return True
             
+            
         except Exception as e:
             print(f"❌ Error cargando homologación: {e}")
             self.df = pd.DataFrame(columns=self.columnas_actuales)

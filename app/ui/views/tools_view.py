@@ -68,10 +68,8 @@ class ToolsView:
         header = self.nav_header.build(
             title="⚙️ Herramientas",
             back_text="← Volver al Dashboard",
-            breadcrumb=[
-                {"text": "Dashboard", "action": lambda e: self.navigation_controller.go_to_dashboard() if self.navigation_controller else None},
-                {"text": "Herramientas", "action": None}
-            ]
+            custom_back_action=lambda: self.navigation_controller.go_to_dashboard() if self.navigation_controller else None,
+            
         )
         
         self.container = ft.Container(
