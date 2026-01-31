@@ -109,13 +109,7 @@ class ToolsView:
                                 lambda e: self._handle_homologador_manual(),
                                 image_src=os.path.join(self.assets_dir, "img", "homologador_manual.png")
                             ),
-                            self._create_tool_card(
-                                ft.Icons.SETTINGS,
-                                "Configuración",
-                                "Ajustes de la aplicación",
-                                "#9C27B0",
-                                lambda e: self._handle_settings()
-                            ),
+                            
                         ], spacing=20, alignment=ft.MainAxisAlignment.CENTER),
                     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                     padding=30,
