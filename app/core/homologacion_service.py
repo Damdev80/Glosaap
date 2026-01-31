@@ -175,7 +175,7 @@ class HomologacionService:
                 self.df = self._file_cache[cache_key]['df'].copy()
                 self._file_hash = self._file_cache[cache_key]['file_hash']
                 eps_name = self.eps.upper() if self.eps else "DESCONOCIDA"
-                print(f"⚡ Homologación {eps_name} cargada desde caché: {len(self.df)} registros")
+                print(f"⚡ Homologación {eps_name} cargada desde caché: {len(self.df)} registros") # type: ignore
                 return True
             
             # Cargar desde archivo si no hay caché válido
