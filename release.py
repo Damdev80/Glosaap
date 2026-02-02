@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Cargar variables de entorno
+# Cargar variables de entorno ...
 load_dotenv()
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
