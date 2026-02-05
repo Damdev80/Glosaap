@@ -434,10 +434,6 @@ def main(page: ft.Page):
                                 msg_date = msg.get('date')
                                 email_date_str = None
                                 
-                                print(f"\n[DEBUG] ===== PROCESANDO CORREO {msg_id} =====")
-                                print(f"[DEBUG] msg_date RAW: {msg_date}")
-                                print(f"[DEBUG] msg_date TYPE: {type(msg_date)}")
-                                
                                 if msg_date:
                                     from datetime import datetime as dt
                                     try:
@@ -447,34 +443,32 @@ def main(page: ft.Page):
                                                 try:
                                                     parsed = dt.strptime(msg_date.strip(), fmt)
                                                     email_date_str = parsed.strftime('%Y-%m-%d %H:%M:%S')
-                                                    print(f"[DEBUG] ✅ Fecha parseada con formato {fmt}: {email_date_str}")
                                                     break
-                                                except ValueError as e:
-                                                    print(f"[DEBUG] ❌ Formato {fmt} falló: {e}")
+                                                except ValueError:
                                                     continue
                                         elif hasattr(msg_date, 'strftime'):
                                             email_date_str = msg_date.strftime('%Y-%m-%d %H:%M:%S')
-                                            print(f"[DEBUG] ✅ Fecha desde datetime object: {email_date_str}")
                                     except Exception as e:
-                                        print(f"[DEBUG] ❌ Error parseando fecha: {e}")
-                                        pass
-                                else:
-                                    print(f"[DEBUG] ⚠️ msg_date es None o vacío")
-                                
-                                print(f"[DEBUG] email_date_str FINAL: {email_date_str}")
+                                        print(f"[WARN] Error parseando fecha para correo {msg_id}: {e}")
                                 
                                 # Descargar con la fecha del correo
                                 files = email_service.download_message_attachments(msg_id, email_date=email_date_str)
-                                print(f"[DEBUG] Archivos descargados: {len(files) if files else 0}")
-                                print(f"[DEBUG] ===== FIN CORREO {msg_id} =====\n")
                                 
                                 if files:
                                     downloaded_count += 1
                                     messages_view.update_message_status(msg_id, f"✅ {len(files)} archivo(s)")
                                 else:
-                                    messages_view.update_message_status(msg_id, "Sin adjuntos Excel")
+                                    messages_view.update_message_status(msg_id, "⚠️ Sin adjuntos")
                             except Exception as e:
-                                messages_view.update_message_status(msg_id, f"❌ Error", is_error=True)
+                                error_msg = str(e)
+                                # Mostrar mensaje corto en UI, detalle en logs
+                                if "No se pudo descargar" in error_msg or "timeout" in error_msg.lower():
+                                    messages_view.update_message_status(msg_id, "❌ Error descarga", is_error=True)
+                                elif "No tiene adjuntos" in error_msg:
+                                    messages_view.update_message_status(msg_id, "⚠️ Sin adjuntos")
+                                else:
+                                    messages_view.update_message_status(msg_id, "❌ Error", is_error=True)
+                                print(f"[ERROR] Error procesando correo {msg_id}: {error_msg}")
                 
                 # Determinar palabra clave de búsqueda según EPS
                 eps_info = app_state.get("selected_eps")

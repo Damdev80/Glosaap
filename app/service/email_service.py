@@ -153,35 +153,22 @@ class EmailService:
         if not self.imap_client:
             raise Exception("No hay conexión IMAP establecida")
         
-        print(f"\n[EMAIL_SERVICE] download_message_attachments llamado")
-        print(f"[EMAIL_SERVICE] message_id: {message_id}")
-        print(f"[EMAIL_SERVICE] email_date: {email_date}")
-        
         saved_files = self.imap_client.download_attachments(
             message_id,
             dest_dir=self.attachment_service.base_dir
         )
         
-        print(f"[EMAIL_SERVICE] Archivos descargados por IMAP: {len(saved_files) if saved_files else 0}")
-        
         if saved_files:
             # Crear metadata con fecha del correo si está disponible
             metadata = {}
             if email_date:
-                print(f"[EMAIL_SERVICE] ✅ Creando metadata con fecha: {email_date}")
                 for file_path in saved_files:
                     metadata[file_path] = {
                         "email_date": email_date,
                         "message_id": message_id
                     }
-                print(f"[EMAIL_SERVICE] Metadata creado para {len(metadata)} archivos")
-            else:
-                print(f"[EMAIL_SERVICE] ⚠️ NO HAY email_date - metadata vacío")
             
-            print(f"[EMAIL_SERVICE] Llamando attachment_service.add_files()")
             self.attachment_service.add_files(saved_files, metadata=metadata)
-            print(f"[EMAIL_SERVICE] Total archivos en attachment_service: {len(self.attachment_service.files)}")
-            print(f"[EMAIL_SERVICE] Total metadatos en attachment_service: {len(self.attachment_service.file_metadata)}\n")
         
         return saved_files
     
