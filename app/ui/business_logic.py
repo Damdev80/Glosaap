@@ -348,7 +348,13 @@ class EPSProcessor:
                 email_date = latest_date.strftime('%Y-%m-%d %H:%M:%S')
                 logger.info(f"Usando fecha del correo: {email_date}")
         
-        result_data, message = processor.process_glosas(excel_files, output_dir=output_dir, email_date=email_date)
+        # Pasar attachment_service para fechas individuales por archivo
+        result_data, message = processor.process_glosas(
+            excel_files, 
+            output_dir=output_dir, 
+            email_date=email_date,
+            attachment_service=self.email_service.attachment_service
+        )
         
         if result_data:
             self.messages_view.set_processing(False, f"✅ {message}")

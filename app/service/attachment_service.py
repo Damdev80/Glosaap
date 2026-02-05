@@ -19,6 +19,7 @@ class AttachmentService:
         # Inicializar las listas PRIMERO
         self.downloaded_files = []  # Todos los archivos en el directorio
         self.session_files = []     # Solo archivos descargados en esta búsqueda
+        self.file_metadata = {}     # Metadatos de archivos: {ruta_archivo: {"email_date": fecha, "message_id": id, ...}}
         
         if base_dir is None:
             # IMPORTANTE: Usar MISMO directorio que imap_client (tempfile.gettempdir())
@@ -78,8 +79,14 @@ class AttachmentService:
         else:
             print(f"[ATTACH] ⚠️ No se encontraron archivos en: {self.base_dir}")
     
-    def add_files(self, file_paths):
-        """Agrega archivos a la lista de descargados Y de sesión"""
+    def add_files(self, file_paths, metadata=None):
+        """Agrega archivos a la lista de descargados Y de sesión
+        
+        Args:
+            file_paths: Lista de rutas de archivos
+            metadata: Dict con metadatos por archivo {path: {"email_date": fecha, ...}}
+                     O dict con metadatos para todos los archivos {"email_date": fecha, ...}
+        """
         for path in file_paths:
             if os.path.exists(path):
                 if path not in self.downloaded_files:
@@ -87,6 +94,14 @@ class AttachmentService:
                 # Siempre agregar a session_files (archivos de esta búsqueda)
                 if path not in self.session_files:
                     self.session_files.append(path)
+                # Almacenar metadatos si se proporcionan
+                if metadata:
+                    # Si metadata tiene el path como clave, usar esos metadatos específicos
+                    if path in metadata:
+                        self.file_metadata[path] = metadata[path].copy()
+                    # Si no, asumir que metadata es para aplicar a todos
+                    else:
+                        self.file_metadata[path] = metadata.copy()
         print(f"[ATTACH] Archivos sesión: {len(self.session_files)} | Total dir: {len(self.downloaded_files)}")
     
     def rescan(self):
@@ -125,16 +140,32 @@ class AttachmentService:
         # Limpiar listas en memoria
         self.downloaded_files = []
         self.session_files = []
+        self.file_metadata = {}  # Limpiar metadatos también
         print(f"[CLEANUP] Listas en memoria limpiadas")
     
     def clear_session(self):
         """Limpia solo la lista de archivos de sesión (no elimina archivos físicos)"""
         print(f"[CLEANUP] Limpiando archivos de sesión: {len(self.session_files)} archivos")
+        # Limpiar metadatos de archivos de sesión
+        for file_path in self.session_files:
+            if file_path in self.file_metadata:
+                del self.file_metadata[file_path]
         self.session_files = []
     
     def get_session_files(self):
         """Retorna solo los archivos descargados en esta sesión de búsqueda"""
         return self.session_files
+    
+    def get_file_metadata(self, file_path):
+        """Obtiene metadatos de un archivo específico
+        
+        Args:
+            file_path: Ruta del archivo
+            
+        Returns:
+            dict: Metadatos del archivo o None si no existen
+        """
+        return self.file_metadata.get(file_path)
     
     def get_session_excel_files(self, exclude_devoluciones=True):
         """

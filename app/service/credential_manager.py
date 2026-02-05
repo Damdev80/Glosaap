@@ -10,11 +10,14 @@ from typing import Optional
 class CredentialManager:
     """Gestor de credenciales guardadas localmente"""
     
-    def __init__(self, config_dir: str = None):
+    def __init__(self, config_dir: Optional[str] = None):
         if config_dir is None:
             # Usar AppData en Windows para persistencia (funciona en exe y desarrollo)
             if sys.platform == 'win32':
                 appdata = os.getenv('APPDATA')
+                if appdata is None:
+                    # Fallback si APPDATA no está definido
+                    appdata = os.path.expanduser('~')
                 config_dir = os.path.join(appdata, 'Glosaap', 'config')
             else:
                 # En desarrollo o Linux/Mac, usar carpeta temp del proyecto

@@ -16,7 +16,7 @@ import os
 import re
 import pandas as pd
 from datetime import datetime
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Any
 
 from .base_processor import BaseProcessor
 
@@ -564,6 +564,7 @@ class CoosaludProcessor(BaseProcessor):
         
         for keys, group in glosa_df.groupby(merge_columns):
             # Crear diccionario base con las columnas de merge
+            row: Dict[str, Any] = {}
             if isinstance(keys, tuple):
                 row = dict(zip(merge_columns, keys))
             else:
@@ -700,6 +701,7 @@ class CoosaludProcessor(BaseProcessor):
         # Agrupar por las columnas de merge
         for keys, group in glosa_df.groupby(merge_columns):
             # Crear diccionario base con las columnas de merge
+            row: Dict[str, Any] = {}
             if isinstance(keys, tuple):
                 row = dict(zip(merge_columns, keys))
             else:
@@ -1294,7 +1296,7 @@ class CoosaludProcessor(BaseProcessor):
             self.errors.append(f"Error al guardar archivo: {str(e)}")
             return False
     
-    def process_glosas(self, file_paths: List[str], output_dir: Optional[str] = None, email_date: Optional[str] = None) -> Tuple[Optional[Dict[str, pd.DataFrame]], str]:
+    def process_glosas(self, file_paths: List[str], output_dir: Optional[str] = None, email_date: Optional[str] = None, attachment_service=None) -> Tuple[Optional[Dict[str, pd.DataFrame]], str]:
         """
         Método principal para procesar archivos de GLOSAS de Coosalud
         Procesa TODOS los pares de archivos (DETALLE + GLOSA) y los combina
@@ -1302,7 +1304,8 @@ class CoosaludProcessor(BaseProcessor):
         Args:
             file_paths: Lista de rutas a los archivos
             output_dir: Directorio de salida (opcional)
-            email_date: Fecha del correo recibido (formato string)
+            email_date: Fecha del correo recibido (formato string) - DEPRECATED, usar attachment_service
+            attachment_service: Servicio de adjuntos con metadatos de fechas por archivo
             
         Returns:
             Tupla con (Diccionario de DataFrames combinados, mensaje de estado)
@@ -1381,10 +1384,79 @@ class CoosaludProcessor(BaseProcessor):
         combined_detalle = pd.concat(all_detalles, ignore_index=True)
         combined_glosa = pd.concat(all_glosas, ignore_index=True)
         
-        # Agregar fecha del correo
-        if email_date:
+        # Agregar fecha del correo INDIVIDUAL por archivo
+        if attachment_service:
+            print(f"\n{'='*60}")
+            print(f"[INFO] ASIGNANDO FECHAS DE CORREOS A ARCHIVOS")
+            print(f"{'='*60}")
+            print(f"[DEBUG] Total metadatos disponibles: {len(attachment_service.file_metadata)}")
+            
+            # Mostrar muestra de metadatos disponibles
+            if attachment_service.file_metadata:
+                print(f"[DEBUG] Muestra de metadatos (primeros 5):")
+                for idx, (path, meta) in enumerate(list(attachment_service.file_metadata.items())[:5]):
+                    import os
+                    print(f"   {idx+1}. {os.path.basename(path)}")
+                    print(f"      Fecha: {meta.get('email_date', 'SIN FECHA')}")
+            else:
+                print(f"[WARN] ⚠️ NO HAY METADATOS - Los archivos no tienen fecha asociada")
+                print(f"[WARN] Esto ocurre cuando los archivos fueron descargados antes de implementar el sistema de metadatos")
+            
+            # Crear columna de fecha vacía
+            combined_detalle["fecha_correo"] = ""
+            
+            archivos_con_fecha = 0
+            archivos_sin_fecha = 0
+            
+            # Asignar fecha según el archivo de origen (_FACTURA)
+            print(f"\n[PROC] Procesando {len(pairs)} pares de archivos...")
+            for i, pair in enumerate(pairs):
+                factura = pair.get("factura", f"Par {i+1}")
+                detalle_path = pair["detalle"]
+                
+                # Debug para primeros 3
+                if i < 3:
+                    import os
+                    print(f"\n[{i+1}] Factura: {factura}")
+                    print(f"    Archivo: {os.path.basename(detalle_path)}")
+                
+                # Buscar metadatos del archivo DETALLE
+                metadata = None
+                if attachment_service:  # type: ignore
+                    metadata = attachment_service.get_file_metadata(detalle_path)
+                
+                if i < 3:
+                    print(f"    Metadata: {'✅ ENCONTRADO' if metadata else '❌ NO ENCONTRADO'}")
+                    if metadata:
+                        print(f"    Fecha: {metadata.get('email_date', 'SIN CAMPO email_date')}")
+                
+                if metadata and "email_date" in metadata:
+                    file_date = metadata["email_date"]
+                    # Asignar fecha a todos los registros de esta factura
+                    mask = combined_detalle["_FACTURA"] == factura
+                    combined_detalle.loc[mask, "fecha_correo"] = file_date
+                    archivos_con_fecha += 1
+                else:
+                    # Fallback a fecha actual para este archivo
+                    fallback_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    mask = combined_detalle["_FACTURA"] == factura
+                    combined_detalle.loc[mask, "fecha_correo"] = fallback_date
+                    archivos_sin_fecha += 1
+            
+            print(f"\n[RESULTADO] Archivos procesados:")
+            print(f"   ✅ Con fecha del correo: {archivos_con_fecha}/{len(pairs)}")
+            print(f"   ⚠️ Sin fecha (usando actual): {archivos_sin_fecha}/{len(pairs)}")
+            
+            if archivos_sin_fecha > 0:
+                print(f"\n[AYUDA] Para que las fechas funcionen correctamente:")
+                print(f"   1. Los archivos antiguos NO tienen metadatos")
+                print(f"   2. Haz una nueva búsqueda de correos para descargar archivos con metadatos")
+                print(f"   3. Los archivos antiguos se limpian automáticamente al buscar correos")
+            print(f"{'='*60}\n")
+        elif email_date:
+            # Fallback antiguo: usar fecha global (menos preciso)
             combined_detalle["fecha_correo"] = email_date
-            print(f"[INFO] ✅ Fecha del correo agregada: {email_date}")
+            print(f"[INFO] ✅ Fecha global agregada: {email_date}")
         else:
             # Fallback a fecha actual
             combined_detalle["fecha_correo"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -1670,24 +1742,26 @@ class CoosaludProcessor(BaseProcessor):
         """
         print("🔄 Procesando AU/TA...")
         
-        filas_eliminar: List[int] = []
+        filas_eliminar: List[Any] = []  # Cambiar a List[Any] para aceptar cualquier tipo de índice
         procesadas = 0
         
         for (factura, tec), grupo in df_obj.groupby(['CRNCXC', 'SLNSERPRO']):
             if len(grupo) < 2:
                 continue
             
-            filas_au = [int(i) for i, r in grupo.iterrows() if str(r.get('CRNCONOBJ', '')).upper().startswith('AU')]
-            filas_ta = [int(i) for i, r in grupo.iterrows() if str(r.get('CRNCONOBJ', '')).upper().startswith('TA')]
+            # Convertir índices de forma segura (el índice puede ser int, str, o cualquier hashable)
+            filas_au = [i for i, r in grupo.iterrows() if str(r.get('CRNCONOBJ', '')).upper().startswith('AU')]
+            filas_ta = [i for i, r in grupo.iterrows() if str(r.get('CRNCONOBJ', '')).upper().startswith('TA')]
             
             if filas_au and filas_ta:
                 idx_au = filas_au[0]
                 
                 for idx_ta in filas_ta:
-                    obs_ta = str(df_obj.loc[idx_ta, 'CRDOBSERV']).strip()
+                    # Usar .at para acceso a celda individual (más rápido y sin problemas de tipo)
+                    obs_ta = str(df_obj.at[idx_ta, 'CRDOBSERV']).strip()  # type: ignore
                     if obs_ta:
-                        obs_au = str(df_obj.loc[idx_au, 'CRDOBSERV']).strip()
-                        df_obj.loc[idx_au, 'CRDOBSERV'] = f"{obs_au} \\\\ {obs_ta}" if obs_au else f"\\\\ {obs_ta}"
+                        obs_au = str(df_obj.at[idx_au, 'CRDOBSERV']).strip()  # type: ignore
+                        df_obj.at[idx_au, 'CRDOBSERV'] = f"{obs_au} \\\\ {obs_ta}" if obs_au else f"\\\\ {obs_ta}"  # type: ignore
                     
                     filas_eliminar.append(idx_ta)
                     procesadas += 1
@@ -1761,10 +1835,23 @@ class CoosaludProcessor(BaseProcessor):
             else:
                 df_obj['CRNCXC'] = ''
             
-            # CROFECOBJ - Fecha de objeción (fecha del correo)
-            if email_date:
+            # CROFECOBJ - Fecha de objeción (fecha del correo individual por registro)
+            # Usar la columna fecha_correo que tiene la fecha específica de cada archivo
+            if 'fecha_correo' in detalle_df.columns:
+                def format_fecha_correo(fecha_str):
+                    if pd.isna(fecha_str) or not fecha_str:
+                        return ''
+                    try:
+                        # Parsear y formatear solo la fecha (sin hora)
+                        fecha_dt = pd.to_datetime(fecha_str)
+                        return fecha_dt.strftime('%d/%m/%Y')
+                    except:
+                        return ''
+                
+                df_obj['CROFECOBJ'] = detalle_df['fecha_correo'].apply(format_fecha_correo)
+            elif email_date:
+                # Fallback a fecha global si no hay fecha_correo
                 try:
-                    # Parsear y formatear la fecha del correo
                     fecha_correo = pd.to_datetime(email_date)
                     df_obj['CROFECOBJ'] = fecha_correo.strftime('%d/%m/%Y')
                 except:
@@ -1775,13 +1862,10 @@ class CoosaludProcessor(BaseProcessor):
             # CROREFERE - Vacío
             df_obj['CROREFERE'] = ''
             
-            # CROOBSERV - REG GLOSA según número de glosa
-            if col_glosa_num and col_glosa_num in detalle_df.columns:
-                df_obj['CROOBSERV'] = detalle_df[col_glosa_num].apply(
-                    lambda x: f"REG, GLOSA SEGUN RAD N. {x}" if pd.notna(x) else ""
-                )
-            else:
-                df_obj['CROOBSERV'] = ''
+            # CROOBSERV - REG, GLOSA SEGUN RAD N. + fecha CROFECOBJ
+            df_obj['CROOBSERV'] = df_obj['CROFECOBJ'].apply(
+                lambda fecha: f"REG, GLOSA SEGUN RAD N. {fecha}" if fecha else ""
+            )
             
             # CROCLAOBJ - Siempre 0
             df_obj['CROCLAOBJ'] = 0

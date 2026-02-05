@@ -113,12 +113,13 @@ class EmailService:
         )
         return self.messages
     
-    def download_message_attachments(self, message_id):
+    def download_message_attachments(self, message_id, email_date=None):
         """
         Descarga todos los adjuntos de un mensaje específico al directorio temporal.
         
         Args:
             message_id (str): ID único del mensaje en el servidor IMAP
+            email_date (str, optional): Fecha del correo en formato '%Y-%m-%d %H:%M:%S'
             
         Returns:
             list: Lista de rutas absolutas de archivos descargados exitosamente.
@@ -128,9 +129,10 @@ class EmailService:
             Exception: Si no hay conexión IMAP establecida
             
         Examples:
-            >>> # Descargar adjuntos de un mensaje específico
+            >>> # Descargar adjuntos de un mensaje específico con fecha
             >>> message_id = "12345"
-            >>> files = email_service.download_message_attachments(message_id)
+            >>> email_date = "2026-02-05 10:30:00"
+            >>> files = email_service.download_message_attachments(message_id, email_date=email_date)
             >>> print(f"Descargados {len(files)} archivos:")
             >>> for file_path in files:
             ...     print(f"  - {os.path.basename(file_path)}")
@@ -146,17 +148,40 @@ class EmailService:
             - Los archivos se descargan al directorio temporal del AttachmentService
             - Los nombres de archivo duplicados se renombran automáticamente
             - Los archivos se agregan automáticamente al registro de la sesión actual
+            - Si se proporciona email_date, se guarda en los metadatos de cada archivo
         """
         if not self.imap_client:
             raise Exception("No hay conexión IMAP establecida")
+        
+        print(f"\n[EMAIL_SERVICE] download_message_attachments llamado")
+        print(f"[EMAIL_SERVICE] message_id: {message_id}")
+        print(f"[EMAIL_SERVICE] email_date: {email_date}")
         
         saved_files = self.imap_client.download_attachments(
             message_id,
             dest_dir=self.attachment_service.base_dir
         )
         
+        print(f"[EMAIL_SERVICE] Archivos descargados por IMAP: {len(saved_files) if saved_files else 0}")
+        
         if saved_files:
-            self.attachment_service.add_files(saved_files)
+            # Crear metadata con fecha del correo si está disponible
+            metadata = {}
+            if email_date:
+                print(f"[EMAIL_SERVICE] ✅ Creando metadata con fecha: {email_date}")
+                for file_path in saved_files:
+                    metadata[file_path] = {
+                        "email_date": email_date,
+                        "message_id": message_id
+                    }
+                print(f"[EMAIL_SERVICE] Metadata creado para {len(metadata)} archivos")
+            else:
+                print(f"[EMAIL_SERVICE] ⚠️ NO HAY email_date - metadata vacío")
+            
+            print(f"[EMAIL_SERVICE] Llamando attachment_service.add_files()")
+            self.attachment_service.add_files(saved_files, metadata=metadata)
+            print(f"[EMAIL_SERVICE] Total archivos en attachment_service: {len(self.attachment_service.files)}")
+            print(f"[EMAIL_SERVICE] Total metadatos en attachment_service: {len(self.attachment_service.file_metadata)}\n")
         
         return saved_files
     
@@ -229,7 +254,27 @@ class EmailService:
         
         for idx, msg in enumerate(msgs):
             try:
-                files = self.download_message_attachments(msg["id"])
+                # Extraer fecha del correo si está disponible
+                email_date = None
+                if "date" in msg and msg["date"]:
+                    from datetime import datetime
+                    msg_date = msg["date"]
+                    try:
+                        # Intentar convertir a formato estándar
+                        if isinstance(msg_date, str):
+                            for fmt in ['%a, %d %b %Y %H:%M:%S %z', '%a, %d %b %Y %H:%M:%S', '%Y-%m-%d %H:%M:%S']:
+                                try:
+                                    parsed = datetime.strptime(msg_date.strip(), fmt)
+                                    email_date = parsed.strftime('%Y-%m-%d %H:%M:%S')
+                                    break
+                                except ValueError:
+                                    continue
+                        elif hasattr(msg_date, 'strftime'):
+                            email_date = msg_date.strftime('%Y-%m-%d %H:%M:%S')
+                    except Exception:
+                        pass
+                
+                files = self.download_message_attachments(msg["id"], email_date=email_date)
                 
                 if files:
                     stats["messages_with_attachments"] += 1

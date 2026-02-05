@@ -402,6 +402,14 @@ def main(page: ft.Page):
         """Carga mensajes del servidor y descarga adjuntos automáticamente"""
         def worker():
             try:
+                # IMPORTANTE: Limpiar archivos antiguos para que los nuevos tengan metadatos frescos
+                print(f"\n[CLEANUP] 🧹 Limpiando archivos temporales antiguos...")
+                try:
+                    email_service.attachment_service.clear_all()
+                    print(f"[CLEANUP] ✅ Archivos antiguos limpiados. Listos para nueva descarga con metadatos.")
+                except Exception as e:
+                    print(f"[CLEANUP] ⚠️ Error limpiando: {e}")
+                
                 messages_view.set_loading(True, "🔍 Buscando correos...")
                 
                 all_msgs = []
@@ -422,7 +430,44 @@ def main(page: ft.Page):
                         if msg_id:
                             messages_view.update_message_status(msg_id, "📥 Descargando...")
                             try:
-                                files = email_service.download_message_attachments(msg_id)
+                                # Extraer fecha del correo
+                                msg_date = msg.get('date')
+                                email_date_str = None
+                                
+                                print(f"\n[DEBUG] ===== PROCESANDO CORREO {msg_id} =====")
+                                print(f"[DEBUG] msg_date RAW: {msg_date}")
+                                print(f"[DEBUG] msg_date TYPE: {type(msg_date)}")
+                                
+                                if msg_date:
+                                    from datetime import datetime as dt
+                                    try:
+                                        if isinstance(msg_date, str):
+                                            # Probar formatos comunes
+                                            for fmt in ['%a, %d %b %Y %H:%M:%S %z', '%a, %d %b %Y %H:%M:%S', '%Y-%m-%d %H:%M:%S']:
+                                                try:
+                                                    parsed = dt.strptime(msg_date.strip(), fmt)
+                                                    email_date_str = parsed.strftime('%Y-%m-%d %H:%M:%S')
+                                                    print(f"[DEBUG] ✅ Fecha parseada con formato {fmt}: {email_date_str}")
+                                                    break
+                                                except ValueError as e:
+                                                    print(f"[DEBUG] ❌ Formato {fmt} falló: {e}")
+                                                    continue
+                                        elif hasattr(msg_date, 'strftime'):
+                                            email_date_str = msg_date.strftime('%Y-%m-%d %H:%M:%S')
+                                            print(f"[DEBUG] ✅ Fecha desde datetime object: {email_date_str}")
+                                    except Exception as e:
+                                        print(f"[DEBUG] ❌ Error parseando fecha: {e}")
+                                        pass
+                                else:
+                                    print(f"[DEBUG] ⚠️ msg_date es None o vacío")
+                                
+                                print(f"[DEBUG] email_date_str FINAL: {email_date_str}")
+                                
+                                # Descargar con la fecha del correo
+                                files = email_service.download_message_attachments(msg_id, email_date=email_date_str)
+                                print(f"[DEBUG] Archivos descargados: {len(files) if files else 0}")
+                                print(f"[DEBUG] ===== FIN CORREO {msg_id} =====\n")
+                                
                                 if files:
                                     downloaded_count += 1
                                     messages_view.update_message_status(msg_id, f"✅ {len(files)} archivo(s)")
@@ -733,7 +778,12 @@ def main(page: ft.Page):
                         print(f"[COOSALUD] ⚠️ No hay mensajes en app_state['found_messages']")
                     
                     processor = CoosaludProcessor(homologador_path=homologador_path)
-                    result_data, message = processor.process_glosas(excel_files, output_dir=output_dir, email_date=email_date)
+                    result_data, message = processor.process_glosas(
+                        excel_files, 
+                        output_dir=output_dir, 
+                        email_date=email_date,
+                        attachment_service=email_service.attachment_service
+                    )
                     
                     # Rehabilitar botón después de procesar
                     messages_view.process_eps_btn.disabled = False
