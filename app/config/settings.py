@@ -138,15 +138,21 @@ def is_network_available() -> bool:
     return os.path.exists(NETWORK_BASE)
 
 def get_output_dir(eps_name: str) -> str:
-    """Obtiene el directorio de salida para una EPS"""
-    eps_key = eps_name.lower()
-    if eps_key in NETWORK_PATHS:
-        return NETWORK_PATHS[f"{eps_key}_output"]
+    """Obtiene el directorio de salida para una EPS.
+
+    Busca la clave f"{eps_key}_output" en NETWORK_PATHS (p. ej.
+    "mutualser_output", "coosalud_output"). Si la red no esta
+    disponible, cae al directorio temporal local.
+    """
+    eps_key = eps_name.lower().strip()
+    output_key = f"{eps_key}_output"
+    if output_key in NETWORK_PATHS and is_network_available():
+        return NETWORK_PATHS[output_key]
     return str(TEMP_DIR / eps_name)
 
 def get_homologador_path(eps_name: str) -> str:
     """Obtiene la ruta del homologador para una EPS"""
-    eps_key = eps_name.lower()
+    eps_key = eps_name.lower().strip()
     return HOMOLOGADOR_FILES.get(eps_key, HOMOLOGADOR_FILES["mutualser"])
 
 def ensure_dir(path: str) -> bool:

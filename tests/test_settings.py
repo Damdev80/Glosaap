@@ -10,6 +10,7 @@ Este módulo contiene tests unitarios para verificar:
 import pytest
 import os
 from pathlib import Path
+from unittest.mock import patch
 
 from app.config.settings import (
     APP_VERSION,
@@ -260,7 +261,6 @@ class TestUtilityFunctions:
 
 class TestProjectRoot:
     """Tests para rutas del proyecto."""
-    
     def test_project_root_exists(self):
         """PROJECT_ROOT existe"""
         from app.config.settings import PROJECT_ROOT
@@ -271,3 +271,35 @@ class TestProjectRoot:
         from app.config.settings import ASSETS_DIR
         assert ASSETS_DIR
         # Puede no existir en tests, pero la ruta debe ser válida
+
+
+class TestGetOutputDir:
+    """T1.2: get_output_dir busca f"{eps}_output" con fallback a TEMP."""
+
+    def test_mutualser_red_cuando_disponible(self):
+        """get_output_dir('MutualSer') retorna ruta de red si hay red"""
+        with patch("app.config.settings.is_network_available", return_value=True):
+            result = get_output_dir("MutualSer")
+            assert result == NETWORK_PATHS["mutualser_output"]
+
+    def test_coosalud_red_cuando_disponible(self):
+        """get_output_dir('Coosalud') retorna ruta de red si hay red"""
+        with patch("app.config.settings.is_network_available", return_value=True):
+            result = get_output_dir("Coosalud")
+            assert result == NETWORK_PATHS["coosalud_output"]
+
+    def test_eps_desconocida_fallback_temp(self):
+        """EPS desconocida cae a TEMP aunque haya red"""
+        with patch("app.config.settings.is_network_available", return_value=True):
+            result = get_output_dir("EPSDesconocida")
+            assert "epsdesconocida" in result.lower()
+
+    def test_fallback_temp_sin_red(self):
+        """Sin red, MutualSer y Coosalud caen a TEMP local"""
+        with patch("app.config.settings.is_network_available", return_value=False):
+            result_mut = get_output_dir("MutualSer")
+            result_coo = get_output_dir("Coosalud")
+            assert result_mut != NETWORK_PATHS["mutualser_output"]
+            assert result_coo != NETWORK_PATHS["coosalud_output"]
+            assert "mutualser" in result_mut.lower()
+            assert "coosalud" in result_coo.lower()

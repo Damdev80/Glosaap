@@ -1,14 +1,17 @@
 """ 
 Configuración de las EPS disponibles en el sistema
 Cada EPS tiene su propia configuración para filtrado y procesamiento
+
+Fuente única de rutas de homologación: app/config/settings.py
+(HOMOLOGADOR_FILES + get_homologador_path()). Prohibido hardcodear
+rutas UNC de red en este archivo.
 """
 import os
 
+from app.config.settings import get_homologador_path
+
 # Ruta de assets
 ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "assets"))
-
-# Ruta base de los archivos de homologación en la red
-HOMOLOGADOR_BASE_PATH = r"\\minerva\Cartera\GLOSAAP\HOMOLOGADOR"
 
 
 class EpsInfo:
@@ -38,8 +41,17 @@ class EpsInfo:
         self.enabled = enabled
         self.image_path = image_path
         self.sender_filter = sender_filter  # Correo específico del remitente
-        # Ruta completa al archivo de homologación de esta EPS
-        self.homologador_path = os.path.join(HOMOLOGADOR_BASE_PATH, homologador_file) if homologador_file else None
+        # Ruta completa al archivo de homologación de esta EPS.
+        # Fuente única: settings.get_homologador_path(). `homologador_file`
+        # se interpreta como clave de EPS ("mutualser"/"coosalud") por
+        # compatibilidad; no se construyen rutas UNC aquí.
+        if homologador_file:
+            try:
+                self.homologador_path = get_homologador_path(homologador_file)
+            except Exception:
+                self.homologador_path = None
+        else:
+            self.homologador_path = None
     
     def to_dict(self) -> dict:
         """Convierte a diccionario para compatibilidad con código existente"""
@@ -75,7 +87,7 @@ class MutualserEps(EpsInfo):
             processor_class="MutualserProcessor",
             enabled=True,
             image_path=os.path.join(ASSETS_DIR, "img", "eps", "mutualser.png"),
-            homologador_file="HOMOLOGADOR_MUTUALSER.xlsx"
+            homologador_file="mutualser"
         )
 
 
@@ -93,12 +105,12 @@ class CoosaludEps(EpsInfo):
             processor_class="CoosaludProcessor",
             enabled=True,
             image_path=os.path.join(ASSETS_DIR, "img", "eps", "coosalud.png"),
-            homologador_file="HOMOLOGADOR_COOSALUD.xlsx",
+            homologador_file="coosalud",
         )
 
 
 class NuevaEps(EpsInfo):
-    """Configuración para Nueva EPS"""
+    """Configuración para Nueva EPS (sin procesador: deshabilitada)"""
     
     def __init__(self):
         super().__init__(
@@ -108,12 +120,12 @@ class NuevaEps(EpsInfo):
             filter_value="nuevaeps",
             filter_type="keyword",
             processor_class=None,  # Pendiente de implementar
-            enabled=True
+            enabled=False
         )
 
 
 class CompensarEps(EpsInfo):
-    """Configuración para Compensar EPS"""
+    """Configuración para Compensar EPS (sin procesador: deshabilitada)"""
     
     def __init__(self):
         super().__init__(
@@ -123,12 +135,12 @@ class CompensarEps(EpsInfo):
             filter_value="compensar",
             filter_type="keyword",
             processor_class=None,  # Pendiente de implementar
-            enabled=True
+            enabled=False
         )
 
 
 class FamisanarEps(EpsInfo):
-    """Configuración para Famisanar EPS"""
+    """Configuración para Famisanar EPS (sin procesador: deshabilitada)"""
     
     def __init__(self):
         super().__init__(
@@ -138,12 +150,12 @@ class FamisanarEps(EpsInfo):
             filter_value="famisanar",
             filter_type="keyword",
             processor_class=None,  # Pendiente de implementar
-            enabled=True
+            enabled=False
         )
 
 
 class CosaludEps(EpsInfo):
-    """Configuración para Cosalud EPS"""
+    """Configuración para Cosalud EPS (typo de Coosalud, procesador inexistente: deshabilitada)"""
     
     def __init__(self):
         super().__init__(
@@ -152,8 +164,8 @@ class CosaludEps(EpsInfo):
             description="Cosalud EPS",
             filter_value="cosalud",
             filter_type="keyword",
-            processor_class="CosaludProcessor",  # Pendiente de implementar
-            enabled=True
+            processor_class="CosaludProcessor",  # Procesador inexistente (typo de CoosaludProcessor)
+            enabled=False
         )
 
 

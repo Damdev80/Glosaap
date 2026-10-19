@@ -29,7 +29,7 @@ from app.ui.components.alert_dialog import AlertDialog
 from app.ui.components.update_dialog import UpdateChecker
 from app.ui.navigation import NavigationController
 from app.ui.app_state import AppState
-from app.config.settings import APP_VERSION, GITHUB_REPO, AUTO_UPDATE_CONFIG, logger
+from app.config.settings import APP_VERSION, GITHUB_REPO, AUTO_UPDATE_CONFIG, logger, get_homologador_path, get_output_dir
 
 # Ruta de assets (carpeta con imágenes)
 ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "assets"))
@@ -704,8 +704,8 @@ def main(page: ft.Page):
                     messages_view.set_processing(True, f"📊 Procesando {len(excel_files)} archivo(s) Excel...")
 
                     # Configurar procesador con homologador de Coosalud
-                    homologador_path = r"\\MINERVA\Cartera\GLOSAAP\HOMOLOGADOR\coosalud_homologacion.xlsx"
-                    output_dir = r"\\MINERVA\Cartera\GLOSAAP\REPOSITORIO DE RESULTADOS\COOSALUD"
+                    homologador_path = get_homologador_path("coosalud")
+                    output_dir = get_output_dir("Coosalud")
                     
                     # Verificar que el directorio de salida existe
                     if not os.path.exists(output_dir):

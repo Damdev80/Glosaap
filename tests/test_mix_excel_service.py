@@ -189,3 +189,133 @@ class TestMixExcelServiceTolerance:
         
         assert 'tolerance' in params
         assert params['tolerance'].default == 0.05
+
+    def _make_service(self, source_vals, dest_adj_vals):
+        service = MixExcelService()
+        service.source_df = pd.DataFrame({
+            "valor": source_vals,
+            "ref": ["F1"] * len(source_vals),
+        })
+        service.dest_df = pd.DataFrame({
+            "out": [0] * len(dest_adj_vals),
+            "ref": ["F1"] * len(dest_adj_vals),
+            "ady": dest_adj_vals,
+        })
+        service.source_file = "src.xlsx"
+        service.dest_file = "dst.xlsx"
+        return service
+
+    def test_tolerance_plus_4_pct_matches(self):
+        """Valores +4% con tolerance=0.05 deben matchear"""
+        service = self._make_service([100.0, 200.0], [104.0, 208.0])
+        success, matches, _ = service.transferir_datos(
+            "valor", "ref", "out", "ref", "ady", tolerance=0.05
+        )
+        assert success is True
+        assert matches == 2
+        assert sorted(service.dest_df["out"].tolist()) == [100, 200]
+
+    def test_tolerance_minus_4_pct_matches(self):
+        """Valores -4% con tolerance=0.05 deben matchear"""
+        service = self._make_service([100.0, 200.0], [96.0, 192.0])
+        success, matches, _ = service.transferir_datos(
+            "valor", "ref", "out", "ref", "ady", tolerance=0.05
+        )
+        assert success is True
+        assert matches == 2
+
+    def test_tolerance_plus_6_pct_no_match(self):
+        """Valores +6% con tolerance=0.05 no deben matchear"""
+        service = self._make_service([100.0, 200.0], [106.0, 212.0])
+        success, matches, _ = service.transferir_datos(
+            "valor", "ref", "out", "ref", "ady", tolerance=0.05
+        )
+        assert success is True
+        assert matches == 0
+
+    def test_tolerance_minus_6_pct_no_match(self):
+        """Valores -6% con tolerance=0.05 no deben matchear"""
+        service = self._make_service([100.0, 200.0], [94.0, 188.0])
+        success, matches, _ = service.transferir_datos(
+            "valor", "ref", "out", "ref", "ady", tolerance=0.05
+        )
+        assert success is True
+        assert matches == 0
+
+
+class TestMixExcelServiceRounding:
+    """Tests para reparto proporcional sin error acumulado."""
+
+    def test_reparto_suma_exacta(self):
+        """La suma repartida cuadra exacta (última fila absorbe diferencia)"""
+        service = MixExcelService()
+        service.source_df = pd.DataFrame({"valor": [100.0], "ref": ["F1"]})
+        service.dest_df = pd.DataFrame({
+            "out": [0, 0, 0],
+            "ref": ["F1", "F1", "F1"],
+            "ady": [1.0, 1.0, 1.0],
+        })
+        service.source_file = "src.xlsx"
+        service.dest_file = "dst.xlsx"
+
+        success, matches, _ = service.transferir_datos(
+            "valor", "ref", "out", "ref", "ady", tolerance=0.05
+        )
+        assert success is True
+        assert matches == 3
+        assert int(service.dest_df["out"].sum()) == 100
+
+    def test_reparto_dos_filas_impar(self):
+        """Reparto 10 en 2 filas iguales suma 10"""
+        service = MixExcelService()
+        service.source_df = pd.DataFrame({"valor": [10.0], "ref": ["F1"]})
+        service.dest_df = pd.DataFrame({
+            "out": [0, 0],
+            "ref": ["F1", "F1"],
+            "ady": [1.0, 1.0],
+        })
+        service.source_file = "src.xlsx"
+        service.dest_file = "dst.xlsx"
+
+        success, matches, _ = service.transferir_datos(
+            "valor", "ref", "out", "ref", "ady", tolerance=0.05
+        )
+        assert success is True
+        assert int(service.dest_df["out"].sum()) == 10
+
+
+class TestMixExcelServiceGuardar:
+    """Tests para backup y output_path en guardar_destino."""
+
+    def test_guardar_crea_backup(self, tmp_path):
+        """Guardar sin output_path crea .bak antes de sobreescribir"""
+        dest = tmp_path / "dest.xlsx"
+        pd.DataFrame({"a": [1, 2]}).to_excel(dest, index=False)
+
+        service = MixExcelService()
+        service.cargar_archivo(str(dest), "dest")
+        service.dest_df = pd.DataFrame({"a": [9, 9]})
+
+        success, _ = service.guardar_destino()
+        assert success is True
+        assert (tmp_path / "dest.xlsx.bak").exists()
+        assert pd.read_excel(dest)["a"].tolist() == [9, 9]
+
+    def test_guardar_output_path_no_sobreescribe(self, tmp_path):
+        """Guardar con output_path no modifica el original"""
+        dest = tmp_path / "dest.xlsx"
+        pd.DataFrame({"a": [1, 2]}).to_excel(dest, index=False)
+        out = tmp_path / "salida.xlsx"
+
+        service = MixExcelService()
+        service.cargar_archivo(str(dest), "dest")
+        service.dest_df = pd.DataFrame({"a": [7, 8]})
+
+        success, _ = service.guardar_destino(output_path=str(out))
+        assert success is True
+        assert out.exists()
+        assert pd.read_excel(out)["a"].tolist() == [7, 8]
+        # Original intacto en disco
+        assert pd.read_excel(dest)["a"].tolist() == [1, 2]
+        # Sin backup cuando se usa output_path
+        assert not (tmp_path / "dest.xlsx.bak").exists()

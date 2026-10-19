@@ -1,7 +1,7 @@
 """
 Configuración de la aplicación
 """
-from app.config.eps_config import EPS_CONFIG, get_eps_by_name, get_all_eps
+from app.config.eps_config import EPS_CONFIG, get_eps_by_name, get_all_eps, get_enabled_eps, get_eps_list
 from app.config.settings import (
     NETWORK_PATHS,
     HOMOLOGADOR_FILES,

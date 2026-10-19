@@ -2,9 +2,17 @@
 Servicio para transferir datos entre archivos Excel
 Mix Excel - Transferencia de columnas con distribución proporcional
 """
+import shutil
+
 import pandas as pd
 from pathlib import Path
 from typing import Optional, List, Tuple, Dict
+
+try:
+    from app.config.settings import logger
+except Exception:  # pragma: no cover - fallback si settings no disponible
+    import logging
+    logger = logging.getLogger("glosaap")
 
 
 class MixExcelService:
@@ -113,42 +121,51 @@ class MixExcelService:
                         
                         if len(dest_adjacent_values) > 0:
                             # CASO 1: Múltiples valores en origen - emparejar por similitud
+                            # Se aplica tolerancia proporcional:
+                            # |src - adj| / |adj| <= tolerance, si excede se omite.
                             if len(source_values) > 1:
                                 used_source_values = set()
                                 for dest_idx, dest_adj_val in dest_adjacent_values:
                                     best_match_value = None
                                     best_match_idx = None
                                     min_diff = float('inf')
-                                    
+
+                                    denom = abs(dest_adj_val) if dest_adj_val != 0 else 0
+                                    if denom == 0:
+                                        continue
+
                                     for i, src_val in enumerate(source_values):
                                         if i not in used_source_values:
-                                            diff = abs(src_val - dest_adj_val) / dest_adj_val if dest_adj_val != 0 else float('inf')
+                                            diff = abs(src_val - dest_adj_val) / denom
                                             if diff < min_diff:
                                                 min_diff = diff
                                                 best_match_value = src_val
                                                 best_match_idx = i
-                                    
-                                    if best_match_value is not None:
+
+                                    if best_match_value is not None and min_diff <= tolerance:
                                         self.dest_df.at[dest_idx, dest_col] = int(round(best_match_value))
                                         used_source_values.add(best_match_idx)
                                         matches_found += 1
-                            
+
                             # CASO 2: Un solo valor - distribuir proporcionalmente
+                            # La última fila absorbe la diferencia para que la
+                            # suma cuadre exacta con int(round(total)).
                             else:
                                 total_to_distribute = source_values[0]
                                 total_adjacent = sum([val for _, val in dest_adjacent_values])
-                                
+
                                 if total_adjacent > 0:
+                                    total_int = int(round(total_to_distribute))
                                     distributed_sum = 0
                                     for i, (dest_idx, adjacent_value) in enumerate(dest_adjacent_values):
                                         if i == len(dest_adjacent_values) - 1:
-                                            distributed_value = total_to_distribute - distributed_sum
+                                            assigned_value = total_int - distributed_sum
                                         else:
                                             proportion = adjacent_value / total_adjacent
-                                            distributed_value = total_to_distribute * proportion
-                                            distributed_sum += round(distributed_value)
-                                        
-                                        self.dest_df.at[dest_idx, dest_col] = int(round(distributed_value))
+                                            assigned_value = int(round(total_to_distribute * proportion))
+                                            distributed_sum += assigned_value
+
+                                        self.dest_df.at[dest_idx, dest_col] = assigned_value
                                         matches_found += 1
                         
                         processed_refs.add(dest_ref_value)
@@ -158,17 +175,44 @@ class MixExcelService:
         except Exception as e:
             return False, 0, f"Error en transferencia: {str(e)}"
     
-    def guardar_destino(self) -> Tuple[bool, str]:
-        """Guarda el archivo destino con los cambios"""
+    def guardar_destino(self, output_path: Optional[str] = None) -> Tuple[bool, str]:
+        """Guarda el archivo destino con los cambios.
+
+        Args:
+            output_path: Ruta opcional de salida. Si se indica, se guarda
+                allí sin modificar el archivo original. Si es None
+                (comportamiento por defecto), se crea un backup ``.bak``
+                del archivo original antes de sobreescribirlo.
+
+        Returns:
+            Tuple[success, message]
+        """
         if self.dest_df is None or self.dest_file is None:
             return False, "No hay archivo destino cargado"
-        
+
         try:
-            self.dest_df.to_excel(self.dest_file, index=False)
-            return True, f"Guardado en {Path(self.dest_file).name}"
+            target = output_path if output_path else self.dest_file
+            target_path = Path(target)
+            if target_path.parent and str(target_path.parent) not in ("", "."):
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+
+            if output_path is None:
+                # Backup del original antes de sobreescribir.
+                original = Path(self.dest_file)
+                if original.exists() and original.is_file():
+                    backup_path = Path(str(original) + ".bak")
+                    try:
+                        shutil.copy2(original, backup_path)
+                        logger.info("Backup creado en %s", backup_path)
+                    except Exception as e:
+                        logger.warning("No se pudo crear backup %s: %s", backup_path, e)
+
+            self.dest_df.to_excel(str(target_path), index=False)
+            return True, f"Guardado en {target_path.name}"
         except PermissionError:
             return False, "El archivo está abierto. Ciérralo e intenta de nuevo."
         except Exception as e:
+            logger.error("Error al guardar destino: %s", e)
             return False, f"Error al guardar: {str(e)}"
     
     def get_preview(self, tipo: str = "source", limit: int = 5) -> pd.DataFrame:

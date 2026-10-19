@@ -303,9 +303,10 @@ class EPSProcessor:
         logger.info(f"Procesando {len(excel_files)} archivos Excel de COOSALUD")
         self.messages_view.set_processing(True, f"📊 Procesando {len(excel_files)} archivo(s) Excel...")
         
-        # Configurar procesador
-        homologador_path = r"\\MINERVA\Cartera\GLOSAAP\HOMOLOGADOR\mutualser_homologacion.xlsx"
-        output_dir = r"\\MINERVA\Cartera\GLOSAAP\REPOSITORIO DE RESULTADOS\COOSALUD"
+        # Configurar procesador (rutas centralizadas en settings)
+        from app.config.settings import get_homologador_path, get_output_dir
+        homologador_path = get_homologador_path("coosalud")
+        output_dir = get_output_dir("Coosalud")
         
         if not os.path.exists(output_dir):
             try:
