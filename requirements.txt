@@ -15,6 +15,11 @@ requests>=2.31.0
 # Variables de entorno
 python-dotenv>=1.0.0
 
+# Almacenamiento seguro de secretos (keyring usa DPAPI en Windows)
+keyring>=25.0.0
+cryptography>=42.0.0
+filelock>=3.13.0
+
 # ==================== DEPENDENCIAS DE DESARROLLO ====================
 # Testing
 pytest>=7.0.0

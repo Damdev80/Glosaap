@@ -217,8 +217,6 @@ class LoginView:
                     self.toast_notification.error(f"Error de reconexión: {str(ex)}")
                     
             threading.Thread(target=auto_connect, daemon=True).start()
-            
-            threading.Thread(target=auto_connect, daemon=True).start()
     
     def show_status(self, msg, is_error=False):
         """Muestra mensaje de estado"""

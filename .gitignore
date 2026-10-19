@@ -80,6 +80,14 @@ local_settings.py
 #   CREDENTIALS / SENSITIVE
 # ============================
 credentials.json
+**/credentials.json
+credentials.json.bak
+.session.json
+**/.session.json
+.session.json.bak
+*.key
+temp/config/
+temp/perfil_chrome/
 
 # ============================
 #   SELENIUM WEBDRIVERS
