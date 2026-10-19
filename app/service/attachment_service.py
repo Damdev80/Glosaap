@@ -6,6 +6,8 @@ import os
 import sys
 import tempfile
 
+from app.config.settings import logger
+
 
 class AttachmentService:
     """Servicio para manejar adjuntos de correos"""
@@ -110,42 +112,58 @@ class AttachmentService:
         self._scan_directory()
         return len(self.downloaded_files)
     
-    def clear_all(self):
-        """Elimina todos los archivos del directorio temporal"""
-        import shutil
-        
-        print(f"[CLEANUP] clear_all() llamado - base_dir: {self.base_dir}")
-        
-        if os.path.exists(self.base_dir):
-            files_in_dir = [f for f in os.listdir(self.base_dir) if os.path.isfile(os.path.join(self.base_dir, f))]
-            file_count = len(files_in_dir)
-            print(f"[CLEANUP] Eliminando {file_count} archivo(s) del directorio...")
-            
-            deleted = 0
-            errors = 0
-            # Eliminar todos los archivos
-            for filename in files_in_dir:
-                file_path = os.path.join(self.base_dir, filename)
-                try:
-                    os.unlink(file_path)
-                    deleted += 1
-                except Exception as e:
-                    errors += 1
-                    print(f"[CLEANUP] Error al eliminar {filename}: {e}")
-            
-            print(f"[CLEANUP] ✅ Eliminados: {deleted}, Errores: {errors}")
+    def clear_all(self, delete_files: bool = False):
+        """Limpia el estado en memoria y, opcionalmente, los archivos físicos.
+
+        Semántica explícita:
+        - Por defecto (``delete_files=False``) es NO destructiva: solo vacía
+          ``downloaded_files``, ``session_files`` y ``file_metadata``.
+        - Con ``delete_files=True`` además borra recursivamente todos los
+          archivos bajo ``base_dir`` (sin eliminar el propio directorio).
+
+        Args:
+            delete_files: Si True, borra archivos físicos del disco.
+
+        Returns:
+            dict: ``{"deleted": int, "errors": int, "delete_files": bool}``.
+        """
+        deleted = 0
+        errors = 0
+
+        if delete_files:
+            logger.info("[CLEANUP] clear_all(delete_files=True) - base_dir: %s", self.base_dir)
+            if os.path.exists(self.base_dir):
+                for root, _dirs, files in os.walk(self.base_dir):
+                    for filename in files:
+                        file_path = os.path.join(root, filename)
+                        try:
+                            os.remove(file_path)
+                            deleted += 1
+                        except Exception as e:
+                            errors += 1
+                            logger.warning("[CLEANUP] Error al eliminar %s: %s", file_path, e)
+                logger.info("[CLEANUP] Eliminados: %s, Errores: %s", deleted, errors)
+            else:
+                logger.info("[CLEANUP] Directorio no existe: %s", self.base_dir)
         else:
-            print(f"[CLEANUP] Directorio no existe: {self.base_dir}")
-        
-        # Limpiar listas en memoria
+            logger.info(
+                "[CLEANUP] clear_all(delete_files=False) - solo memoria "
+                "(session=%s, total=%s)",
+                len(self.session_files),
+                len(self.downloaded_files),
+            )
+
+        # Limpiar estado en memoria en ambos casos.
         self.downloaded_files = []
         self.session_files = []
-        self.file_metadata = {}  # Limpiar metadatos también
-        print(f"[CLEANUP] Listas en memoria limpiadas")
-    
+        self.file_metadata = {}
+        logger.info("[CLEANUP] Listas en memoria limpiadas")
+
+        return {"deleted": deleted, "errors": errors, "delete_files": delete_files}
+
     def clear_session(self):
-        """Limpia solo la lista de archivos de sesión (no elimina archivos físicos)"""
-        print(f"[CLEANUP] Limpiando archivos de sesión: {len(self.session_files)} archivos")
+        """Limpia solo la lista de archivos de sesión (no elimina archivos físicos)."""
+        logger.info("[CLEANUP] Limpiando archivos de sesión: %s archivos", len(self.session_files))
         # Limpiar metadatos de archivos de sesión
         for file_path in self.session_files:
             if file_path in self.file_metadata:
@@ -295,22 +313,14 @@ class AttachmentService:
             "is_excel": file_path.endswith(('.xlsx', '.xls', '.csv'))
         }
     
-    def clear_all(self):
-        """Limpia la lista de archivos descargados (no borra archivos físicos)"""
-        self.downloaded_files = []
-    
     def clear_directory(self):
-        """Elimina todos los archivos del directorio físicamente"""
-        import shutil
-        if os.path.exists(self.base_dir):
-            for root, dirs, files in os.walk(self.base_dir):
-                for file in files:
-                    try:
-                        os.remove(os.path.join(root, file))
-                    except Exception as e:
-                        print(f"Error eliminando {file}: {e}")
-        self.downloaded_files = []
-        print(f"DEBUG: Directorio limpiado: {self.base_dir}")
+        """Alias deprecado de :meth:`clear_all` con ``delete_files=True``.
+
+        Se conserva por compatibilidad con callers antiguos. El código nuevo
+        debe usar ``clear_all(delete_files=True)`` directamente.
+        """
+        logger.info("[CLEANUP] clear_directory() deprecado - delega a clear_all(delete_files=True)")
+        return self.clear_all(delete_files=True)
     
     def get_summary(self):
         """Retorna un resumen de archivos descargados"""

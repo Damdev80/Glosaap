@@ -403,12 +403,12 @@ def main(page: ft.Page):
         def worker():
             try:
                 # IMPORTANTE: Limpiar archivos antiguos para que los nuevos tengan metadatos frescos
-                print(f"\n[CLEANUP] 🧹 Limpiando archivos temporales antiguos...")
+                logger.info("[CLEANUP] Limpiando archivos temporales antiguos...")
                 try:
-                    email_service.attachment_service.clear_all()
-                    print(f"[CLEANUP] ✅ Archivos antiguos limpiados. Listos para nueva descarga con metadatos.")
+                    email_service.attachment_service.clear_all(delete_files=True)
+                    logger.info("[CLEANUP] Archivos antiguos limpiados. Listos para nueva descarga con metadatos.")
                 except Exception as e:
-                    print(f"[CLEANUP] ⚠️ Error limpiando: {e}")
+                    logger.warning("[CLEANUP] Error limpiando: %s", e)
                 
                 messages_view.set_loading(True, "🔍 Buscando correos...")
                 
