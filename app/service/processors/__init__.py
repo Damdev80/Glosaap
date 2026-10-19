@@ -6,11 +6,18 @@ Cada EPS tiene su propio procesador que sabe cómo manejar sus archivos específ
 from .base_processor import BaseProcessor
 from .coosalud_processor import CoosaludProcessor
 
-# Re-exportar MutualserProcessor desde core para mantener compatibilidad
-from app.core.mutualser_processor import MutualserProcessor
-
 __all__ = [
     "BaseProcessor",
     "CoosaludProcessor",
     "MutualserProcessor",
 ]
+
+
+def __getattr__(name: str):
+    # Importación perezosa para evitar ciclo circular:
+    # app.core.mutualser_processor importa BaseProcessor desde este paquete.
+    if name == "MutualserProcessor":
+        from app.core.mutualser_processor import MutualserProcessor
+
+        return MutualserProcessor
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
