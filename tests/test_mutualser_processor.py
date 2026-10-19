@@ -200,3 +200,163 @@ class TestMutualserProcessorClass:
     def test_has_docstring(self):
         """La clase tiene docstring"""
         assert MutualserProcessor.__doc__ is not None
+
+
+# ==================== EXTENSIÓN T2.3 (tmp_path, sin red) ====================
+
+import os as _os_mut
+
+
+def _write_homologador_mutualser_tmp(path):
+    import pandas as pd
+    df = pd.DataFrame({
+        'Código Servicio de la ERP': ['890201', '890301'],
+        'Código producto en DGH': ['CUPS001', 'CUPS002'],
+        'COD_SERV_FACT': ['CUPS001', 'CUPS002'],
+    })
+    df.to_excel(str(path), index=False)
+    return str(path)
+
+
+def _write_mutualser_input_tmp(path, filas):
+    """Escribe archivo Mutualser sintético con fila FECHA + encabezado real."""
+    import pandas as pd
+    header = list(MutualserProcessor.COLUMNAS_REQUERIDAS)
+    rows = [
+        ["REPORTE DE GLOSAS MUTUALSER"] + [None] * (len(header) - 1),
+        ["FECHA", "01/01/2024"] + [None] * (len(header) - 2),
+        header,
+    ]
+    rows.extend(filas)
+    pd.DataFrame(rows).to_excel(str(path), index=False, header=False)
+    return str(path)
+
+
+def _fila_mutualser(fact="F001", glosa="G001", tec="890201", concepto="Concepto A",
+                    cod_glosa="AU001", obs="Obs A"):
+    return [fact, glosa, tec, 1, 50000, 1, 10000, concepto, cod_glosa, obs, "01/01/2024"]
+
+
+class TestMutualserLoadHomologadorTmp:
+    """load_homologador con xlsx real en tmp_path."""
+
+    def test_load_homologador_tmp_ok(self, tmp_path):
+        hom = _write_homologador_mutualser_tmp(tmp_path / "hom.xlsx")
+        out = tmp_path / "out_load"
+        proc = MutualserProcessor(output_dir=str(out), homologacion_path=hom)
+        assert proc.df_homologacion is not None
+        assert len(proc.df_homologacion) == 2
+        assert proc.load_homologador() is True
+        assert proc.df_homologacion is not None
+        assert "CUPS001" in (proc._todos_cod_serv_fact or set())
+
+    def test_load_homologador_tmp_inexistente_falla_explicito(self, tmp_path):
+        faltante = str(tmp_path / "noexiste.xlsx")
+        out = tmp_path / "out_load_miss"
+        proc = MutualserProcessor(output_dir=str(out), homologacion_path=faltante)
+        assert proc.df_homologacion is None
+        assert proc.homologador_df is None
+        assert proc.load_homologador() is False
+        assert len(proc.errors) > 0
+
+
+class TestMutualserBuscarCodigoTmp:
+    """_buscar_codigo_homologado hit/miss sin red."""
+
+    def _proc_con_hom(self, tmp_path):
+        hom = _write_homologador_mutualser_tmp(tmp_path / "hom.xlsx")
+        out = tmp_path / "out_buscar"
+        return MutualserProcessor(output_dir=str(out), homologacion_path=hom)
+
+    def test_buscar_hit(self, tmp_path):
+        proc = self._proc_con_hom(tmp_path)
+        assert proc._buscar_codigo_homologado("890201") == "CUPS001"
+        assert proc._buscar_codigo_homologado("890301") == "CUPS002"
+
+    def test_buscar_miss_retorna_vacio(self, tmp_path):
+        proc = self._proc_con_hom(tmp_path)
+        assert proc._buscar_codigo_homologado("999999") == ""
+
+    def test_buscar_nulos_retorna_vacio(self, tmp_path):
+        import math
+        proc = self._proc_con_hom(tmp_path)
+        assert proc._buscar_codigo_homologado(None) == ""
+        assert proc._buscar_codigo_homologado(float("nan")) == ""
+        assert proc._buscar_codigo_homologado("") == ""
+
+    def test_buscar_sin_homologacion_retorna_vacio(self, tmp_path):
+        out = tmp_path / "out_sinhom"
+        proc = MutualserProcessor(
+            output_dir=str(out),
+            homologacion_path=str(tmp_path / "faltante.xlsx"),
+        )
+        assert proc.df_homologacion is None
+        assert proc._buscar_codigo_homologado("890201") == ""
+
+
+class TestMutualserMultiplesArchivosTmp:
+    """procesar_multiples_archivos con 2 archivos sintéticos."""
+
+    def test_procesar_dos_archivos_sinteticos(self, tmp_path):
+        hom = _write_homologador_mutualser_tmp(tmp_path / "hom.xlsx")
+        out = tmp_path / "out_multi"
+        f1 = _write_mutualser_input_tmp(
+            tmp_path / "rep1.xlsx",
+            [_fila_mutualser("F001", "G001", "890201"),
+             _fila_mutualser("F001", "G002", "890301")],
+        )
+        f2 = _write_mutualser_input_tmp(
+            tmp_path / "rep2.xlsx",
+            [_fila_mutualser("F002", "G003", "890201")],
+        )
+        proc = MutualserProcessor(output_dir=str(out), homologacion_path=hom)
+        consolidado = proc.procesar_multiples_archivos([f1, f2])
+
+        assert consolidado is not None
+        assert len(consolidado) == 3
+        assert len(proc.archivos_procesados) == 2
+        assert "Número de factura" in consolidado.columns
+
+    def test_procesar_lista_vacia_retorna_none(self, tmp_path):
+        hom = _write_homologador_mutualser_tmp(tmp_path / "hom.xlsx")
+        out = tmp_path / "out_multi_vacio"
+        proc = MutualserProcessor(output_dir=str(out), homologacion_path=hom)
+        assert proc.procesar_multiples_archivos([]) is None
+
+
+class TestMutualserExportarTmp:
+    """exportar_consolidado verifica xlsx de salida en tmp_path."""
+
+    def test_exportar_consolidado_genera_xlsx(self, tmp_path):
+        hom = _write_homologador_mutualser_tmp(tmp_path / "hom.xlsx")
+        out = tmp_path / "out_exp"
+        f1 = _write_mutualser_input_tmp(
+            tmp_path / "a.xlsx", [_fila_mutualser("F001", "G001", "890201")]
+        )
+        f2 = _write_mutualser_input_tmp(
+            tmp_path / "b.xlsx", [_fila_mutualser("F002", "G002", "890301")]
+        )
+        proc = MutualserProcessor(output_dir=str(out), homologacion_path=hom)
+        proc.procesar_multiples_archivos([f1, f2])
+
+        resultado = proc.exportar_consolidado(nombre_archivo="consolidado_test.xlsx")
+
+        assert resultado is not None
+        output_path, objeciones_path = resultado
+        assert _os_mut.path.exists(output_path)
+        assert output_path.endswith("consolidado_test.xlsx")
+        import pandas as pd
+        cargado = pd.read_excel(output_path)
+        assert len(cargado) == 2
+        assert "Codigo homologado DGH" in cargado.columns
+        # Homologación efectiva con homologador mínimo
+        assert "CUPS001" in cargado["Codigo homologado DGH"].values
+        # Objeciones también se genera en el mismo output_dir
+        assert objeciones_path is not None
+        assert _os_mut.path.exists(objeciones_path)
+
+    def test_exportar_sin_datos_retorna_none(self, tmp_path):
+        hom = _write_homologador_mutualser_tmp(tmp_path / "hom.xlsx")
+        out = tmp_path / "out_exp_vacio"
+        proc = MutualserProcessor(output_dir=str(out), homologacion_path=hom)
+        assert proc.exportar_consolidado() is None

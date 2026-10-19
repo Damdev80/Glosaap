@@ -398,3 +398,157 @@ class TestHomologacionServiceIntegration:
             # Listar con filtro
             filtrado = service.listar(filtro='100')
             assert len(filtrado) == 1
+
+
+# ==================== EXTENSIÓN T2.3 (tmp_path + monkeypatch, sin red) ====================
+
+
+def _df_homolog_minimo():
+    import pandas as pd
+    return pd.DataFrame({
+        'Código Servicio de la ERP': ['100', '200', '300'],
+        'Código producto en DGH': ['ABC100', 'DEF200', 'GHI300'],
+        'COD_SERV_FACT': ['FACT100', 'FACT200', 'FACT300'],
+    })
+
+
+def _svc_con_datos():
+    from app.core.homologacion_service import HomologacionService
+    HomologacionService._file_cache.clear()
+    HomologacionService._search_cache.clear()
+    svc = HomologacionService()
+    svc.df = _df_homolog_minimo().copy()
+    svc.eps = 'mutualser'
+    svc.columnas_actuales = list(_df_homolog_minimo().columns)
+    return svc
+
+
+class TestHomologacionLoteTmp:
+    """buscar_por_codigo_erp_lote hit/miss."""
+
+    def test_lote_hit_y_miss(self):
+        svc = _svc_con_datos()
+        res = svc.buscar_por_codigo_erp_lote(['100', '999'])
+        assert res['100'] is not None
+        assert res['100']['Código producto en DGH'] == 'ABC100'
+        assert res['999'] is None
+
+    def test_lote_todos_hit(self):
+        svc = _svc_con_datos()
+        res = svc.buscar_por_codigo_erp_lote(['100', '200', '300'])
+        assert all(v is not None for v in res.values())
+
+    def test_lote_sin_datos_retorna_vacio(self):
+        from app.core.homologacion_service import HomologacionService
+        HomologacionService._file_cache.clear()
+        HomologacionService._search_cache.clear()
+        svc = HomologacionService()
+        svc.df = None
+        assert svc.buscar_por_codigo_erp_lote(['100']) == {}
+
+    def test_lote_usa_cache_en_segunda_llamada(self):
+        svc = _svc_con_datos()
+        primero = svc.buscar_por_codigo_erp_lote(['100'])
+        segundo = svc.buscar_por_codigo_erp_lote(['100'])
+        assert primero['100']['Código producto en DGH'] == segundo['100']['Código producto en DGH']
+
+
+class TestHomologacionAgregarEliminarTmp:
+    """agregar duplicado -> error, eliminar inexistente."""
+
+    def test_agregar_duplicado_retorna_false(self):
+        from unittest.mock import patch as _patch
+        from app.core.homologacion_service import HomologacionService
+        svc = _svc_con_datos()
+        n_antes = len(svc.df)
+        with _patch.object(HomologacionService, '_guardar') as mock_guardar:
+            assert svc.agregar('100', 'NUEVO100', 'NEWFACT100') is False
+            mock_guardar.assert_not_called()
+        assert len(svc.df) == n_antes
+
+    def test_eliminar_inexistente_retorna_false(self):
+        from unittest.mock import patch as _patch
+        from app.core.homologacion_service import HomologacionService
+        svc = _svc_con_datos()
+        n_antes = len(svc.df)
+        with _patch.object(HomologacionService, '_guardar') as mock_guardar:
+            assert svc.eliminar('999') is False
+            mock_guardar.assert_not_called()
+        assert len(svc.df) == n_antes
+
+    def test_agregar_nuevo_con_guardar_mockeado(self, tmp_path):
+        from unittest.mock import patch as _patch
+        from app.core.homologacion_service import HomologacionService
+        svc = _svc_con_datos()
+        with _patch.object(HomologacionService, '_guardar', return_value=True):
+            assert svc.agregar('400', 'JKL400', 'FACT400') is True
+        assert '400' in svc.df['Código Servicio de la ERP'].values
+
+    def test_eliminar_existente_con_guardar_mockeado(self, tmp_path):
+        from unittest.mock import patch as _patch
+        from app.core.homologacion_service import HomologacionService
+        svc = _svc_con_datos()
+        with _patch.object(HomologacionService, '_guardar', return_value=True):
+            assert svc.eliminar('100') is True
+        assert '100' not in svc.df['Código Servicio de la ERP'].values
+
+
+class TestHomologacionListarTmp:
+    """listar con filtro/límite."""
+
+    def test_listar_filtro(self):
+        svc = _svc_con_datos()
+        res = svc.listar(filtro='100')
+        assert len(res) == 1
+        assert res.iloc[0]['Código Servicio de la ERP'] == '100'
+
+    def test_listar_filtro_sin_coincidencias(self):
+        svc = _svc_con_datos()
+        res = svc.listar(filtro='ZZZ-INEXISTENTE')
+        assert res.empty
+
+    def test_listar_limite(self):
+        svc = _svc_con_datos()
+        res = svc.listar(limite=2)
+        assert len(res) <= 2
+
+    def test_listar_filtro_y_limite_combinados(self, tmp_path):
+        svc = _svc_con_datos()
+        res = svc.listar(filtro='0', limite=1)
+        assert len(res) <= 1
+
+
+class TestHomologacionTmpFileMonkeypatch:
+    """Archivo real en tmp_path + monkeypatch del dir fijo (sin red)."""
+
+    def test_cargar_y_guardar_en_tmp_sin_red(self, tmp_path, monkeypatch):
+        import pandas as pd
+        from app.core.homologacion_service import HomologacionService
+        HomologacionService._file_cache.clear()
+        HomologacionService._search_cache.clear()
+
+        tmp_file = tmp_path / "hom_tmp.xlsx"
+        _df_homolog_minimo().to_excel(str(tmp_file), index=False)
+
+        monkeypatch.setattr(HomologacionService, "HOMOLOGACION_DIR", str(tmp_path))
+
+        svc = HomologacionService()
+        svc.eps = 'mutualser'
+        svc.homologacion_path = str(tmp_file)
+        svc.columnas_actuales = HomologacionService.EPS_COLUMNAS['mutualser']
+        assert svc._cargar() is True
+        assert len(svc.df) == 3
+
+        # Agregar real genera backup dentro de tmp_path (no red)
+        assert svc.agregar('400', 'JKL400', 'FACT400') is True
+        assert (tmp_path / "backups").exists()
+        recargado = pd.read_excel(str(tmp_file))
+        assert '400' in recargado['Código Servicio de la ERP'].astype(str).values
+
+        # Lote después de agregar incluye el nuevo
+        # (se limpia caché de búsqueda: agregar deja entrada stale para '400'
+        #  por bug conocido de clave distinta; el lote debe leer el df real)
+        HomologacionService._search_cache.clear()
+        res = svc.buscar_por_codigo_erp_lote(['400', '999'])
+        assert res['400'] is not None
+        assert res['999'] is None

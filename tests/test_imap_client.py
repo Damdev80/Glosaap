@@ -278,3 +278,175 @@ class TestImapClientPortConfig:
         sig = inspect.signature(ImapClient.connect)
         params = sig.parameters
         assert params['use_ssl'].default is True
+
+
+# ==================== EXTENSIÓN T2.3 (mocks, tmp_path, sin sockets) ====================
+
+from datetime import datetime as _dt_imap
+from email.message import EmailMessage as _EmailMessage
+
+
+def _raw_glosa_email(subject="Reporte Glosas FC123", filename="detalle.xlsx",
+                     payload=b"fake-excel-bytes"):
+    msg = _EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = "eps@test.com"
+    msg["Date"] = "Mon, 01 May 2024 10:00:00 +0000"
+    msg.set_content("cuerpo del correo")
+    msg.add_attachment(
+        payload, maintype="application",
+        subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=filename,
+    )
+    return msg.as_bytes()
+
+
+def _client_with_raw(raw, msg_id=b"1"):
+    client = ImapClient()
+    mock_conn = MagicMock()
+    mock_conn.select.return_value = ("OK", [b"1"])
+    mock_conn.fetch.return_value = ("OK", [(msg_id, raw)])
+    client.conn = mock_conn
+    return client
+
+
+class TestImapBuildSearchCriteriaTmp:
+    """_build_search_criteria por fecha/keyword."""
+
+    def test_keyword_solo(self):
+        client = ImapClient()
+        crit = client._build_search_criteria(keyword="glosas")
+        assert 'SUBJECT "glosas"' in crit
+
+    def test_keyword_escapa_comillas(self):
+        client = ImapClient()
+        crit = client._build_search_criteria(keyword='glosa "fc"')
+        assert '\\"' in crit
+
+    def test_sin_args_retorna_all(self):
+        client = ImapClient()
+        assert client._build_search_criteria() == "ALL"
+
+    def test_fecha_desde(self):
+        client = ImapClient()
+        crit = client._build_search_criteria(date_from=_dt_imap(2024, 5, 1))
+        assert "SINCE 01-May-2024" in crit
+
+    def test_fecha_hasta_es_exclusiva_mas_un_dia(self):
+        client = ImapClient()
+        crit = client._build_search_criteria(date_to=_dt_imap(2024, 5, 10))
+        # BEFORE es exclusivo: 10-may -> 11-May-2024
+        assert "BEFORE 11-May-2024" in crit
+
+    def test_keyword_y_rango_combinados(self):
+        client = ImapClient()
+        crit = client._build_search_criteria(
+            keyword="glosa",
+            date_from=_dt_imap(2024, 5, 1),
+            date_to=_dt_imap(2024, 5, 10),
+        )
+        assert crit.startswith("(") and crit.endswith(")")
+        assert 'SUBJECT "glosa"' in crit
+        assert "SINCE 01-May-2024" in crit
+        assert "BEFORE 11-May-2024" in crit
+
+    def test_fecha_string_soportada(self):
+        client = ImapClient()
+        crit = client._build_search_criteria(date_from="2024-05-01")
+        assert "SINCE 01-May-2024" in crit
+
+
+class TestImapParseMessageTmp:
+    """_parse_message con adjunto programado vía MockIMAP."""
+
+    def test_parse_con_adjunto(self):
+        raw = _raw_glosa_email(subject="Reporte Glosas FC123")
+        client = _client_with_raw(raw, b"7")
+        info = client._parse_message(b"7", keyword="glosas")
+        assert info is not None
+        assert info["id"] == "7"
+        assert "Glosas" in info["subject"]
+        assert info["has_attachments"] is True
+
+    def test_parse_filtra_por_keyword(self):
+        raw = _raw_glosa_email(subject="Reporte Glosas FC123")
+        client = _client_with_raw(raw)
+        assert client._parse_message(b"1", keyword="mutualser") is None
+
+    def test_parse_fetch_fallido_retorna_none(self):
+        client = ImapClient()
+        mock_conn = MagicMock()
+        mock_conn.fetch.return_value = ("NO", [None])
+        client.conn = mock_conn
+        assert client._parse_message(b"1") is None
+
+
+class TestImapDownloadAttachmentsTmp:
+    """download_attachments a tmp_path, sin red."""
+
+    def test_download_guarda_xlsx_en_tmp(self, tmp_path):
+        raw = _raw_glosa_email(filename="detalle.xlsx", payload=b"XLSX-BYTES")
+        client = _client_with_raw(raw)
+        saved = client.download_attachments("1", dest_dir=str(tmp_path))
+        assert len(saved) == 1
+        assert saved[0].endswith("detalle.xlsx")
+        import os
+        assert os.path.exists(saved[0])
+        with open(saved[0], "rb") as f:
+            assert f.read() == b"XLSX-BYTES"
+
+    def test_download_omite_extension_no_permitida(self, tmp_path):
+        msg = _EmailMessage()
+        msg["Subject"] = "test"
+        msg["From"] = "a@test.com"
+        msg.set_content("cuerpo")
+        msg.add_attachment(b"IMG", maintype="image", subtype="png", filename="logo.png")
+        msg.add_attachment(
+            b"XLSX", maintype="application",
+            subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            filename="glosa.xlsx",
+        )
+        client = _client_with_raw(msg.as_bytes())
+        saved = client.download_attachments("1", dest_dir=str(tmp_path))
+        assert len(saved) == 1
+        assert saved[0].endswith("glosa.xlsx")
+
+    def test_download_sin_conexion_retorna_vacio(self, tmp_path):
+        client = ImapClient()
+        assert client.download_attachments("1", dest_dir=str(tmp_path)) == []
+
+
+class TestImapMockFlowTmp:
+    """Flujo select/search/fetch programados + mock de IMAP4_SSL."""
+
+    def test_search_by_subject_con_mock_programado(self):
+        raw = _raw_glosa_email(subject="Reporte Glosas FC999")
+        client = ImapClient()
+        mock_conn = MagicMock()
+        mock_conn.select.return_value = ("OK", [b"2"])
+        mock_conn.search.return_value = ("OK", [b"1 2"])
+        mock_conn.fetch.return_value = ("OK", [(b"1", raw)])
+        client.conn = mock_conn
+
+        msgs = client.search_by_subject("glosas")
+        assert len(msgs) == 2
+        assert all("Glosas" in m["subject"] for m in msgs)
+        mock_conn.select.assert_called()
+        mock_conn.search.assert_called()
+
+    def test_search_sin_resultados_retorna_vacio(self):
+        client = ImapClient()
+        mock_conn = MagicMock()
+        mock_conn.select.return_value = ("OK", [b"0"])
+        mock_conn.search.return_value = ("OK", [b""])
+        client.conn = mock_conn
+        assert client.search_by_subject("glosas") == []
+
+    @patch('app.core.imap_client.imaplib.IMAP4_SSL')
+    def test_connect_mock_sin_sockets(self, mock_ssl):
+        mock_conn = MagicMock()
+        mock_ssl.return_value = mock_conn
+        client = ImapClient()
+        assert client.connect("user@gmail.com", "pwd") is True
+        mock_ssl.assert_called_once_with("imap.gmail.com", 993)
+        mock_conn.login.assert_called_once_with("user@gmail.com", "pwd")
