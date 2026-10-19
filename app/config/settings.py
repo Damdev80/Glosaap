@@ -17,6 +17,9 @@ APP_VERSION = "0.11.16"
 # Nombre de la aplicación
 APP_NAME = "Glosaap"
 
+# Correo corporativo por defecto (se pre-rellena en el login)
+DEFAULT_EMAIL = "Visado@laconcepcion.org"
+
 # Repositorio de GitHub para actualizaciones (formato: owner/repo)
 GITHUB_REPO = "Damdev80/Glosaap"
 

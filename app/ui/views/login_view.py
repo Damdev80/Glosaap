@@ -5,6 +5,7 @@ import flet as ft
 import threading
 import os
 from app.ui.styles import FONT_SIZES, SPACING, WINDOW_SIZES
+from app.config.settings import DEFAULT_EMAIL
 from app.core.session_manager import save_session, load_session, clear_session
 from app.ui.components.loading_overlay import LoadingOverlay, LoadingButton, ToastNotification
 
@@ -40,6 +41,7 @@ class LoginView:
         # Usar colores del tema de Flet (sin hardcodear)
         self.email_input = ft.TextField(
             label="Correo electrónico",
+            value=DEFAULT_EMAIL,
             width=380,
             height=56,
             autofocus=True,
@@ -242,8 +244,8 @@ class LoginView:
         self.page.update()
     
     def clear_credentials(self):
-        """Limpia las credenciales"""
-        self.email_input.value = ""
+        """Limpia las credenciales (email vuelve al valor por defecto)"""
+        self.email_input.value = DEFAULT_EMAIL
         self.password_input.value = ""
         self.server_input.value = ""
         self.page.update()
@@ -278,7 +280,7 @@ class LoginView:
     def logout(self):
         """Limpia la sesión y reinicia los campos"""
         clear_session()
-        self.email_input.value = ""
+        self.email_input.value = DEFAULT_EMAIL
         self.password_input.value = ""
         self.server_input.value = ""
         self.status_text.value = ""
