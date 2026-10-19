@@ -11,22 +11,24 @@ from app.ui.components.loading_overlay import LoadingOverlay, ToastNotification,
 class MessagesView:
     """Vista para listar y gestionar mensajes de correo"""
     
-    def __init__(self, page: ft.Page, on_back, on_refresh, on_download_selected, on_process):
+    def __init__(self, page: ft.Page, on_back, on_refresh, on_download_selected, on_process, navigation_controller=None):
         """
         Inicializa la vista de mensajes
         
         Args:
             page: Página de Flet
-            on_back: Callback para volver atrás
+            on_back: Callback para volver atrás (messages -> eps)
             on_refresh: Callback para actualizar mensajes
             on_download_selected: Callback para descargar mensajes seleccionados
             on_process: Callback para procesar mensajes con EPS
+            navigation_controller: Canal único de navegación (breadcrumb a dashboard)
         """
         self.page = page
         self.on_back = on_back
         self.on_refresh = on_refresh
         self.on_download_selected = on_download_selected
         self.on_process = on_process
+        self.navigation_controller = navigation_controller
         
         # Estado
         self.selected_messages = set()
@@ -127,12 +129,12 @@ class MessagesView:
             on_click=lambda e: self.on_refresh()
         )
         
-        # Breadcrumb navigation
+        # Breadcrumb navigation (usa NavigationController; sin page.data)
         breadcrumb = ft.Row([
             ft.TextButton(
                 "Dashboard",
                 style=ft.ButtonStyle(color=ft.Colors.BLUE),
-                on_click=lambda e: self.page.data.get('navigation_controller', {}).get('go_to_dashboard', lambda: None)() if hasattr(self.page, 'data') and self.page.data else None
+                on_click=lambda e: self._go_to_dashboard()
             ),
             ft.Text(" > ", color=ft.Colors.GREY),
             ft.TextButton(
@@ -222,6 +224,11 @@ class MessagesView:
             visible=False
         )
     
+    def _go_to_dashboard(self):
+        """Breadcrumb a dashboard vía NavigationController (sin page.data)."""
+        if self.navigation_controller is not None:
+            self.navigation_controller.go_to_dashboard()
+
     def _on_select_all_changed(self, e):
         """Maneja el cambio del checkbox de seleccionar todos"""
         is_checked = e.control.value

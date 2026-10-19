@@ -13,18 +13,20 @@ from app.config.eps_config import get_eps_list
 class EpsScreen:
     """Pantalla para seleccionar EPS y rango de fechas"""
     
-    def __init__(self, page: ft.Page, on_eps_selected=None, on_logout=None, on_back=None):
+    def __init__(self, page: ft.Page, on_eps_selected=None, on_logout=None, on_back=None, navigation_controller=None):
         """
         Args:
             page: Página de Flet
             on_eps_selected: Callback(eps_info, date_from, date_to) al seleccionar EPS
             on_logout: Callback al cerrar sesión
             on_back: Callback para navegar atrás
+            navigation_controller: NavigationController (canal único de navegación)
         """
         self.page = page
         self.on_eps_selected = on_eps_selected
         self.on_logout = on_logout
         self.on_back = on_back
+        self.navigation_controller = navigation_controller
         
         # Cargar lista de EPS desde configuración
         self.eps_list = get_eps_list()
@@ -115,14 +117,20 @@ class EpsScreen:
         self.page.update()
     
     def _close_overlay_dialog(self, dialog):
-        """Cierra un diálogo del overlay"""
-        dialog.open = False
+        """Cierra solo su diálogo (no usa overlay.clear() destructivo)."""
         try:
-            # Limpiar todos los diálogos del overlay para evitar problemas
-            self.page.overlay.clear()
-        except:
-            pass
-        self.page.update()
+            self.page.close(dialog)
+        except Exception:
+            try:
+                dialog.open = False
+                self.page.update()
+            except Exception:
+                pass
+        else:
+            try:
+                self.page.update()
+            except Exception:
+                pass
     
     def _handle_back(self, e):
         """Maneja el regreso al menú anterior"""
@@ -263,10 +271,12 @@ class EpsScreen:
             expand=True,
             visible=False
         )
+        # Alias exigido por el skill (toda vista expone .container)
+        self.container = self.view
     
     def build(self):
-        """Retorna la vista construida"""
-        return self.view
+        """Retorna la vista construida (alias legacy de .container)."""
+        return self.container
     
     def show(self):
         """Muestra la pantalla"""

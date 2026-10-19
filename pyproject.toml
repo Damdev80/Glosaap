@@ -1,8 +1,8 @@
 [project]
 name = "glosaap"
-version = "1.0.0"
+version = "0.11.16"
 description = "Sistema de Gestión de Glosas Médicas"
-requires-python = ">=3.10"
+requires-python = "==3.11.*"
 authors = [
     {name = "La Concepción", email = "sistemas@laconcepcion.org"}
 ]

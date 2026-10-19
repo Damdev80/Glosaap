@@ -84,7 +84,7 @@ class ToolsView:
                                 ft.Icons.SYNC_ALT,
                                 "Gestión Homologación",
                                 "Agregar/editar códigos de homologación",
-                                "#4CAF50",
+                                ft.Colors.GREEN,
                                 lambda e: self._handle_homologacion(),
                                 image_src=os.path.join(self.assets_dir, "img", "homologar.png")
                             ),
@@ -92,7 +92,7 @@ class ToolsView:
                                 ft.Icons.COMPARE_ARROWS,
                                 "Mix Excel",
                                 "Transferir datos entre archivos Excel",
-                                "#2196F3",
+                                ft.Colors.BLUE,
                                 lambda e: self._handle_mix_excel(),
                                 image_src=os.path.join(self.assets_dir, "img", "mix_excel.png")
                             ),
@@ -103,7 +103,7 @@ class ToolsView:
                                 ft.Icons.TRANSFORM,
                                 "Homologador Manual",
                                 "Homologar archivos Excel por EPS",
-                                "#FF9800",
+                                ft.Colors.ORANGE,
                                 lambda e: self._handle_homologador_manual(),
                                 image_src=os.path.join(self.assets_dir, "img", "homologador_manual.png")
                             ),

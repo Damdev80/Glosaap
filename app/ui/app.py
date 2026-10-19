@@ -1,11 +1,15 @@
 """
 Aplicación Glosaap - Cliente IMAP con Flet (REFACTORIZADO)
-Con soporte completo de temas claro/oscuro
+Con soporte completo de temas claro/oscuro.
+
+Bootstrap + inyección: crea servicios, estado (AppState) y vistas, y
+delega TODA la navegación al NavigationController (canal único).
 """
 import flet as ft
 import os
 import sys
 import threading
+from datetime import datetime as _dt
 from typing import Optional, List
 
 # Configurar path para imports - agregar el directorio raíz del proyecto
@@ -29,256 +33,206 @@ from app.ui.components.alert_dialog import AlertDialog
 from app.ui.components.update_dialog import UpdateChecker
 from app.ui.navigation import NavigationController
 from app.ui.app_state import AppState
-from app.config.settings import APP_VERSION, GITHUB_REPO, AUTO_UPDATE_CONFIG, logger, get_homologador_path, get_output_dir
+from app.ui.business_logic import MessageFilter
+from app.config.settings import APP_VERSION, GITHUB_REPO, AUTO_UPDATE_CONFIG, logger, get_homologador_path, get_output_dir, ensure_dir
 
 # Ruta de assets (carpeta con imágenes)
 ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "assets"))
 
 
+def _parse_email_date(msg_date):
+    """Parsea la fecha de un correo a datetime (múltiples formatos) o None."""
+    if msg_date is None:
+        return None
+    try:
+        if isinstance(msg_date, str):
+            for fmt in (
+                '%a, %d %b %Y %H:%M:%S %z',
+                '%a, %d %b %Y %H:%M:%S',
+                '%d %b %Y %H:%M:%S %z',
+                '%d %b %Y %H:%M:%S',
+                '%Y-%m-%d %H:%M:%S',
+                '%d/%m/%Y %H:%M:%S',
+            ):
+                try:
+                    return _dt.strptime(msg_date.strip(), fmt)
+                except ValueError:
+                    continue
+            return None
+        if hasattr(msg_date, 'strftime'):
+            return msg_date
+    except Exception:
+        return None
+    return None
+
+
+def _latest_email_date_str(messages):
+    """Retorna la fecha del correo más reciente como 'YYYY-MM-DD HH:MM:SS'."""
+    dates = []
+    for msg in messages or []:
+        parsed = _parse_email_date((msg or {}).get('date'))
+        if parsed is not None:
+            dates.append(parsed)
+    if not dates:
+        return None
+    return max(dates).strftime('%Y-%m-%d %H:%M:%S')
+
+
+def _open_folder_in_explorer(folder_path):
+    """Abre una carpeta en el explorador (único punto; las vistas no llaman subprocess).
+
+    Delega al servicio de SO en la capa bootstrap, no desde vistas.
+    """
+    if not folder_path:
+        return
+    try:
+        if sys.platform.startswith("win"):
+            try:
+                os.startfile(folder_path)  # type: ignore[attr-defined]
+                return
+            except Exception:
+                pass
+        import subprocess as _sp
+        _sp.Popen(f'explorer "{folder_path}"')
+    except Exception as ex:
+        logger.warning("No se pudo abrir carpeta %s: %s", folder_path, ex)
+
+
 def main(page: ft.Page):
-    """Función principal de la aplicación"""
-    
+    """Función principal de la aplicación (bootstrap + inyección)"""
+
     # ==================== CONFIGURACIÓN INICIAL ====================
     page.title = "Glosaap"
     page.window.width = WINDOW_SIZES["login"]["width"]
     page.window.height = WINDOW_SIZES["login"]["height"]
     # Nota: Flet no soporta window_min_width/height directamente
-    # El tamaño mínimo se controla validando en los métodos go_to_*
-    
+    # El tamaño mínimo lo gestiona NavigationController por vista.
+
+    # Estado global único (fuente de verdad para NavigationController)
+    ui_state = AppState()
+
     # Atajos de teclado (solo F5 para actualizar)
     def handle_keyboard(e):
         """Maneja los atajos de teclado"""
         if e.key == "F5":
             # F5 para actualizar en vista de mensajes
-            if current_view["name"] == "messages":
+            if ui_state.current_view == "messages":
                 load_messages(messages_view.search_info_text.value or "")
-    
+
     page.on_keyboard_event = handle_keyboard
-    
+
     # Inicializar el sistema de temas
     ThemeManager.init(page)
     update_colors()  # Actualizar diccionario COLORS global
-    
+
     page.padding = 0
     # Icono de la ventana (ruta absoluta)
     icon_path = os.path.join(ASSETS_DIR, "icons", "app_logo.png")
     if os.path.exists(icon_path):
         page.window.icon = icon_path
-    
-    # Estado de navegación actual
-    current_view = {"name": "login"}
-    
+
     # ==================== SERVICIOS ====================
     email_service = EmailService()
-    
-    # Estado global
-    app_state = {
-        "selected_eps": None,
-        "date_from": None,
-        "date_to": None,
-        "dashboard_action": None,
-        "found_messages": []
-    }
-    
-    # ==================== FUNCIONES DE NAVEGACIÓN ====================
-    
-    def go_to_login(logout=False):
-        """Navega a la pantalla de login"""
-        if logout:
-            login_view.logout()
-        current_view["name"] = "login"
-        login_view.show()
-        dashboard_view.hide()
-        method_selection_view.hide()
-        tools_view.hide()
-        eps_screen.hide()
-        messages_view.hide()
-        homologacion_view.hide()
-        mix_excel_view.hide()
-        homologador_manual_view.hide()
-        web_download_view.hide()
-        page.update()
-    
-    def go_to_method_selection():
-        """Navega a la selección de método (correo vs web)"""
-        current_view["name"] = "method_selection"
-        login_view.hide()
-        dashboard_view.hide()
-        method_selection_view.show()
-        tools_view.hide()
-        eps_screen.hide()
-        messages_view.hide()
-        homologacion_view.hide()
-        mix_excel_view.hide()
-        homologador_manual_view.hide()
-        web_download_view.hide()
-        page.update()
-    
-    def go_to_dashboard():
-        """Navega al dashboard principal"""
-        current_view["name"] = "dashboard"
-        login_view.hide()
-        dashboard_view.show()
-        method_selection_view.hide()
-        tools_view.hide()
-        eps_screen.hide()
-        messages_view.hide()
-        homologacion_view.hide()
-        mix_excel_view.hide()
-        homologador_manual_view.hide()
-        web_download_view.hide()
-        page.update()
-    
-    def go_to_tools():
-        """Navega a la pantalla de herramientas"""
-        current_view["name"] = "tools"
-        login_view.hide()
-        dashboard_view.hide()
-        method_selection_view.hide()
-        tools_view.show()
-        eps_screen.hide()
-        messages_view.hide()
-        homologacion_view.hide()
-        mix_excel_view.hide()
-        homologador_manual_view.hide()
-        web_download_view.hide()
-        # Ocultar cualquier loading activo
-        dashboard_view.hide_loading()
-        tools_view.hide_loading()
-        page.update()
-    
-    def go_to_homologacion():
-        """Navega a la gestión de homologación"""
-        current_view["name"] = "homologacion"
-        login_view.hide()
-        dashboard_view.hide()
-        method_selection_view.hide()
-        tools_view.hide()
-        eps_screen.hide()
-        messages_view.hide()
-        homologacion_view.show()
-        mix_excel_view.hide()
-        homologador_manual_view.hide()
-        web_download_view.hide()
-        # Ocultar cualquier loading activo
-        tools_view.hide_loading()
-        page.update()
-    
-    def go_to_mix_excel():
-        """Navega a Mix Excel"""
-        current_view["name"] = "mix_excel"
-        login_view.hide()
-        dashboard_view.hide()
-        method_selection_view.hide()
-        tools_view.hide()
-        eps_screen.hide()
-        messages_view.hide()
-        homologacion_view.hide()
-        homologador_manual_view.hide()
-        mix_excel_view.show()
-        web_download_view.hide()
-        # Ocultar cualquier loading activo
-        tools_view.hide_loading()
-        page.update()
-    
-    def go_to_homologador_manual():
-        """Navega al Homologador Manual"""
-        current_view["name"] = "homologador_manual"
-        login_view.hide()
-        dashboard_view.hide()
-        method_selection_view.hide()
-        tools_view.hide()
-        eps_screen.hide()
-        messages_view.hide()
-        homologacion_view.hide()
-        mix_excel_view.hide()
-        homologador_manual_view.show()
-        web_download_view.hide()
-        # Ocultar cualquier loading activo
-        tools_view.hide_loading()
-        page.update()
-    
-    def go_to_web_download():
-        """Navega a la pantalla de descarga web"""
-        current_view["name"] = "web_download"
-        login_view.hide()
-        dashboard_view.hide()
-        method_selection_view.hide()
-        tools_view.hide()
-        eps_screen.hide()
-        messages_view.hide()
-        homologacion_view.hide()
-        mix_excel_view.hide()
-        homologador_manual_view.hide()
-        web_download_view.show()
-        page.update()
-    
-    def go_to_eps_selection():
-        """Navega a la pantalla de selección de EPS"""
-        current_view["name"] = "eps"
-        login_view.hide()
-        dashboard_view.hide()
-        method_selection_view.hide()
-        tools_view.hide()
-        eps_screen.show()
-        messages_view.hide()
-        homologacion_view.hide()
-        mix_excel_view.hide()
-        homologador_manual_view.hide()
-        web_download_view.hide()
-        # Ocultar cualquier loading activo
-        dashboard_view.hide_loading()
-        tools_view.hide_loading()
-        page.update()
-    
-    def go_to_messages():
-        """Navega a la pantalla de mensajes"""
-        current_view["name"] = "messages"
-        login_view.hide()
-        dashboard_view.hide()
-        method_selection_view.hide()
-        tools_view.hide()
-        eps_screen.hide()
-        messages_view.show()
-        homologacion_view.hide()
-        mix_excel_view.hide()
-        homologador_manual_view.hide()
-        web_download_view.hide()
-        page.update()
-    
-    def go_back():
-        """Navega hacia atrás según la vista actual"""
-        if current_view["name"] == "messages":
-            go_to_eps_selection()
-        elif current_view["name"] == "eps":
-            go_to_dashboard()
-        elif current_view["name"] == "tools":
-            go_to_dashboard()
-        elif current_view["name"] == "mix_excel":
-            go_to_tools()
-        elif current_view["name"] == "homologador_manual":
-            go_to_tools()
-        elif current_view["name"] == "web_download":
-            go_to_dashboard()
-        elif current_view["name"] == "dashboard":
-            go_to_login()
 
-            
-    
+    # ==================== NAVEGACIÓN (canal único) ====================
+    # El controlador se crea tras las vistas; los wrappers resuelven tarde
+    # (late binding) para que los callbacks de las vistas siempre pasen por él.
+    nav_holder = {"controller": None}
+
+    def _nav():
+        return nav_holder["controller"]
+
+    def go_to_login(logout=False):
+        """Navega a login vía NavigationController."""
+        ctl = _nav()
+        if ctl is None:
+            return
+        ctl.go_to_login(logout=logout)
+
+    def go_to_method_selection():
+        """Navega a selección de método vía NavigationController."""
+        ctl = _nav()
+        if ctl is None:
+            return
+        ctl.go_to_method_selection()
+
+    def go_to_dashboard():
+        """Navega al dashboard vía NavigationController."""
+        ctl = _nav()
+        if ctl is None:
+            return
+        ctl.go_to_dashboard()
+
+    def go_to_tools():
+        """Navega a herramientas vía NavigationController."""
+        ctl = _nav()
+        if ctl is None:
+            return
+        ctl.go_to_tools()
+
+    def go_to_homologacion():
+        """Navega a homologación vía NavigationController (back -> tools)."""
+        ctl = _nav()
+        if ctl is None:
+            return
+        ctl.go_to_homologacion()
+
+    def go_to_mix_excel():
+        """Navega a Mix Excel vía NavigationController (back -> tools)."""
+        ctl = _nav()
+        if ctl is None:
+            return
+        ctl.go_to_mix_excel()
+
+    def go_to_homologador_manual():
+        """Navega a homologador manual vía NavigationController (back -> tools)."""
+        ctl = _nav()
+        if ctl is None:
+            return
+        ctl.go_to_homologador_manual()
+
+    def go_to_web_download():
+        """Navega a descarga web vía NavigationController."""
+        ctl = _nav()
+        if ctl is None:
+            return
+        ctl.go_to_web_download()
+
+    def go_to_eps_selection():
+        """Navega a selección de EPS vía NavigationController."""
+        ctl = _nav()
+        if ctl is None:
+            return
+        ctl.go_to_eps_selection()
+
+    def go_to_messages():
+        """Navega a mensajes vía NavigationController."""
+        ctl = _nav()
+        if ctl is None:
+            return
+        ctl.go_to_messages()
+
+    def go_back():
+        """Retrocede según mapa único (messages->eps->dashboard, etc.)."""
+        ctl = _nav()
+        if ctl is None:
+            return
+        ctl.go_back()
+
     # ==================== FUNCIONES DE NEGOCIO ====================
-    
+
     def handle_login_success():
         """Callback cuando el login es exitoso - ir a selección de método"""
         go_to_method_selection()
-    
+
     def on_email_method():
         """Callback cuando se selecciona método de correo"""
         go_to_dashboard()
-    
+
     def on_web_method():
         """Callback cuando se selecciona método web"""
         go_to_web_download()
-    
+
     def on_dashboard_action(action_key):
         """Callback cuando se selecciona una acción del dashboard"""
         # Verificar si la funcionalidad está implementada
@@ -286,13 +240,13 @@ def main(page: ft.Page):
             "evitar": "Evitar Glosa",
             "responder": "Responder Glosa"
         }
-        
+
         if action_key in funciones_en_desarrollo:
             nombre_funcion = funciones_en_desarrollo[action_key]
-            
+
             def _cerrar_dialogo(e):
                 page.close(dialog)
-            
+
             # Mostrar alerta usando overlay (Flet moderno)
             dialog = ft.AlertDialog(
                 modal=True,
@@ -300,52 +254,40 @@ def main(page: ft.Page):
                 content=ft.Text(f"'{nombre_funcion}' estará disponible próximamente."),
                 actions=[ft.TextButton("OK", on_click=_cerrar_dialogo)]
             )
-            
+
             page.open(dialog)
             return
-        
+
         # Funcionalidad implementada - continuar normalmente
-        app_state["dashboard_action"] = action_key
+        ui_state.dashboard_action = action_key
         go_to_eps_selection()
-    
+
     def on_eps_selected(eps_info, date_from, date_to):
         """Callback cuando se selecciona una EPS"""
-        app_state["selected_eps"] = eps_info
-        app_state["date_from"] = date_from
-        app_state["date_to"] = date_to
-        
+        ui_state.set_eps(eps_info, date_from, date_to)
+
         # DEBUG: Mostrar qué EPS se seleccionó
         print(f"[EPS] ========================================")
         print(f"[EPS] EPS seleccionada: {eps_info.get('name')}")
         print(f"[EPS] Filter: {eps_info.get('filter')}")
         print(f"[EPS] Subject pattern: {eps_info.get('subject_pattern')}")
         print(f"[EPS] ========================================")
-        
+
         # LIMPIAR sesión anterior antes de nueva búsqueda
         # (no borra archivos físicos, solo la lista de archivos de esta búsqueda)
         print("[CLEANUP] Limpiando archivos de búsquedas anteriores...")
         email_service.clear_session()
-        
-        # Preparar info de búsqueda
-        eps_name = eps_info["name"]
-        date_info = ""
-        if date_from and date_to:
-            date_info = f" | {date_from.strftime('%d/%m/%Y')} - {date_to.strftime('%d/%m/%Y')}"
-        elif date_from:
-            date_info = f" | Desde {date_from.strftime('%d/%m/%Y')}"
-        elif date_to:
-            date_info = f" | Hasta {date_to.strftime('%d/%m/%Y')}"
-        
-        search_info = f"EPS: {eps_name}{date_info}"
-        
-        # Configurar botón de procesamiento según la EPS
-        eps_filter = eps_info.get("filter", "").lower()
+
+        search_info = ui_state.get_search_info()
+
+        # Configurar botón de procesamiento según la EPS (ft.Colors.*, sin hex)
+        eps_filter = ui_state.get_eps_filter()
         if eps_filter == "mutualser":
             messages_view.show_process_button(True)
             messages_view.process_eps_btn.text = " Procesar MUTUALSER"
             messages_view.process_eps_btn.style = ft.ButtonStyle(
                 color=ft.Colors.WHITE,
-                bgcolor="#4488ee",  # Azul vibrante
+                bgcolor=ft.Colors.BLUE,
             )
             messages_view.process_eps_btn.data = "mutualser"
         elif eps_filter == "coosalud":
@@ -353,51 +295,20 @@ def main(page: ft.Page):
             messages_view.process_eps_btn.text = " Procesar COOSALUD"
             messages_view.process_eps_btn.style = ft.ButtonStyle(
                 color=ft.Colors.WHITE,
-                bgcolor="#4488ee",  # Verde vibrante
+                bgcolor=ft.Colors.BLUE,
             )
             messages_view.process_eps_btn.data = "coosalud"
         else:
             messages_view.show_process_button(False)
-        
+
         # Navegar y cargar mensajes
         go_to_messages()
         load_messages(search_info)
-    
+
     def filter_messages_by_eps(messages):
-        """Filtra mensajes según la EPS seleccionada"""
-        eps = app_state.get("selected_eps")
-        if not eps:
-            return messages
-        
-        filtered = []
-        filter_type = eps.get("filter_type", "keyword")
-        filter_value = (eps.get("filter") or "").lower()
-        subject_pattern = (eps.get("subject_pattern") or "").lower()
-        sender_filter = (eps.get("sender_filter") or "").lower()
-        
-        for msg in messages:
-            subject = (msg.get("subject") or "").lower()
-            from_addr = (msg.get("from") or "").lower()
-            
-            if filter_type == "keyword":
-                if filter_value and (filter_value in subject or filter_value in from_addr):
-                    filtered.append(msg)
-            elif filter_type == "subject_exact_pattern":
-                has_subject = subject_pattern and subject_pattern in subject
-                
-                if has_subject:
-                    if sender_filter:
-                        if sender_filter in from_addr:
-                            filtered.append(msg)
-                    else:
-                        if "sanitas" not in subject and "sanitas" not in from_addr:
-                            filtered.append(msg)
-            elif filter_type == "email":
-                if filter_value and filter_value in from_addr:
-                    filtered.append(msg)
-        
-        return filtered
-    
+        """Filtra mensajes según la EPS (delega a business_logic.MessageFilter)."""
+        return MessageFilter.filter_by_eps(messages, ui_state.selected_eps)
+
     def load_messages(search_info=""):
         """Carga mensajes del servidor y descarga adjuntos automáticamente"""
         def worker():
@@ -409,53 +320,34 @@ def main(page: ft.Page):
                     logger.info("[CLEANUP] Archivos antiguos limpiados. Listos para nueva descarga con metadatos.")
                 except Exception as e:
                     logger.warning("[CLEANUP] Error limpiando: %s", e)
-                
+
                 messages_view.set_loading(True, "🔍 Buscando correos...")
-                
+
                 all_msgs = []
-                downloaded_count = 0
-                
+
                 def on_found(msg):
-                    nonlocal downloaded_count
                     all_msgs.append(msg)
-                    # Filtrar en tiempo real
+                    # Filtrar en tiempo real (lógica centralizada en MessageFilter)
                     filtered = filter_messages_by_eps(all_msgs)
                     # Mostrar mensajes en tiempo real
                     messages_view.show_messages(filtered, search_info)
                     messages_view.set_loading(True, f"🔍 Encontrados {len(all_msgs)} correo(s), mostrando {len(filtered)} filtrados...")
-                    
+
                     # Descargar adjuntos automáticamente para mensajes de la EPS seleccionada
                     if msg in filtered:
                         msg_id = msg.get("id")
                         if msg_id:
                             messages_view.update_message_status(msg_id, "📥 Descargando...")
                             try:
-                                # Extraer fecha del correo
-                                msg_date = msg.get('date')
                                 email_date_str = None
-                                
-                                if msg_date:
-                                    from datetime import datetime as dt
-                                    try:
-                                        if isinstance(msg_date, str):
-                                            # Probar formatos comunes
-                                            for fmt in ['%a, %d %b %Y %H:%M:%S %z', '%a, %d %b %Y %H:%M:%S', '%Y-%m-%d %H:%M:%S']:
-                                                try:
-                                                    parsed = dt.strptime(msg_date.strip(), fmt)
-                                                    email_date_str = parsed.strftime('%Y-%m-%d %H:%M:%S')
-                                                    break
-                                                except ValueError:
-                                                    continue
-                                        elif hasattr(msg_date, 'strftime'):
-                                            email_date_str = msg_date.strftime('%Y-%m-%d %H:%M:%S')
-                                    except Exception as e:
-                                        print(f"[WARN] Error parseando fecha para correo {msg_id}: {e}")
-                                
+                                parsed = _parse_email_date(msg.get('date'))
+                                if parsed is not None:
+                                    email_date_str = parsed.strftime('%Y-%m-%d %H:%M:%S')
+
                                 # Descargar con la fecha del correo
                                 files = email_service.download_message_attachments(msg_id, email_date=email_date_str)
-                                
+
                                 if files:
-                                    downloaded_count += 1
                                     messages_view.update_message_status(msg_id, f"✅ {len(files)} archivo(s)")
                                 else:
                                     messages_view.update_message_status(msg_id, "⚠️ Sin adjuntos")
@@ -469,67 +361,41 @@ def main(page: ft.Page):
                                 else:
                                     messages_view.update_message_status(msg_id, "❌ Error", is_error=True)
                                 print(f"[ERROR] Error procesando correo {msg_id}: {error_msg}")
-                
-                # Determinar palabra clave de búsqueda según EPS
-                eps_info = app_state.get("selected_eps")
-                search_keyword = "glosa"  # Default
-                
-                if eps_info:
-                    # Si tiene subject_pattern, usarlo para búsqueda más específica
-                    subject_pattern = eps_info.get("subject_pattern", "")
-                    if subject_pattern:
-                        # Buscar palabras significativas (no preposiciones)
-                        # Palabras a ignorar
-                        ignore_words = ['de', 'del', 'la', 'el', 'y', 'en', 'a', 'con']
-                        words = subject_pattern.split()
-                        
-                        # Buscar primera palabra significativa
-                        for word in words:
-                            if word.lower() not in ignore_words and len(word) > 2:
-                                search_keyword = word
-                                break
-                        
-                        print(f"[SEARCH] Subject pattern: '{subject_pattern}'")
-                        print(f"[SEARCH] Palabra clave seleccionada: '{search_keyword}'")
-                
+
+                # Palabra clave de búsqueda según EPS (centralizada en MessageFilter)
+                search_keyword = MessageFilter.get_search_keyword(ui_state.selected_eps)
+                print(f"[SEARCH] Palabra clave seleccionada: '{search_keyword}'")
+
                 # Buscar con filtro de fechas (timeout aumentado para búsquedas grandes)
                 email_service.search_messages(
                     search_keyword,
                     limit=None,  # Sin límite - busca todos
                     timeout=120,  # 2 minutos de timeout
                     on_found=on_found,
-                    date_from=app_state.get("date_from"),
-                    date_to=app_state.get("date_to")
+                    date_from=ui_state.date_from,
+                    date_to=ui_state.date_to
                 )
-                
+
                 # Filtrar por EPS (filtrado final)
                 msgs = filter_messages_by_eps(all_msgs)
-                app_state["found_messages"] = msgs
-                
+                ui_state.found_messages = msgs
+
                 # Mostrar mensajes finales
                 messages_view.show_messages(msgs, search_info)
-                # Actualizar estados de los mensajes que ya fueron descargados
-                for msg in msgs:
-                    msg_id = msg.get("id")
-                    if msg_id and msg_id in messages_view.message_rows:
-                        # Re-verificar archivos descargados
-                        pass  # El estado ya fue actualizado durante la descarga
-                
+
                 # Ocultar controles de descarga manual - no son necesarios
                 messages_view.show_download_controls(False)
-                
+
                 excel_count = len(email_service.get_excel_files())
                 if msgs:
                     messages_view.set_loading(False, f"✅ {len(msgs)} correo(s) | 📁 {excel_count} Excel listos para procesar")
-                    
+
                     # Mostrar diálogo de búsqueda completada
-                    eps_name = app_state.get("selected_eps", {}).get("name", "")
-                    date_from = app_state.get("date_from")
-                    date_to = app_state.get("date_to")
+                    eps_name = (ui_state.selected_eps or {}).get("name", "")
                     date_range = ""
-                    if date_from and date_to:
-                        date_range = f"{date_from.strftime('%d/%m/%Y')} - {date_to.strftime('%d/%m/%Y')}"
-                    
+                    if ui_state.date_from and ui_state.date_to:
+                        date_range = f"{ui_state.date_from.strftime('%d/%m/%Y')} - {ui_state.date_to.strftime('%d/%m/%Y')}"
+
                     AlertDialog.show_search_complete(
                         page=page,
                         total_found=len(all_msgs),
@@ -544,9 +410,9 @@ def main(page: ft.Page):
                     AlertDialog.show_info(
                         page=page,
                         title="Sin resultados",
-                        message=f"No se encontraron correos de {app_state.get('selected_eps', {}).get('name', 'la EPS seleccionada')} en el rango de fechas especificado."
+                        message=f"No se encontraron correos de {(ui_state.selected_eps or {}).get('name', 'la EPS seleccionada')} en el rango de fechas especificado."
                     )
-                
+
             except Exception as ex:
                 messages_view.set_loading(False, f"❌ Error: {str(ex)}")
                 AlertDialog.show_error(
@@ -554,9 +420,9 @@ def main(page: ft.Page):
                     title="Error en la búsqueda",
                     message=f"Ocurrió un error al buscar correos:\n\n{str(ex)}"
                 )
-        
+
         threading.Thread(target=worker, daemon=True).start()
-    
+
     def download_selected_messages():
         """Descarga adjuntos de los mensajes seleccionados"""
         def worker():
@@ -564,22 +430,22 @@ def main(page: ft.Page):
                 selected_ids = messages_view.get_selected_messages()
                 if not selected_ids:
                     return
-                
+
                 messages_view.download_selected_btn.disabled = True
-                messages_view.messages_status.value = f"📥 Descargando adjuntos de {len(selected_ids)} correo(s)..."
-                page.update()
-                
+                # El refresh lo hace set_loading/update_message_status (sin page.update directo)
+                messages_view.set_loading(True, f"📥 Descargando adjuntos de {len(selected_ids)} correo(s)...")
+
                 downloaded = 0
                 total_files = 0
-                
-                for msg in app_state["found_messages"]:
+
+                for msg in ui_state.found_messages:
                     if msg.get("id") in selected_ids:
                         messages_view.update_message_status(msg["id"], "Descargando...")
-                        
+
                         try:
                             files = email_service.download_message_attachments(msg["id"])
                             downloaded += 1
-                            
+
                             if files:
                                 total_files += len(files)
                                 messages_view.update_message_status(
@@ -590,44 +456,42 @@ def main(page: ft.Page):
                                 messages_view.update_message_status(msg["id"], "Sin adjuntos")
                         except Exception:
                             messages_view.update_message_status(msg["id"], "❌ Error", is_error=True)
-                
-                messages_view.messages_status.value = f"✅ Descargados {total_files} archivo(s) de {downloaded} correo(s)"
+
                 messages_view.download_selected_btn.disabled = False
-                page.update()
-                
+                messages_view.set_loading(False, f"✅ Descargados {total_files} archivo(s) de {downloaded} correo(s)")
+
             except Exception as ex:
-                messages_view.messages_status.value = f"❌ Error: {str(ex)}"
                 messages_view.download_selected_btn.disabled = False
-                page.update()
-        
+                messages_view.set_loading(False, f"❌ Error: {str(ex)}")
+
         threading.Thread(target=worker, daemon=True).start()
-    
+
     def process_eps_files():
-        """Procesa archivos de una EPS"""
-        # Deshabilitar botón INMEDIATAMENTE al entrar
+        """Procesa archivos de una EPS (hilo principal deshabilita botón; worker no usa page.update directo)"""
+        # Deshabilitar botón INMEDIATAMENTE al entrar (hilo principal: page.update OK)
         messages_view.process_eps_btn.disabled = True
         page.update()
-        
+
         def worker():
             try:
                 eps_type = messages_view.process_eps_btn.data
                 if not eps_type:
                     messages_view.process_eps_btn.disabled = False
-                    page.update()
+                    # Refresca vía canal de la vista (su show_process_button hace page.update)
+                    messages_view.show_process_button(True)
                     return
-                
+
                 messages_view.set_processing(True, f"🔄 Procesando {eps_type.upper()}...")
-                
+
                 if eps_type == "mutualser":
                     # Usar session_only=True para procesar solo archivos de esta búsqueda
                     excel_files = email_service.get_excel_files(session_only=True)
-                    
+
                     # Verificación simple - solo verificar si hay archivos
                     if not excel_files:
-                        messages_view.set_processing(False, "❌ No hay archivos Excel para procesar")
                         messages_view.process_eps_btn.disabled = False
-                        page.update()
-                        
+                        messages_view.set_processing(False, "❌ No hay archivos Excel para procesar")
+
                         # Mostrar diálogo informativo
                         AlertDialog.show_warning(
                             page=page,
@@ -635,13 +499,13 @@ def main(page: ft.Page):
                             message="No se descargaron archivos Excel en esta búsqueda.\n\nPrimero descarga los adjuntos de los correos."
                         )
                         return
-                    
+
                     # Procesar TODOS los archivos Excel encontrados sin confirmación
                     print(f"✅ Procesando TODOS los {len(excel_files)} archivos Excel automáticamente")
                     messages_view.set_processing(True, f"📊 Procesando {len(excel_files)} archivo(s) Excel...")
-                    
+
                     resultado = email_service.procesar_mutualser()
-                    
+
                     if resultado['success']:
                         resumen = resultado['resumen']
                         msg = f"✅ ¡Archivos generados!\n"
@@ -651,17 +515,17 @@ def main(page: ft.Page):
                         msg += f"📊 {resumen['total_registros']} registros | {resumen['codigos_homologados']} homologados"
                         messages_view.set_processing(False, msg)
                         messages_view.processing_status.color = ft.Colors.GREEN
-                        
+
                         # Mostrar diálogo de procesamiento completado
                         output_files = [resultado['output_file']]
                         if resultado.get('objeciones_file'):
                             output_files.append(resultado['objeciones_file'])
-                        
+
+                        _mutualser_output = str(resultado['output_file'])
+
                         def open_output_folder():
-                            import subprocess
-                            output_dir = os.path.dirname(resultado['output_file'])
-                            subprocess.Popen(f'explorer "{output_dir}"')
-                        
+                            _open_folder_in_explorer(os.path.dirname(_mutualser_output))
+
                         AlertDialog.show_processing_complete(
                             page=page,
                             eps_name="MUTUALSER",
@@ -672,27 +536,26 @@ def main(page: ft.Page):
                     else:
                         messages_view.set_processing(False, f"❌ Error: {resultado['message']}")
                         messages_view.processing_status.color = ft.Colors.RED
-                        
+
                         AlertDialog.show_error(
                             page=page,
                             title="Error al procesar",
                             message=f"No se pudo procesar los archivos:\n\n{resultado['message']}"
                         )
-                    
+
                     messages_view.process_eps_btn.disabled = False
-                    page.update()
-                
+                    # Refresca vía canal de la vista (set_processing/show hacen page.update)
+                    messages_view.show_process_button(True)
+
                 elif eps_type == "coosalud":
                     from app.service.processors import CoosaludProcessor
-                    from datetime import datetime as dt
-                    
+
                     # Obtener archivos Excel de ESTA SESIÓN (excluyendo devoluciones)
                     excel_files = email_service.get_excel_files(exclude_devoluciones=True, session_only=True)
                     if not excel_files:
-                        messages_view.set_processing(False, "❌ No hay archivos Excel para procesar")
                         messages_view.process_eps_btn.disabled = False
-                        page.update()
-                        
+                        messages_view.set_processing(False, "❌ No hay archivos Excel para procesar")
+
                         AlertDialog.show_warning(
                             page=page,
                             title="Sin archivos para procesar",
@@ -706,95 +569,45 @@ def main(page: ft.Page):
                     # Configurar procesador con homologador de Coosalud
                     homologador_path = get_homologador_path("coosalud")
                     output_dir = get_output_dir("Coosalud")
-                    
-                    # Verificar que el directorio de salida existe
+
+                    # Delegar creación del directorio al servicio de configuración
                     if not os.path.exists(output_dir):
-                        try:
-                            os.makedirs(output_dir, exist_ok=True)
+                        if ensure_dir(output_dir):
                             print(f"[COOSALUD] Directorio de salida creado: {output_dir}")
-                        except Exception as e:
-                            print(f"[COOSALUD] Error al crear directorio: {e}")
-                    
-                    # Obtener fecha del correo más reciente de los mensajes encontrados
-                    email_date = None
-                    if app_state.get("found_messages"):
-                        print(f"[COOSALUD] 📧 Extrayendo fecha de {len(app_state['found_messages'])} mensajes...")
-                        dates = []
-                        for i, msg in enumerate(app_state["found_messages"]):
-                            msg_date = msg.get('date')
-                            if msg_date:
-                                # Debug: mostrar primeras 3 fechas
-                                if i < 3:
-                                    print(f"[COOSALUD]   Mensaje {i+1} fecha: {msg_date}")
-                                
-                                try:
-                                    if isinstance(msg_date, str):
-                                        parsed_date = None
-                                        # Probar diferentes formatos de fecha
-                                        date_formats = [
-                                            '%a, %d %b %Y %H:%M:%S %z',  # Thu, 30 Jan 2026 10:30:00 +0000
-                                            '%a, %d %b %Y %H:%M:%S',     # Thu, 30 Jan 2026 10:30:00
-                                            '%d %b %Y %H:%M:%S %z',      # 30 Jan 2026 10:30:00 +0000
-                                            '%d %b %Y %H:%M:%S',         # 30 Jan 2026 10:30:00
-                                            '%Y-%m-%d %H:%M:%S',         # 2026-01-30 10:30:00
-                                            '%d/%m/%Y %H:%M:%S',         # 30/01/2026 10:30:00
-                                        ]
-                                        
-                                        for fmt in date_formats:
-                                            try:
-                                                parsed_date = dt.strptime(msg_date.strip(), fmt)
-                                                if i < 3:
-                                                    print(f"[COOSALUD]   ✅ Parseado con formato: {fmt}")
-                                                break
-                                            except ValueError:
-                                                continue
-                                        
-                                        if parsed_date:
-                                            dates.append(parsed_date)
-                                        elif i < 3:
-                                            print(f"[COOSALUD]   ❌ No se pudo parsear")
-                                    elif hasattr(msg_date, 'strftime'):
-                                        dates.append(msg_date)
-                                        if i < 3:
-                                            print(f"[COOSALUD]   ✅ Ya es objeto datetime")
-                                except Exception as e:
-                                    if i < 3:
-                                        print(f"[COOSALUD]   ⚠️ Error parseando: {e}")
-                                    continue
-                        
-                        if dates:
-                            latest_date = max(dates)
-                            email_date = latest_date.strftime('%Y-%m-%d %H:%M:%S')
-                            print(f"[COOSALUD] ✅ Fecha del correo extraída: {email_date}")
                         else:
-                            print(f"[COOSALUD] ⚠️ No se pudieron parsear fechas de {len(app_state['found_messages'])} mensajes")
+                            print(f"[COOSALUD] Error al crear directorio: {output_dir}")
+
+                    # Fecha del correo más reciente (helper centralizado)
+                    email_date = _latest_email_date_str(ui_state.found_messages)
+                    if email_date:
+                        print(f"[COOSALUD] ✅ Fecha del correo extraída: {email_date}")
                     else:
-                        print(f"[COOSALUD] ⚠️ No hay mensajes en app_state['found_messages']")
-                    
+                        print(f"[COOSALUD] ⚠️ Sin fecha extraíble de {len(ui_state.found_messages)} mensajes")
+
                     processor = CoosaludProcessor(homologador_path=homologador_path)
                     result_data, message = processor.process_glosas(
-                        excel_files, 
-                        output_dir=output_dir, 
+                        excel_files,
+                        output_dir=output_dir,
                         email_date=email_date,
                         attachment_service=email_service.attachment_service
                     )
-                    
+
                     # Rehabilitar botón después de procesar
                     messages_view.process_eps_btn.disabled = False
-                    
+
                     if result_data:
                         messages_view.set_processing(False, f"✅ {message}")
                         messages_view.processing_status.color = ft.Colors.GREEN
-                        
+
                         # Preparar estadísticas desde los DataFrames
                         total_detalles = len(result_data.get('detalle', [])) if isinstance(result_data, dict) else 0
                         total_glosas = len(result_data.get('glosa', [])) if isinstance(result_data, dict) else 0
-                        
+
                         stats = {
                             'archivos_procesados': len(excel_files),
                             'total_registros': total_detalles + total_glosas,
                         }
-                        
+
                         # Extraer nombre del archivo del mensaje
                         output_files = []
                         if "Guardado en:" in message:
@@ -804,11 +617,12 @@ def main(page: ft.Page):
                                     path = line.split(":")[-1].strip() if ":" in line else ""
                                     if path and os.path.exists(path):
                                         output_files.append(path)
-                        
+
+                        _coosalud_dir = str(output_dir)
+
                         def open_coosalud_folder():
-                            import subprocess
-                            subprocess.Popen(f'explorer "{output_dir}"')
-                        
+                            _open_folder_in_explorer(_coosalud_dir)
+
                         AlertDialog.show_processing_complete(
                             page=page,
                             eps_name="COOSALUD",
@@ -819,44 +633,40 @@ def main(page: ft.Page):
                     else:
                         messages_view.set_processing(False, f"❌ {message}")
                         messages_view.processing_status.color = ft.Colors.RED
-                        
+
                         AlertDialog.show_error(
                             page=page,
                             title="Error al procesar",
                             message=message
                         )
-                    
-                    page.update()
-                    
+
+                    # Refresca vía canal de la vista
+                    messages_view.show_process_button(True)
+
             except Exception as ex:
                 messages_view.set_processing(False, f"❌ Error: {str(ex)}")
                 messages_view.processing_status.color = ft.Colors.RED
                 messages_view.process_eps_btn.disabled = False
-                page.update()
-                
+                # Refresca vía canal de la vista
+                messages_view.show_process_button(True)
+
                 AlertDialog.show_error(
                     page=page,
                     title="Error en el procesamiento",
                     message=f"Ocurrió un error inesperado:\n\n{str(ex)}"
                 )
-        
+
         threading.Thread(target=worker, daemon=True).start()
-    
-    # ==================== CREAR VISTAS ====================
-    
-    # Crear estado de aplicación para NavigationController
-    nav_app_state = AppState()
-    
-    # NavigationController se inicializará después de crear las vistas
-    navigation_controller = None  # Placeholder
-    
+
+    # ==================== CREAR VISTAS (inyección) ====================
+
     login_view = LoginView(
         page=page,
         email_service=email_service,
         on_login_success=handle_login_success,
         assets_dir=ASSETS_DIR
     )
-    
+
     dashboard_view = DashboardView(
         page=page,
         assets_dir=ASSETS_DIR,
@@ -865,17 +675,17 @@ def main(page: ft.Page):
         on_logout=lambda: go_to_login(logout=True),
         on_web_download=go_to_web_download
     )
-    
+
     tools_view = ToolsView(
         page=page,
         assets_dir=ASSETS_DIR,
-        navigation_controller=navigation_controller,
+        navigation_controller=None,  # se inyecta tras crear el controlador
         on_back=go_to_dashboard,
         on_homologacion=go_to_homologacion,
         on_mix_excel=go_to_mix_excel,
         on_homologador_manual=go_to_homologador_manual
     )
-    
+
     method_selection_view = MethodSelectionView(
         page=page,
         assets_dir=ASSETS_DIR,
@@ -883,65 +693,48 @@ def main(page: ft.Page):
         on_web_method=on_web_method,
         on_logout=lambda: go_to_login(logout=True)
     )
-    
+
     web_download_view = WebDownloadView(
         page=page,
         assets_dir=ASSETS_DIR,
         on_back=go_to_method_selection  # Volver a selección de método
     )
-    
+
     homologacion_view = HomologacionView(
         page=page,
-        navigation_controller=navigation_controller,
+        navigation_controller=None,  # se inyecta tras crear el controlador
         on_back=go_to_tools
     )
-    
+
     mix_excel_view = MixExcelView(
         page=page,
-        navigation_controller=navigation_controller,
+        navigation_controller=None,  # se inyecta tras crear el controlador
         on_back=go_to_tools
     )
-    
+
     homologador_manual_view = HomologadorManualView(
         page=page,
         on_back=go_to_tools
     )
-    
+
     messages_view = MessagesView(
         page=page,
         on_back=go_to_eps_selection,
         on_refresh=lambda: load_messages(messages_view.search_info_text.value or ""),
         on_download_selected=download_selected_messages,
-        on_process=process_eps_files
+        on_process=process_eps_files,
+        navigation_controller=None,  # se inyecta tras crear el controlador
     )
-    
+
     eps_screen = EpsScreen(
         page=page,
         on_eps_selected=on_eps_selected,
         on_logout=go_to_dashboard,
-        on_back=go_to_dashboard
+        on_back=go_to_dashboard,
+        navigation_controller=None,  # se inyecta tras crear el controlador
     )
-    
-    # Configurar navegación disponible en page.data para las vistas
-    page.data = {
-        'navigation_controller': {
-            'go_to_dashboard': go_to_dashboard,
-            'go_to_eps_selection': go_to_eps_selection,
-            'go_to_messages': go_to_messages,
-            'go_to_tools': go_to_tools,
-            'go_to_homologacion': go_to_homologacion,
-            'go_to_mix_excel': go_to_mix_excel,
-            'go_to_homologador_manual': go_to_homologador_manual,
-            'go_back': go_back
-        },
-        'views': {
-            'login': login_view,
-            'method_selection': method_selection_view,
-            'dashboard': dashboard_view,
-        }
-    }
-    
-    # Inicializar NavigationController con todas las vistas
+
+    # Inicializar NavigationController con todas las vistas (canal único)
     views_dict = {
         "login": login_view,
         "method_selection": method_selection_view,
@@ -954,25 +747,35 @@ def main(page: ft.Page):
         "eps": eps_screen,
         "messages": messages_view
     }
-    navigation_controller = NavigationController(page, views_dict, nav_app_state)
-    
-    # Actualizar referencia en las vistas que lo necesitan
+    navigation_controller = NavigationController(page, views_dict, ui_state)
+    nav_holder["controller"] = navigation_controller
+
+    # Inyectar controlador en las vistas que lo usan (sin tercer canal page.data)
     tools_view.navigation_controller = navigation_controller
     homologacion_view.navigation_controller = navigation_controller
     mix_excel_view.navigation_controller = navigation_controller
-    
+    messages_view.navigation_controller = navigation_controller
+    eps_screen.navigation_controller = navigation_controller
+    # Sincronizar headers que capturaron None al construirse
+    for _v in (tools_view, homologacion_view, mix_excel_view):
+        try:
+            if hasattr(_v, 'nav_header') and _v.nav_header is not None:
+                _v.nav_header.nav_controller = navigation_controller
+        except Exception:
+            pass
+
     # ==================== CONSTRUIR PÁGINA ====================
-    
+
     # Función para abrir configuración global
     def open_global_settings(e):
         """Abre el diálogo de configuración desde cualquier pantalla"""
         is_dark = ThemeManager.is_dark()
-        
+
         def toggle_theme(ev):
             page.close(settings_dialog)
             ThemeManager.toggle_theme()
             update_colors()
-        
+
         settings_dialog = ft.AlertDialog(
             modal=True,
             title=ft.Text("⚙️ Configuración", size=18, weight=ft.FontWeight.W_600),
@@ -1004,7 +807,7 @@ def main(page: ft.Page):
             actions_alignment=ft.MainAxisAlignment.END
         )
         page.open(settings_dialog)
-    
+
     # Botón de configuración global (visible en todas las pantallas)
     global_settings_btn = ft.Container(
         content=ft.IconButton(
@@ -1016,7 +819,7 @@ def main(page: ft.Page):
         right=15,
         bottom=10,
     )
-    
+
     page.add(
         ft.Stack([
             control for control in [
@@ -1028,33 +831,34 @@ def main(page: ft.Page):
                 mix_excel_view.container,
                 homologador_manual_view.container,
                 web_download_view.container,
-                eps_screen.build(),
+                eps_screen.container,
                 messages_view.container,
             ] if control is not None
         ] + [global_settings_btn], expand=True)  # Agregar el botón de config al final del Stack
     )
-    
+
     # ==================== VERIFICADOR DE ACTUALIZACIONES ====================
-    
+
     # Crear verificador de actualizaciones
     update_checker = UpdateChecker(
         page=page,
         current_version=APP_VERSION,
         github_repo=GITHUB_REPO
     )
-    
+
     # Verificar actualizaciones silenciosamente al inicio (si está habilitado)
     if AUTO_UPDATE_CONFIG.get("enabled") and AUTO_UPDATE_CONFIG.get("check_on_startup"):
         logger.info(f"Verificando actualizaciones al inicio (v{APP_VERSION})...")
         update_checker.check_updates_silent()
-    
-    # Exponer función para verificar actualizaciones desde otras vistas
-    page.data = page.data if hasattr(page, 'data') and page.data else {}
-    page.data['check_updates' ] = update_checker.check_updates # type: ignore
-    page.data['app_version'] = APP_VERSION # type: ignore
-    
+
+    # Exponer solo funciones no navegacionales en page.data (sin canal de navegación)
+    if not hasattr(page, 'data') or not page.data:
+        page.data = {}
+    page.data['check_updates'] = update_checker.check_updates  # type: ignore
+    page.data['app_version'] = APP_VERSION  # type: ignore
+
     # ==================== AUTO-LOGIN ====================
-    
+
     login_view.try_auto_login()
 
 

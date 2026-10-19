@@ -82,10 +82,10 @@ class HomologacionView:
         def on_click(e):
             self._seleccionar_eps(eps_info["key"])
         
-        # Colores por EPS
+        # Colores por EPS (ft.Colors.*, sin hex fijo)
         colores = {
-            "mutualser": "#2196F3",
-            "coosalud": "#4CAF50"
+            "mutualser": ft.Colors.BLUE,
+            "coosalud": ft.Colors.GREEN
         }
         color = colores.get(eps_info["key"], ft.Colors.PRIMARY)
         
@@ -233,10 +233,10 @@ class HomologacionView:
         self.status_text = ft.Text("", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
         self.stats_text = ft.Text("", size=13, color=ft.Colors.ON_SURFACE_VARIANT)
         
-        # Colores por EPS
+        # Colores por EPS (ft.Colors.*, sin hex fijo)
         colores = {
-            "mutualser": "#2196F3",
-            "coosalud": "#4CAF50"
+            "mutualser": ft.Colors.BLUE,
+            "coosalud": ft.Colors.GREEN
         }
         eps_color = colores.get(self.current_eps or "", ft.Colors.PRIMARY)
         

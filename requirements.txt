@@ -19,8 +19,3 @@ python-dotenv>=1.0.0
 keyring>=25.0.0
 cryptography>=42.0.0
 filelock>=3.13.0
-
-# ==================== DEPENDENCIAS DE DESARROLLO ====================
-# Testing
-pytest>=7.0.0
-pytest-cov>=4.0.0

@@ -31,6 +31,116 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.11.16] - 2026-02-05
+
+### 🐛 Correcciones
+- **Fechas individuales por correo en COOSALUD**: cada glosa usa la fecha de su propio correo en vez de una fecha global (`3f336ff`, `920aef5`, tag `v0.11.16`)
+
+### 📚 Documentación
+- Comentario de carga de variables de entorno en `release.py` (`8b376ab`)
+
+---
+
+## [0.11.15] - 2026-02-02
+
+### ✨ Nuevas Características
+- Nuevo archivo de configuración de base de datos (`eb0b17a`)
+
+### 🔧 Mejoras Técnicas
+- Cambio de versión (`2d846bb`, tag `v0.11.15`)
+
+---
+
+## [0.11.14] - 2026-01-31
+
+### 🔧 Mejoras Técnicas
+- La ventana ya no cambia de tamaño si está maximizada o en pantalla completa; simplificado el breadcrumb en `ToolsView` (`c3e8892`)
+- Eliminada la tarjeta de configuración de `ToolsView` (`53e995c`)
+- Suprimido aviso de type checking (`4e78016`)
+
+### 📚 Documentación
+- Nueva guía para subir cambios a Git (`docs/GUIA_GIT_CAMBIOS.md`, `2c794ee`)
+
+---
+
+## [0.11.13] - 2026-01-30
+
+### ✨ Nuevas Características
+- **CoosaludProcessor con fecha de correo**: extrae la fecha del email con logging y `process_glosas` acepta `email_date` (`2711f18`, tag `v0.11.13`)
+
+### 🔧 Mejoras Técnicas
+- Merge de PR #1 y bumps de versión a 0.11.12 / 0.11.13 (`deea0b3`, `894231d`, `c8aa5ee`)
+
+---
+
+## [0.11.12] - 2026-01-29
+
+### 🔧 Mejoras Técnicas
+- Bump a 0.11.11; refactor del manejo de tema en vistas UI con métodos `rebuild` (`d7ecc6a`)
+- Refactor de legibilidad: firmas de métodos simplificadas sin type hints (`c61fae7`, `33975f2`, tag `v0.11.12`)
+- Componentes UI con colores adaptativos al tema (`e002a35`)
+
+### 📚 Documentación
+- Formato y enlaces del `README.md`, incluido el link a `DEVELOPER_GUIDE` (`3e172f2`, `86a74b3`)
+
+---
+
+## [0.11.11] - 2026-01-28
+
+### ✨ Nuevas Características
+- Refactor de `EmailService` y `CoosaludProcessor` con documentación ampliada; eliminadas pantallas obsoletas de login y mensajes (`47bfbd4`)
+
+### 🐛 Correcciones
+- Constructor de `BaseProcessor` acepta `homologador_path` como `Optional` (`6631539`)
+
+### 🧪 Tests
+- Tests de integración de `FomagScraper` y validación de carga de datos de servicios (`80b86a0`, `469d122`, tag `v0.11.11`)
+
+---
+
+## [0.11.8 - 0.11.10] - 2026-01-28
+
+> Sin tags para este rango. Cambios verificables en commits intermedios entre `v0.11.7` y `v0.11.11`:
+
+### ✨ Nuevas Características
+- Bump a 0.11.7; mejora de type hints en encabezado de navegación y manejo de errores en `build.py` (`75c1fb4`, 2026-01-27)
+- Bump a 0.11.9; mejor manejo de diálogos y notificaciones toast (`dc7cc60`, 2026-01-28)
+
+### 🔧 Mejoras Técnicas
+- Navegación y retroalimentación de carga entre vistas (`ac24fb5`)
+- Limpieza de tests del scraper de Fomag (`ed47efa`)
+
+### 🧪 Tests
+- Nuevos tests unitarios para varios módulos (`0aecb16`)
+
+---
+
+## [0.11.6 - 0.11.7] - 2026-01-27
+
+> Los tags `v0.11.6` y `v0.11.7` apuntan al mismo commit (`8e8ed8c`, cuyo mensaje indica bump a 0.11.5):
+
+### 🐛 Correcciones
+- El updater omite `updater.exe` en uso durante las actualizaciones (`8e8ed8c`)
+
+---
+
+## [0.11.5] - 2026-01-27
+
+### 🔧 Mejoras Técnicas
+- Mejora del proceso de build y script de release para integración con GitHub (`a424dfa`, tag `v0.11.5`; el mensaje del commit indica versión 0.11.4)
+
+---
+
+## [0.11.1 - 0.11.4] - 2026-01-27
+
+> Los tags `v0.11.1`, `v0.11.2` y `v0.11.4` apuntan al mismo commit que `v0.11.0` (`901644d`); `v0.11.3` no tiene tag. Sin cambios propios en este rango:
+
+### 🔧 Mejoras Técnicas
+- Release script carga `GITHUB_TOKEN` desde `.env` (`901644d`)
+- Refactor del script de build y del proceso de release (`3667409`)
+
+---
+
 ## [0.11.0] - 2026-01-27
 
 ### ✨ Nuevas Características

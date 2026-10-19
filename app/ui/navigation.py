@@ -9,7 +9,27 @@ from app.ui.styles import WINDOW_SIZES
 
 
 class NavigationController:
-    """Controlador de navegación entre vistas"""
+    """Controlador de navegación entre vistas.
+
+    Canal único de navegación de la app: toda transición entre vistas
+    (login -> method_selection -> dashboard -> eps -> messages y
+    tools -> homologacion/mix/manual) pasa por aquí.
+    """
+
+    # Mapa único de retorno (sin backs muertos):
+    # messages -> eps -> dashboard, homologacion/mix/manual -> tools,
+    # tools/web_download -> dashboard, method_selection/dashboard -> login.
+    BACK_ROUTES = {
+        "messages": "eps",
+        "eps": "dashboard",
+        "tools": "dashboard",
+        "mix_excel": "tools",
+        "homologador_manual": "tools",
+        "homologacion": "tools",
+        "web_download": "dashboard",
+        "dashboard": "login",
+        "method_selection": "login",
+    }
     
     def __init__(self, page: ft.Page, views: Dict[str, Any], app_state):
         """
@@ -25,17 +45,37 @@ class NavigationController:
         self.app_state = app_state
     
     def _hide_all_views(self):
-        """Oculta todas las vistas"""
+        """Oculta todas las vistas (canal único; sin hide()/show() dispersos)."""
         for view in self.views.values():
             if hasattr(view, 'hide'):
                 view.hide()
-    
+
+    def _hide_loading_overlays(self):
+        """Oculta overlays de carga activos tras navegar.
+
+        Centraliza los hide_loading() antes dispersos en app.py
+        (dashboard/tools) para no dejar spinners colgados.
+        """
+        for view in self.views.values():
+            hide_fn = getattr(view, 'hide_loading', None)
+            if callable(hide_fn):
+                try:
+                    hide_fn()
+                except Exception:
+                    pass
+
     def _set_window_size(self, width: int, height: int):
-        """Establece el tamaño de la ventana solo si NO está maximizada"""
-        # No cambiar tamaño si la ventana está maximizada o en pantalla completa
-        if not self.page.window.maximized and not self.page.window.full_screen:
-            self.page.window.width = width
-            self.page.window.height = height
+        """Establece el tamaño de la ventana solo si NO está maximizada.
+
+        Compara con `is True` para no romper con MagicMock en tests
+        (un MagicMock nunca `is True`, así se aplica el tamaño).
+        """
+        maximized = getattr(self.page.window, 'maximized', False)
+        full_screen = getattr(self.page.window, 'full_screen', False)
+        if maximized is True or full_screen is True:
+            return
+        self.page.window.width = width
+        self.page.window.height = height
     
     def go_to(self, view_name: str, **kwargs):
         """
@@ -51,6 +91,9 @@ class NavigationController:
         # Mostrar vista correspondiente
         if view_name in self.views and hasattr(self.views[view_name], 'show'):
             self.views[view_name].show()
+
+        # Limpiar loadings residuales de forma centralizada
+        self._hide_loading_overlays()
         
         # Configurar tamaño de ventana según vista
         sizes = {
@@ -114,19 +157,12 @@ class NavigationController:
         self.go_to("messages")
     
     def go_back(self):
-        """Navega hacia atrás según la vista actual"""
-        back_routes = {
-            "messages": "eps",
-            "eps": "dashboard",
-            "tools": "dashboard",
-            "mix_excel": "tools",
-            "homologador_manual": "tools",
-            "homologacion": "tools",
-            "web_download": "dashboard",
-            "dashboard": "login",
-            "method_selection": "login",
-        }
-        
+        """Navega hacia atrás según la vista actual.
+
+        Mapa completo: messages->eps->dashboard, homologacion/mix_excel/
+        homologador_manual->tools, tools/web_download->dashboard,
+        method_selection/dashboard->login.
+        """
         current = self.app_state.current_view
-        if current in back_routes:
-            self.go_to(back_routes[current])
+        if current in self.BACK_ROUTES:
+            self.go_to(self.BACK_ROUTES[current])
