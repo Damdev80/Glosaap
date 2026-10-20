@@ -163,6 +163,9 @@ def main(page: ft.Page):
     # El controlador se crea tras las vistas; los wrappers resuelven tarde
     # (late binding) para que los callbacks de las vistas siempre pasen por él.
     nav_holder = {"controller": None}
+    # Holder del verificador de updates (se inyecta tras crearlo; permite
+    # re-verificar en sesiones largas sin acoplar navegación <-> updates).
+    update_holder = {"checker": None}
 
     def _nav():
         return nav_holder["controller"]
@@ -187,6 +190,13 @@ def main(page: ft.Page):
         if ctl is None:
             return
         ctl.go_to_dashboard()
+        # Sesiones largas: re-verifica actualización cuando toca (no bloquea).
+        try:
+            _chk = update_holder.get("checker")
+            if _chk is not None and hasattr(_chk, "maybe_check"):
+                _chk.maybe_check()
+        except Exception:
+            pass
 
     def go_to_tools():
         """Navega a herramientas vía NavigationController."""
@@ -987,22 +997,31 @@ def main(page: ft.Page):
 
     # ==================== VERIFICADOR DE ACTUALIZACIONES ====================
 
-    # Crear verificador de actualizaciones
+    # Crear verificador de actualizaciones (intervalo real desde config)
+    check_interval_hours = AUTO_UPDATE_CONFIG.get("check_interval_hours", 24)
     update_checker = UpdateChecker(
         page=page,
         current_version=APP_VERSION,
-        github_repo=GITHUB_REPO
+        github_repo=GITHUB_REPO,
+        check_interval_hours=check_interval_hours,
     )
+    update_holder["checker"] = update_checker
 
-    # Verificar actualizaciones silenciosamente al inicio (si está habilitado)
+    # Verificar actualizaciones silenciosamente al inicio (si está habilitado).
+    # maybe_check() respeta intervalo + remind_at/skip_versions y persiste
+    # last_check en el mismo state file; no bloquea el arranque.
     if AUTO_UPDATE_CONFIG.get("enabled") and AUTO_UPDATE_CONFIG.get("check_on_startup"):
         logger.info(f"Verificando actualizaciones al inicio (v{APP_VERSION})...")
-        update_checker.check_updates_silent()
+        try:
+            update_checker.maybe_check()
+        except Exception as ex:
+            logger.warning("No se pudo verificar actualización inicial: %s", ex)
 
     # Exponer solo funciones no navegacionales en page.data (sin canal de navegación)
     if not hasattr(page, 'data') or not page.data:
         page.data = {}
     page.data['check_updates'] = update_checker.check_updates  # type: ignore
+    page.data['maybe_check_updates'] = update_checker.maybe_check  # type: ignore
     page.data['app_version'] = APP_VERSION  # type: ignore
 
     # ==================== AUTO-LOGIN ====================

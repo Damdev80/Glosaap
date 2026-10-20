@@ -8,10 +8,15 @@ la aplicación principal sin conflictos de archivos en uso.
 Flujo:
 1. Recibe argumentos con la ubicación del archivo de actualización
 2. Espera a que el proceso principal termine
-3. Extrae los archivos del zip
-4. Crea backup de la versión anterior (opcional)
-5. Reemplaza los archivos de la aplicación
-6. Reinicia la aplicación principal
+3. Crea backup de la versión anterior (opcional, --no-backup lo omite)
+4. Extrae el ZIP a subdir temporal (sin tocar la app)
+5. Verifica smoke del nuevo Glosaap.exe (existe + tamaño>0); si falla
+   aborta ANTES de tocar la app
+6. Solo entonces reemplaza los archivos de la aplicación
+7. Ante cualquier fallo en extracción/verificación/reemplazo, restaura
+   automáticamente desde el backup más reciente, MessageBox de error
+   y exit code != 0
+8. Reinicia la aplicación principal (un fallo aquí NO dispara rollback)
 
 Uso:
     updater.exe --update-file <path> --app-dir <dir> --app-exe <exe> --pid <pid>
@@ -151,67 +156,284 @@ def create_backup(app_dir: Path, logger: logging.Logger | None = None) -> Path |
         return None
 
 
-def extract_update(update_file: Path, app_dir: Path, logger: logging.Logger | None = None) -> bool:
+def find_latest_backup(app_dir: Path, logger: logging.Logger | None = None) -> Path | None:
     """
-    Extrae los archivos de actualización.
-    
+    Busca el backup más reciente disponible.
+
+    Args:
+        app_dir: Directorio de la aplicación
+        logger: Logger para mensajes
+
+    Returns:
+        Ruta al backup más reciente o None si no hay ninguno
+    """
+    try:
+        parent_dir = app_dir.parent
+        if not parent_dir.exists():
+            return None
+        backups = sorted(
+            [d for d in parent_dir.iterdir() if d.is_dir() and d.name.startswith("Glosaap_backup_")],
+            key=lambda x: x.name,
+            reverse=True,
+        )
+        if backups:
+            if logger:
+                logger.info(f"Backup más reciente encontrado: {backups[0]}")
+            return backups[0]
+        return None
+    except Exception as e:
+        if logger:
+            logger.warning(f"Error buscando backups: {e}")
+        return None
+
+
+def verify_staged_update(source_dir: Path, logger: logging.Logger | None = None) -> bool:
+    """
+    Smoke check del update ya extraído al temporal (sin tocar la app).
+
+    Verifica que el nuevo Glosaap.exe existe y tiene tamaño > 0.
+
+    Args:
+        source_dir: Directorio staging con los archivos nuevos
+        logger: Logger para mensajes
+
+    Returns:
+        True si pasa el smoke check
+    """
+    candidate = source_dir / "Glosaap.exe"
+    if not candidate.exists():
+        # Fallback case-insensitive (zip puede traer distinta capitalización)
+        found = None
+        try:
+            for item in source_dir.iterdir():
+                if item.is_file() and item.name.lower() == "glosaap.exe":
+                    found = item
+                    break
+        except OSError:
+            found = None
+        if found is None:
+            if logger:
+                logger.error(
+                    f"Smoke check fallido: no se encontró Glosaap.exe en {source_dir}"
+                )
+            return False
+        candidate = found
+
+    try:
+        size = candidate.stat().st_size
+    except OSError as e:
+        if logger:
+            logger.error(f"Smoke check fallido: no se pudo leer {candidate}: {e}")
+        return False
+
+    if size <= 0:
+        if logger:
+            logger.error(f"Smoke check fallido: {candidate} tiene tamaño 0")
+        return False
+
+    if logger:
+        logger.info(f"Smoke check OK: {candidate.name} ({size} bytes)")
+    return True
+
+
+def restore_from_backup(
+    app_dir: Path, backup_dir: Path, logger: logging.Logger | None = None
+) -> bool:
+    """
+    Restaura la app desde un backup (rollback).
+
+    Copia el contenido del backup sobre app_dir, sin tocar updater.exe
+    (puede estar en uso).
+
+    Args:
+        app_dir: Directorio de la aplicación a restaurar
+        backup_dir: Directorio del backup origen
+        logger: Logger para mensajes
+
+    Returns:
+        True si la restauración fue exitosa
+    """
+    if backup_dir is None or not backup_dir.exists():
+        if logger:
+            logger.error(f"Backup no disponible para rollback: {backup_dir}")
+        return False
+
+    if logger:
+        logger.warning(f"Iniciando rollback desde: {backup_dir}")
+
+    try:
+        app_dir.mkdir(parents=True, exist_ok=True)
+        for item in backup_dir.iterdir():
+            if item.name.lower() == "updater.exe":
+                continue
+            src = item
+            dest = app_dir / item.name
+            # Eliminar destino parcial/actual
+            if dest.exists():
+                if dest.is_dir():
+                    shutil.rmtree(dest)
+                else:
+                    dest.unlink()
+            if src.is_dir():
+                shutil.copytree(src, dest)
+            else:
+                shutil.copy2(src, dest)
+            if logger:
+                logger.info(f"  Restaurado: {item.name}")
+        if logger:
+            logger.warning("Rollback completado")
+        return True
+    except Exception as e:
+        if logger:
+            logger.error(f"Rollback fallido: {e}")
+            logger.error(traceback.format_exc())
+        return False
+
+
+def _cleanup_temp_dir(temp_dir: Path, logger: logging.Logger | None = None):
+    """Elimina el directorio temporal de staging (best-effort)."""
+    try:
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir)
+    except Exception as e:
+        if logger:
+            logger.warning(f"No se pudo limpiar temporal {temp_dir}: {e}")
+
+
+def _app_looks_broken(app_dir: Path) -> bool:
+    """
+    Heurística rápida: la app está rota si no hay Glosaap.exe o está vacío.
+
+    Usada como red de seguridad antes de decidir un rollback adicional
+    en main() (evita downgrades innecesarios cuando el fallo ocurrió
+    antes de tocar la app).
+    """
+    try:
+        candidate = app_dir / "Glosaap.exe"
+        if candidate.exists():
+            try:
+                return candidate.stat().st_size <= 0
+            except OSError:
+                return True
+        # Fallback case-insensitive
+        for item in app_dir.iterdir():
+            if item.is_file() and item.name.lower() == "glosaap.exe":
+                try:
+                    return item.stat().st_size <= 0
+                except OSError:
+                    return True
+        return True
+    except OSError:
+        return True
+
+
+def extract_update(
+    update_file: Path,
+    app_dir: Path,
+    logger: logging.Logger | None = None,
+    backup_dir: Path | None = None,
+) -> bool:
+    """
+    Extrae los archivos de actualización con staging + smoke + rollback.
+
+    Fases:
+    1. Extrae el ZIP a un subdirectorio temporal (sin tocar la app).
+    2. Verifica smoke del nuevo Glosaap.exe (existe + tamaño > 0).
+       Si 1 o 2 fallan, aborta ANTES de tocar la app (no deja instalación
+       parcial). No requiere backup para este caso.
+    3. Solo entonces reemplaza los archivos en app_dir.
+       Si 3 falla a medias echa rollback desde backup_dir (si se proveyó).
+
     Args:
         update_file: Ruta al archivo zip de actualización
         app_dir: Directorio destino de la aplicación
         logger: Logger para mensajes
-        
+        backup_dir: Backup a usar para rollback en fase de reemplazo.
+            Si es None no se intenta restaurar (modo --no-backup).
+
     Returns:
         True si se extrajo correctamente
     """
     if logger:
         logger.info(f"Extrayendo actualización desde: {update_file}")
         logger.info(f"Destino: {app_dir}")
-    
+
     if not update_file.exists():
         if logger:
             logger.error(f"Archivo de actualización no encontrado: {update_file}")
         return False
-    
+
+    # Directorio temporal de staging (hermano de app_dir, no dentro)
+    temp_extract = app_dir.parent / "glosaap_update_temp"
+
+    # --- Preparar temporal limpio ---
     try:
-        # Crear directorio temporal para extracción
-        temp_extract = app_dir.parent / "glosaap_update_temp"
         if temp_extract.exists():
             shutil.rmtree(temp_extract)
-        temp_extract.mkdir()
-        
+        temp_extract.mkdir(parents=True)
+    except Exception as e:
         if logger:
-            logger.info("Extrayendo archivos...")
-        
+            logger.error(f"No se pudo preparar directorio temporal: {e}")
+        return False
+
+    # --- FASE 1: extraer ZIP al temporal (sin tocar la app) ---
+    try:
+        if logger:
+            logger.info("Extrayendo archivos al temporal...")
         with zipfile.ZipFile(update_file, 'r') as zip_ref:
             zip_ref.extractall(temp_extract)
-        
-        # Encontrar el directorio raíz dentro del zip
-        # (puede ser "Glosaap" o estar directamente en la raíz)
-        extracted_items = list(temp_extract.iterdir())
-        
-        if len(extracted_items) == 1 and extracted_items[0].is_dir():
-            # El zip tiene un directorio raíz
-            source_dir = extracted_items[0]
-            if logger:
-                logger.info(f"Directorio raíz del zip: {source_dir.name}")
-        else:
-            # Los archivos están directamente en la raíz
-            source_dir = temp_extract
-        
-        # Copiar archivos a la aplicación
+    except zipfile.BadZipFile:
         if logger:
-            logger.info("Reemplazando archivos...")
-        
+            logger.error("El archivo de actualización está corrupto")
+        _cleanup_temp_dir(temp_extract, logger)
+        return False
+    except Exception as e:
+        if logger:
+            logger.error(f"Error extrayendo actualización al temporal: {e}")
+            logger.error(traceback.format_exc())
+        _cleanup_temp_dir(temp_extract, logger)
+        return False
+
+    # Encontrar el directorio raíz dentro del zip
+    # (puede ser "Glosaap" o estar directamente en la raíz)
+    try:
+        extracted_items = list(temp_extract.iterdir())
+    except Exception as e:
+        if logger:
+            logger.error(f"No se pudo listar el temporal: {e}")
+        _cleanup_temp_dir(temp_extract, logger)
+        return False
+
+    if len(extracted_items) == 1 and extracted_items[0].is_dir():
+        # El zip tiene un directorio raíz
+        source_dir = extracted_items[0]
+        if logger:
+            logger.info(f"Directorio raíz del zip: {source_dir.name}")
+    else:
+        # Los archivos están directamente en la raíz
+        source_dir = temp_extract
+
+    # --- FASE 2: smoke check ANTES de tocar la app ---
+    if not verify_staged_update(source_dir, logger=logger):
+        # Aborto limpio: la app sigue intacta, solo limpiamos el temporal.
+        _cleanup_temp_dir(temp_extract, logger)
+        return False
+
+    # --- FASE 3: reemplazo (único punto donde se toca la app) ---
+    if logger:
+        logger.info("Smoke OK. Reemplazando archivos...")
+
+    try:
         for item in source_dir.iterdir():
             dest = app_dir / item.name
-            
+
             # ⚠️ IMPORTANTE: Saltar updater.exe (está en uso)
             # Se actualizará en la próxima ejecución
             if item.name.lower() == "updater.exe":
                 if logger:
                     logger.warning(f"Saltando {item.name} (está en uso, se actualizará en próxima ejecución)")
                 continue
-            
+
             # Eliminar destino si existe
             if dest.exists():
                 if dest.is_dir():
@@ -233,40 +455,50 @@ def extract_update(update_file: Path, app_dir: Path, logger: logging.Logger | No
                             if logger:
                                 logger.warning(f"Permiso denegado para {dest}, reintentando...")
                             time.sleep(1)
-            
+
             # Copiar nuevo archivo/directorio
             if item.is_dir():
                 shutil.copytree(item, dest)
             else:
                 shutil.copy2(item, dest)
-            
+
             if logger:
                 logger.info(f"  Actualizado: {item.name}")
-        
+
         # Limpiar directorio temporal
-        try:
-            shutil.rmtree(temp_extract)
-        except Exception:
-            pass
-        
+        _cleanup_temp_dir(temp_extract, logger)
+
         if logger:
             logger.info("Extracción completada")
-        
+
         return True
-        
-    except zipfile.BadZipFile:
-        if logger:
-            logger.error("El archivo de actualización está corrupto")
-        return False
+
     except PermissionError as e:
         if logger:
-            logger.error(f"Permisos insuficientes: {e}")
-        return False
+            logger.error(f"Permisos insuficientes durante el reemplazo: {e}")
     except Exception as e:
         if logger:
-            logger.error(f"Error extrayendo actualización: {e}")
+            logger.error(f"Error reemplazando archivos: {e}")
             logger.error(traceback.format_exc())
-        return False
+
+    # --- Rollback: el reemplazo falló a medias ---
+    _cleanup_temp_dir(temp_extract, logger)
+    if backup_dir is not None and backup_dir.exists():
+        if logger:
+            logger.warning("Reemplazo fallido, intentando rollback automático...")
+        if restore_from_backup(app_dir, backup_dir, logger=logger):
+            if logger:
+                logger.warning("Rollback exitoso tras fallo de reemplazo")
+        else:
+            if logger:
+                logger.error("Rollback fallido: la instalación puede estar parcial")
+    else:
+        if logger:
+            logger.warning(
+                "Reemplazo fallido y no hay backup para rollback "
+                "(modo --no-backup o backup no disponible)"
+            )
+    return False
 
 
 def restart_application(app_exe: Path, app_dir: Path, logger: logging.Logger | None = None) -> bool:
@@ -462,6 +694,7 @@ def main():
     logger.info("=" * 50)
     
     success = False
+    backup_for_rollback: Path | None = None
     
     try:
         # 1. Esperar a que el proceso principal termine
@@ -470,13 +703,38 @@ def main():
             time.sleep(2)  # Esperar un poco más por si acaso
         
         # 2. Crear backup (opcional)
+        # backup_for_rollback es el backup a usar si extracción/verificación/
+        # reemplazo fallan. Con --no-backup queda en None (sin rollback,
+        # pero extracción/verificación abortan antes de tocar la app).
         if not args.no_backup:
-            backup_dir = create_backup(app_dir, logger=logger)
-            if not backup_dir:
-                logger.warning("No se pudo crear backup, continuando sin backup...")
+            fresh_backup = create_backup(app_dir, logger=logger)
+            if fresh_backup is not None and fresh_backup.exists():
+                backup_for_rollback = fresh_backup
+            else:
+                logger.warning("No se pudo crear backup, buscando backup previo para rollback...")
+                fallback = find_latest_backup(app_dir, logger=logger)
+                if fallback is not None:
+                    logger.warning(f"Usando backup existente para rollback: {fallback}")
+                    backup_for_rollback = fallback
+                else:
+                    logger.warning("Sin backup disponible: el rollback no será posible")
+        else:
+            logger.info("Omitiendo backup por flag --no-backup (sin rollback; "
+                        "extracción/verificación abortan antes de tocar la app)")
         
-        # 3. Extraer actualización
-        if not extract_update(update_file, app_dir, logger=logger):
+        # 3. Extraer actualización (staging -> smoke -> reemplazo con rollback interno)
+        if not extract_update(update_file, app_dir, logger=logger, backup_dir=backup_for_rollback):
+            # extract_update ya intentó rollback en fase de reemplazo.
+            # Red de seguridad: solo restaurar de nuevo si la app quedó rota
+            # (evita downgrades cuando el fallo fue antes del reemplazo y la
+            # app sigue intacta).
+            if backup_for_rollback is not None and backup_for_rollback.exists():
+                if _app_looks_broken(app_dir):
+                    logger.warning("La app quedó en estado parcial, rollback de seguridad...")
+                    restore_from_backup(app_dir, backup_for_rollback, logger=logger)
+                else:
+                    logger.info("La app sigue intacta (fallo antes del reemplazo), "
+                                "no se requiere rollback adicional")
             raise Exception("Error al extraer la actualización")
         
         # 4. Limpiar backups antiguos
@@ -486,6 +744,7 @@ def main():
         cleanup_update_file(update_file, logger=logger)
         
         # 6. Reiniciar aplicación
+        # NOTA: un fallo aquí NO dispara rollback (los archivos ya están bien).
         if not args.no_restart:
             time.sleep(1)  # Pequeña pausa antes de reiniciar
             if not restart_application(app_exe, app_dir, logger=logger):
@@ -497,12 +756,35 @@ def main():
     except Exception as e:
         logger.error(f"Error durante la actualización: {e}")
         logger.error(traceback.format_exc())
+
+        # Red de seguridad final: si la excepción escapó sin pasar por el
+        # chequeo de arriba (p. ej. error inesperado) y la app está rota,
+        # intentar rollback desde el backup más reciente disponible.
+        try:
+            effective_backup = backup_for_rollback
+            if (
+                not success
+                and effective_backup is None
+                and not args.no_backup
+            ):
+                effective_backup = find_latest_backup(app_dir, logger=logger)
+            if (
+                effective_backup is not None
+                and effective_backup.exists()
+                and _app_looks_broken(app_dir)
+            ):
+                logger.warning("Rollback final de seguridad...")
+                restore_from_backup(app_dir, effective_backup, logger=logger)
+        except Exception as rb_e:
+            logger.error(f"Error en rollback final: {rb_e}")
         
-        # Mostrar mensaje de error al usuario
+        # Mostrar mensaje de error al usuario (exit code != 0 abajo)
         show_error_message(
             "Error de actualización",
             f"No se pudo completar la actualización:\n\n{str(e)}\n\n"
-            f"Por favor, descarga manualmente la última versión desde GitHub."
+            f"Se intentó restaurar la versión anterior. "
+            f"Si la app no inicia, restaura manualmente desde "
+            f"Glosaap_backup_* o descarga la última versión desde GitHub."
         )
     
     logger.info("=" * 50)
