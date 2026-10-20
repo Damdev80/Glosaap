@@ -25,7 +25,7 @@ class EmailService:
         # Procesadores por EPS - usar ruta de red MINERVA
         mutualser_output = self._get_output_path(self.MUTUALSER_OUTPUT_RED, "outputs/mutualser")
         self.mutualser_processor = MutualserProcessor(output_dir=mutualser_output)
-        print(f"📁 MUTUALSER guardará en: {mutualser_output}")
+        logger.debug("MUTUALSER guardara en: %s", mutualser_output)
 
         # Procesador COOSALUD - fuente unica de rutas en app/config/settings.py
         coosalud_output = self._get_output_path(
@@ -58,10 +58,10 @@ class EmailService:
             # Intentar crear la ruta de red
             os.makedirs(network_path, exist_ok=True)
             if os.path.exists(network_path):
-                print(f"✅ Ruta de red accesible: {network_path}")
+                logger.debug("Ruta de red accesible: %s", network_path)
                 return network_path
         except Exception as e:
-            print(f"⚠️ Red no accesible ({e}), usando local: {fallback_path}")
+            logger.warning("Red no accesible (%s), usando local: %s", e, fallback_path)
         
         # Fallback a ruta local
         os.makedirs(fallback_path, exist_ok=True)
@@ -121,8 +121,8 @@ class EmailService:
         if not self.imap_client:
             raise Exception("No hay conexión IMAP establecida")
         
-        print(f"[SEARCH] Buscando: keyword='{keyword}', limit={limit}, timeout={timeout}")
-        print(f"[SEARCH] Rango: {date_from} hasta {date_to}")
+        logger.debug("Buscando: keyword='%s', limit=%s, timeout=%s", keyword, limit, timeout)
+        logger.debug("Rango: %s hasta %s", date_from, date_to)
         
         self.messages = self.imap_client.search_by_subject(
             keyword, 
@@ -259,9 +259,25 @@ class EmailService:
             "total_files": 0,
             "errors": 0
         }
-        
+        # Dedupe por asunto normalizado dentro de esta corrida: evita
+        # descargar dos veces el mismo correo reenviado/duplicado.
+        seen_subjects = set()
+
         for idx, msg in enumerate(msgs):
             try:
+                subject_key = str(msg.get("subject") or "").lower().strip()
+                import re as _re
+                subject_key = _re.sub(r"\s+", " ", subject_key)
+                if subject_key and subject_key in seen_subjects:
+                    logger.debug(
+                        "Asunto duplicado, se omite descarga: %s",
+                        (msg.get("subject") or "")[:60],
+                    )
+                    if on_progress:
+                        on_progress(idx, len(msgs), msg, [])
+                    continue
+                if subject_key:
+                    seen_subjects.add(subject_key)
                 # Extraer fecha del correo si está disponible
                 email_date = None
                 if "date" in msg and msg["date"]:
@@ -293,7 +309,7 @@ class EmailService:
                     
             except Exception as e:
                 stats["errors"] += 1
-                print(f"Error descargando adjuntos del mensaje {msg.get('id')}: {e}")
+                logger.warning("Error descargando adjuntos del mensaje %s: %s", msg.get("id"), e)
         
         return stats
     

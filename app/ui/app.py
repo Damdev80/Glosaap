@@ -291,16 +291,13 @@ def main(page: ft.Page):
         """Callback cuando se selecciona una EPS"""
         ui_state.set_eps(eps_info, date_from, date_to)
 
-        # DEBUG: Mostrar qué EPS se seleccionó
-        print(f"[EPS] ========================================")
-        print(f"[EPS] EPS seleccionada: {eps_info.get('name')}")
-        print(f"[EPS] Filter: {eps_info.get('filter')}")
-        print(f"[EPS] Subject pattern: {eps_info.get('subject_pattern')}")
-        print(f"[EPS] ========================================")
+        logger.debug("EPS seleccionada: %s | filter=%s | pattern=%s",
+                     eps_info.get('name'), eps_info.get('filter'),
+                     eps_info.get('subject_pattern'))
 
         # LIMPIAR sesión anterior antes de nueva búsqueda
         # (no borra archivos físicos, solo la lista de archivos de esta búsqueda)
-        print("[CLEANUP] Limpiando archivos de búsquedas anteriores...")
+        logger.debug("Limpiando archivos de busquedas anteriores...")
         email_service.clear_session()
 
         search_info = ui_state.get_search_info()
@@ -340,16 +337,18 @@ def main(page: ft.Page):
             load_seq = messages_view.new_generation()
             try:
                 # IMPORTANTE: Limpiar archivos antiguos para que los nuevos tengan metadatos frescos
-                logger.info("[CLEANUP] Limpiando archivos temporales antiguos...")
+                logger.debug("Limpiando archivos temporales antiguos...")
                 try:
                     email_service.attachment_service.clear_all(delete_files=True)
-                    logger.info("[CLEANUP] Archivos antiguos limpiados. Listos para nueva descarga con metadatos.")
+                    logger.debug("Archivos antiguos limpiados. Listos para nueva descarga.")
                 except Exception as e:
-                    logger.warning("[CLEANUP] Error limpiando: %s", e)
+                    logger.warning("Error limpiando temporales: %s", e)
 
                 messages_view.set_loading(True, "🔍 Buscando correos...")
 
                 all_msgs = []
+                # Dedupe por asunto normalizado dentro de esta busqueda.
+                seen_subjects = set()
 
                 def on_found(msg):
                     if messages_view.is_cancelled(load_seq):
@@ -361,8 +360,23 @@ def main(page: ft.Page):
                     messages_view.show_messages(filtered, search_info)
                     messages_view.set_loading(True, f"🔍 Encontrados {len(all_msgs)} correo(s), mostrando {len(filtered)} filtrados...")
 
-                    # Descargar adjuntos automáticamente para mensajes de la EPS seleccionada
+                    # Descargar adjuntos solo si matchea la EPS y no es duplicado.
                     if msg in filtered and not messages_view.is_cancelled(load_seq):
+                        if not MessageFilter.matches(msg, ui_state.selected_eps):
+                            logger.debug(
+                                "Se omite descarga (no matchea EPS): %s",
+                                str(msg.get("subject") or "")[:60],
+                            )
+                            return
+                        _skey = MessageFilter.normalize_subject(msg.get("subject"))
+                        if _skey and _skey in seen_subjects:
+                            logger.debug(
+                                "Asunto duplicado, se omite descarga: %s",
+                                str(msg.get("subject") or "")[:60],
+                            )
+                            return
+                        if _skey:
+                            seen_subjects.add(_skey)
                         msg_id = msg.get("id")
                         if msg_id:
                             messages_view.update_message_status(msg_id, "📥 Descargando...")
@@ -388,11 +402,11 @@ def main(page: ft.Page):
                                     messages_view.update_message_status(msg_id, "⚠️ Sin adjuntos")
                                 else:
                                     messages_view.update_message_status(msg_id, "❌ Error", is_error=True)
-                                print(f"[ERROR] Error procesando correo {msg_id}: {error_msg}")
+                                logger.warning("Error procesando correo %s: %s", msg_id, error_msg)
 
                 # Palabra clave de búsqueda según EPS (centralizada en MessageFilter)
                 search_keyword = MessageFilter.get_search_keyword(ui_state.selected_eps)
-                print(f"[SEARCH] Palabra clave seleccionada: '{search_keyword}'")
+                logger.debug("Palabra clave seleccionada: '%s'", search_keyword)
 
                 # Buscar con filtro de fechas (timeout aumentado para búsquedas grandes)
                 email_service.search_messages(
@@ -475,11 +489,27 @@ def main(page: ft.Page):
 
                 downloaded = 0
                 total_files = 0
+                seen_selected = set()
 
                 for msg in ui_state.found_messages:
                     if messages_view.is_cancelled(dl_seq):
                         break
                     if msg.get("id") in selected_ids:
+                        if not MessageFilter.matches(msg, ui_state.selected_eps):
+                            logger.debug(
+                                "Se omite descarga manual (no matchea EPS): %s",
+                                str(msg.get("subject") or "")[:60],
+                            )
+                            continue
+                        _skey2 = MessageFilter.normalize_subject(msg.get("subject"))
+                        if _skey2 and _skey2 in seen_selected:
+                            logger.debug(
+                                "Asunto duplicado en descarga manual, se omite: %s",
+                                str(msg.get("subject") or "")[:60],
+                            )
+                            continue
+                        if _skey2:
+                            seen_selected.add(_skey2)
                         messages_view.update_message_status(msg["id"], "Descargando...")
 
                         try:
@@ -549,7 +579,7 @@ def main(page: ft.Page):
                         return
 
                     # Procesar TODOS los archivos Excel encontrados sin confirmación
-                    print(f"✅ Procesando TODOS los {len(excel_files)} archivos Excel automáticamente")
+                    logger.info("Procesando %s archivos Excel automaticamente", len(excel_files))
                     messages_view.set_processing(True, f"📊 Procesando {len(excel_files)} archivo(s) Excel...")
 
                     resultado = email_service.procesar_mutualser()
@@ -647,7 +677,7 @@ def main(page: ft.Page):
                         )
                         return
 
-                    print(f"[COOSALUD] Procesando {len(excel_files)} archivos Excel (devoluciones excluidas)")
+                    logger.info("COOSALUD procesando %s archivos Excel (devoluciones excluidas)", len(excel_files))
                     messages_view.set_processing(True, f"📊 Procesando {len(excel_files)} archivo(s) Excel...")
 
                     # Configurar procesador con homologador de Coosalud
@@ -657,16 +687,16 @@ def main(page: ft.Page):
                     # Delegar creación del directorio al servicio de configuración
                     if not os.path.exists(output_dir):
                         if ensure_dir(output_dir):
-                            print(f"[COOSALUD] Directorio de salida creado: {output_dir}")
+                            logger.debug("COOSALUD directorio de salida creado: %s", output_dir)
                         else:
-                            print(f"[COOSALUD] Error al crear directorio: {output_dir}")
+                            logger.warning("COOSALUD error al crear directorio: %s", output_dir)
 
                     # Fecha del correo más reciente (helper centralizado)
                     email_date = _latest_email_date_str(ui_state.found_messages)
                     if email_date:
-                        print(f"[COOSALUD] ✅ Fecha del correo extraída: {email_date}")
+                        logger.debug("COOSALUD fecha del correo extraida: %s", email_date)
                     else:
-                        print(f"[COOSALUD] ⚠️ Sin fecha extraíble de {len(ui_state.found_messages)} mensajes")
+                        logger.warning("COOSALUD sin fecha extraible de %s mensajes", len(ui_state.found_messages))
 
                     processor = CoosaludProcessor(homologador_path=homologador_path)
                     result_data, message = processor.process_glosas(

@@ -64,6 +64,25 @@ class MessageFilter:
         return filtered
     
     @staticmethod
+    def normalize_subject(subject) -> str:
+        """Normaliza un asunto para dedupe (minusculas, espacios colapsados)."""
+        import re as _re
+        if not subject:
+            return ""
+        key = str(subject).lower().strip()
+        return _re.sub(r"\s+", " ", key)
+
+    @staticmethod
+    def matches(msg: Dict, eps: Optional[Dict]) -> bool:
+        """Verifica client-side si un mensaje cumple el filtro de la EPS."""
+        if not eps:
+            return True
+        try:
+            return len(MessageFilter.filter_by_eps([msg], eps)) > 0
+        except Exception:
+            return True
+
+    @staticmethod
     def get_search_keyword(eps: Optional[Dict]) -> str:
         """
         Obtiene la palabra clave de búsqueda según la EPS.
@@ -77,7 +96,12 @@ class MessageFilter:
         if not eps:
             return "glosa"
         
-        subject_pattern = eps.get("subject_pattern", "")
+        subject_pattern = (eps.get("subject_pattern") or "").strip()
+        filter_type_exact = eps.get("filter_type", "")
+        # EPS con patron exacto (Mutualser/Coosalud): usar el patron
+        # COMPLETO en el SEARCH IMAP para no traer basura (ej. "Fwd:").
+        if filter_type_exact == "subject_exact_pattern" and subject_pattern:
+            return subject_pattern
         if not subject_pattern:
             return "glosa"
         
@@ -131,21 +155,38 @@ class EmailLoader:
         all_msgs = []
         downloaded_count = 0
         eps = self.app_state.selected_eps
-        
+        # Dedupe por asunto normalizado dentro de esta busqueda.
+        seen_subjects = set()
+
         def on_found(msg):
             nonlocal downloaded_count
             all_msgs.append(msg)
-            
+
             # Filtrar en tiempo real
             filtered = MessageFilter.filter_by_eps(all_msgs, eps)
             self.messages_view.show_messages(filtered, search_info)
             self.messages_view.set_loading(
-                True, 
+                True,
                 f"🔍 Encontrados {len(all_msgs)} correo(s), mostrando {len(filtered)} filtrados..."
             )
-            
-            # Descargar adjuntos automáticamente
+
+            # No descargar lo que no matchea el filtro de la EPS.
             if msg in filtered:
+                if not MessageFilter.matches(msg, eps):
+                    logger.debug(
+                        "Se omite descarga (no matchea EPS): %s",
+                        str(msg.get("subject") or "")[:60],
+                    )
+                    return
+                subject_key = MessageFilter.normalize_subject(msg.get("subject"))
+                if subject_key and subject_key in seen_subjects:
+                    logger.debug(
+                        "Asunto duplicado, se omite descarga: %s",
+                        str(msg.get("subject") or "")[:60],
+                    )
+                    return
+                if subject_key:
+                    seen_subjects.add(subject_key)
                 msg_id = msg.get("id")
                 if msg_id:
                     self._download_attachment(msg_id)
@@ -153,7 +194,7 @@ class EmailLoader:
         
         # Obtener palabra clave de búsqueda
         search_keyword = MessageFilter.get_search_keyword(eps)
-        logger.info(f"Buscando con palabra clave: '{search_keyword}'")
+        logger.debug("Buscando con palabra clave: '%s'", search_keyword)
         
         # Buscar mensajes (timeout aumentado para búsquedas grandes)
         self.email_service.search_messages(

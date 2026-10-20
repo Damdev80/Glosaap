@@ -299,7 +299,7 @@ class ImapClient:
                 logger.debug(f"Correo descartado: {subject[:50]}")
                 return None
             
-            logger.info(f"Correo encontrado: {subject[:60]}...")
+            logger.debug(f"Correo encontrado: {subject[:60]}...")
             
             return {
                 "id": msg_id.decode() if isinstance(msg_id, bytes) else str(msg_id),

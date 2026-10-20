@@ -44,7 +44,9 @@ class MessagesView:
         
         # Componentes - sin colores hardcodeados para soporte de temas
         self.messages_list = ft.Column([], scroll=ft.ScrollMode.AUTO, expand=True, spacing=0)
-        self.messages_status = ft.Text("", size=FONT_SIZES["small"])
+        self.messages_status = ft.Text(
+            "", size=FONT_SIZES["caption"], color=ft.Colors.ON_SURFACE_VARIANT
+        )
         self.loading_bar = ft.ProgressBar(visible=False)
         
         # Barra de progreso mejorada
@@ -52,31 +54,46 @@ class MessagesView:
             value=None  # None = indeterminado
         )
         self.processing_percentage = ft.Text(
-            "", 
-            size=12, 
-            weight=ft.FontWeight.W_500
+            "",
+            size=FONT_SIZES["caption"],
+            weight=ft.FontWeight.W_500,
+            color=ft.Colors.ON_SURFACE_VARIANT,
         )
         self.processing_spinner = ft.ProgressRing(
-            width=18, 
-            height=18, 
-            stroke_width=2
+            width=16,
+            height=16,
+            stroke_width=2,
+            color=ft.Colors.PRIMARY,
         )
-        self.processing_status = ft.Text("", size=FONT_SIZES["small"])
+        self.processing_status = ft.Text(
+            "", size=FONT_SIZES["caption"], color=ft.Colors.ON_SURFACE_VARIANT
+        )
         # Botón Cancelar visible durante el procesado (hilo principal)
-        self.cancel_btn = ft.OutlinedButton(
+        # Minimalista: TextButton sutil en ERROR, compacto, sin fondos/bordes
+        self.cancel_btn = ft.TextButton(
             "Cancelar",
-            icon=ft.Icons.CANCEL_OUTLINED,
+            icon=ft.Icons.CLOSE,
             visible=False,
             on_click=lambda e: self.cancel_processing(),
-            style=ft.ButtonStyle(color=ft.Colors.RED),
+            icon_color=ft.Colors.ERROR,
+            style=ft.ButtonStyle(
+                color=ft.Colors.ERROR,
+                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                text_style=ft.TextStyle(size=12),
+            ),
         )
         # Botón Cancelar para la carga/búsqueda (misma señal de cancelación)
         self.loading_cancel_btn = ft.TextButton(
             "Cancelar",
-            icon=ft.Icons.CANCEL_OUTLINED,
+            icon=ft.Icons.CLOSE,
             visible=False,
             on_click=lambda e: self.cancel_processing(),
-            style=ft.ButtonStyle(color=ft.Colors.RED),
+            icon_color=ft.Colors.ERROR,
+            style=ft.ButtonStyle(
+                color=ft.Colors.ERROR,
+                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                text_style=ft.TextStyle(size=12),
+            ),
         )
         
         # Contenedor de progreso (se muestra/oculta completo)
@@ -95,30 +112,36 @@ class MessagesView:
             padding=ft.padding.only(top=10)
         )
         
-        self.search_info_text = ft.Text("", size=12)
+        self.search_info_text = ft.Text(
+            "", size=FONT_SIZES["caption"], color=ft.Colors.ON_SURFACE_VARIANT
+        )
         
-        # Botones con colores visibles en ambos temas
+        # Acción principal + secundaria minimalista:
+        # un solo Elevated primario; el secundario como TextButton sutil
         self.process_eps_btn = ft.ElevatedButton(
-            "📊 Procesar",
+            "Procesar",
             icon=ft.Icons.TABLE_CHART,
             visible=False,
             on_click=lambda e: self.on_process(),
             style=ft.ButtonStyle(
-                color=ft.Colors.WHITE,
+                color=ft.Colors.ON_PRIMARY,
                 bgcolor=ft.Colors.PRIMARY,
-            )
+                padding=ft.padding.symmetric(horizontal=16, vertical=8),
+                text_style=ft.TextStyle(size=13),
+            ),
         )
-        
-        self.download_selected_btn = ft.ElevatedButton(
-            "📥 Descargar seleccionados",
+
+        self.download_selected_btn = ft.TextButton(
+            "Descargar seleccionados",
             icon=ft.Icons.DOWNLOAD,
             visible=False,
             disabled=True,
             on_click=lambda e: self.on_download_selected(),
             style=ft.ButtonStyle(
-                color=ft.Colors.WHITE,
-                bgcolor=ft.Colors.SECONDARY,
-            )
+                color=ft.Colors.PRIMARY,
+                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                text_style=ft.TextStyle(size=12),
+            ),
         )
         
         self.select_all_checkbox = ft.Checkbox(
@@ -130,10 +153,12 @@ class MessagesView:
         
         self.selected_count_text = ft.Text(
             "0 seleccionados",
-            size=12,
+            size=FONT_SIZES["caption"],
+            color=ft.Colors.ON_SURFACE_VARIANT,
         )
 
         # Filtro por texto (en memoria: asunto/remitente) + paginación 50/página
+        # Minimalista: TextField denso y compacto, una sola barra con paginación
         self._all_messages = []
         self._filtered_messages = []
         self._filter_text = ""
@@ -144,19 +169,31 @@ class MessagesView:
             prefix_icon=ft.Icons.SEARCH,
             expand=True,
             dense=True,
+            height=38,
+            text_size=13,
+            content_padding=ft.padding.symmetric(horizontal=12, vertical=6),
+            border_radius=8,
             on_change=self._on_filter_changed,
         )
         self.prev_btn = ft.IconButton(
             icon=ft.Icons.CHEVRON_LEFT,
+            icon_size=18,
+            icon_color=ft.Colors.ON_SURFACE_VARIANT,
             tooltip="Anterior",
             on_click=self._on_prev_page,
         )
         self.next_btn = ft.IconButton(
             icon=ft.Icons.CHEVRON_RIGHT,
+            icon_size=18,
+            icon_color=ft.Colors.ON_SURFACE_VARIANT,
             tooltip="Siguiente",
             on_click=self._on_next_page,
         )
-        self.page_label = ft.Text("Página 1 de 1", size=12)
+        self.page_label = ft.Text(
+            "Página 1 de 1",
+            size=FONT_SIZES["caption"],
+            color=ft.Colors.ON_SURFACE_VARIANT,
+        )
         
         # Crear vista
         self.container = self._create_view()
@@ -176,20 +213,29 @@ class MessagesView:
         )
         
         # Breadcrumb navigation (usa NavigationController; sin page.data)
+        # Minimalista: PRIMARY sutil + separadores ON_SURFACE_VARIANT
         breadcrumb = ft.Row([
             ft.TextButton(
                 "Dashboard",
-                style=ft.ButtonStyle(color=ft.Colors.BLUE),
+                style=ft.ButtonStyle(
+                    color=ft.Colors.PRIMARY,
+                    padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                    text_style=ft.TextStyle(size=12),
+                ),
                 on_click=lambda e: self._go_to_dashboard()
             ),
-            ft.Text(" > ", color=ft.Colors.GREY),
+            ft.Text(" > ", color=ft.Colors.ON_SURFACE_VARIANT, size=12),
             ft.TextButton(
                 "Selección EPS",
-                style=ft.ButtonStyle(color=ft.Colors.BLUE),
+                style=ft.ButtonStyle(
+                    color=ft.Colors.PRIMARY,
+                    padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                    text_style=ft.TextStyle(size=12),
+                ),
                 on_click=lambda e: self.on_back()
             ),
-            ft.Text(" > ", color=ft.Colors.GREY),
-            ft.Text("Mensajes", weight=ft.FontWeight.BOLD),
+            ft.Text(" > ", color=ft.Colors.ON_SURFACE_VARIANT, size=12),
+            ft.Text("Mensajes", weight=ft.FontWeight.BOLD, size=12),
         ], spacing=0)
         
         # Usar Card para el header - soporte de temas automático
@@ -221,22 +267,26 @@ class MessagesView:
                 # Info de búsqueda
                 ft.Container(
                     content=ft.Row([
-                        ft.Icon(ft.Icons.INFO_OUTLINE, size=14),
+                        ft.Icon(
+                            ft.Icons.INFO_OUTLINE,
+                            size=14,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
                         self.search_info_text
-                    ], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
-                    padding=ft.padding.symmetric(horizontal=SPACING["md"], vertical=8),
+                    ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
+                    padding=ft.padding.symmetric(horizontal=SPACING["md"], vertical=6),
                 ),
                 self.loading_bar,
-                # Filtro + paginación (50 por página)
+                # Filtro + paginación (50 por página): barra única compacta
                 ft.Container(
                     content=ft.Row([
                         self.filter_field,
                         self.prev_btn,
                         self.page_label,
                         self.next_btn,
-                    ], spacing=8, alignment=ft.MainAxisAlignment.CENTER,
+                    ], spacing=4, alignment=ft.MainAxisAlignment.CENTER,
                        vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                    padding=ft.padding.symmetric(horizontal=SPACING["md"], vertical=6),
+                    padding=ft.padding.symmetric(horizontal=SPACING["md"], vertical=4),
                 ),
                 ft.Container(
                     content=self.messages_list,
@@ -346,7 +396,12 @@ class MessagesView:
                 "Limpiar filtro",
                 icon=ft.Icons.CLEAR,
                 on_click=self._on_clear_filter,
-                style=ft.ButtonStyle(color=ft.Colors.PRIMARY),
+                icon_color=ft.Colors.PRIMARY,
+                style=ft.ButtonStyle(
+                    color=ft.Colors.PRIMARY,
+                    padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                    text_style=ft.TextStyle(size=12),
+                ),
             )
         elif not self._all_messages:
             title = "Sin mensajes todavía."
@@ -356,7 +411,12 @@ class MessagesView:
                 "Actualizar",
                 icon=ft.Icons.REFRESH,
                 on_click=lambda e: self.on_refresh() if self.on_refresh else None,
-                style=ft.ButtonStyle(color=ft.Colors.PRIMARY),
+                icon_color=ft.Colors.PRIMARY,
+                style=ft.ButtonStyle(
+                    color=ft.Colors.PRIMARY,
+                    padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                    text_style=ft.TextStyle(size=12),
+                ),
             )
         else:
             title = "No se encontraron mensajes."
@@ -364,9 +424,9 @@ class MessagesView:
             icon = ft.Icons.INBOX
             action = None
         controls = [
-            ft.Icon(icon, size=64, color=ft.Colors.OUTLINE),
-            ft.Text(title, size=FONT_SIZES["body"], color=ft.Colors.ON_SURFACE),
-            ft.Text(hint, size=FONT_SIZES["small"], color=ft.Colors.ON_SURFACE_VARIANT),
+            ft.Icon(icon, size=40, color=ft.Colors.OUTLINE),
+            ft.Text(title, size=FONT_SIZES["small"], color=ft.Colors.ON_SURFACE),
+            ft.Text(hint, size=FONT_SIZES["caption"], color=ft.Colors.ON_SURFACE_VARIANT),
         ]
         if action is not None:
             controls.append(action)
@@ -374,9 +434,9 @@ class MessagesView:
             content=ft.Column(
                 controls,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=SPACING["md"],
+                spacing=SPACING["sm"],
             ),
-            padding=SPACING["xxl"],
+            padding=SPACING["lg"],
             alignment=ft.alignment.center,
         )
 
