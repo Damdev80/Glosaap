@@ -7,6 +7,7 @@ desde GitHub Releases.
 import os
 import sys
 import json
+import hashlib
 import tempfile
 import subprocess
 import urllib.request
@@ -48,6 +49,7 @@ class ReleaseInfo:
     download_url: str
     asset_name: str
     asset_size: int
+    checksum_url: Optional[str] = None
     
     @property
     def changelog(self) -> str:
@@ -58,6 +60,106 @@ class ReleaseInfo:
     def size_mb(self) -> float:
         """Retorna el tamaño en MB"""
         return self.asset_size / (1024 * 1024)
+
+
+# ==================== CHECKSUM SHA256 ====================
+
+def _parse_sha256_from_body(body: str) -> Optional[str]:
+    """
+    Extrae el hash SHA256 publicado en el body de la release.
+
+    Formato esperado en el body: línea "SHA256: <hash>".
+
+    Returns:
+        Hash en minúsculas si se encuentra, None en caso contrario.
+    """
+    if not body:
+        return None
+    match = re.search(r"SHA256:\s*([a-fA-F0-9]{64})", body, re.IGNORECASE)
+    if match:
+        return match.group(1).lower()
+    return None
+
+
+def _parse_sha256_file_content(content: str) -> Optional[str]:
+    """
+    Parsea el contenido de un asset .sha256.
+
+    Formato esperado: "<sha256>  <nombre-zip>" (estilo sha256sum).
+    También acepta un hash suelto en el contenido.
+
+    Returns:
+        Hash en minúsculas si se encuentra, None en caso contrario.
+    """
+    if not content:
+        return None
+    match = re.search(r"([a-fA-F0-9]{64})", content)
+    if match:
+        return match.group(1).lower()
+    return None
+
+
+def _verify_sha256(file_path: Path | str, expected_hash: str) -> bool:
+    """
+    Verifica el SHA256 de un archivo contra el hash esperado.
+
+    Args:
+        file_path: Ruta al archivo a verificar.
+        expected_hash: Hash SHA256 esperado (hex, 64 chars).
+
+    Returns:
+        True si coincide, False en cualquier otro caso
+        (archivo inexistente, hash vacío/inválido o mismatch).
+    """
+    try:
+        if not expected_hash:
+            logger.warning("Verificación SHA256 sin hash esperado")
+            return False
+        expected = expected_hash.strip().lower()
+        if len(expected) != 64 or any(c not in "0123456789abcdef" for c in expected):
+            logger.warning("Hash esperado inválido para verificación SHA256")
+            return False
+        digest = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                digest.update(chunk)
+        actual = digest.hexdigest().lower()
+        if actual != expected:
+            logger.warning(f"Checksum mismatch: esperado {expected}, obtenido {actual}")
+            return False
+        return True
+    except FileNotFoundError:
+        logger.error(f"Archivo no encontrado para verificación SHA256: {file_path}")
+        return False
+    except OSError as e:
+        logger.error(f"Error leyendo archivo para verificación SHA256: {e}")
+        return False
+
+
+def _find_checksum_asset_url(assets: list, zip_asset_name: Optional[str]) -> Optional[str]:
+    """
+    Busca la URL del asset .sha256 correspondiente al ZIP.
+
+    Prioridad: match exacto "<zip>.sha256", luego cualquier
+    asset que termine en .sha256.
+    """
+    if not assets:
+        return None
+    if zip_asset_name:
+        expected_name = f"{zip_asset_name}.sha256"
+        for asset in assets:
+            name = asset.get("name", "")
+            if name == expected_name:
+                url = asset.get("browser_download_url")
+                if url:
+                    return url
+    for asset in assets:
+        name = asset.get("name", "")
+        if name.endswith(".sha256"):
+            url = asset.get("browser_download_url")
+            if url:
+                return url
+    return None
 
 
 # ==================== COMPARACIÓN DE VERSIONES ====================
@@ -164,6 +266,7 @@ class UpdateService:
         self.current_version = current_version
         self.github_repo = github_repo
         self._downloaded_file: Optional[Path] = None
+        self._verified_sha256: Optional[str] = None
         self._ssl_context = self._create_ssl_context()
     
     def _create_ssl_context(self) -> ssl.SSLContext:
@@ -269,7 +372,9 @@ class UpdateService:
         if not download_url:
             logger.warning("No se encontró asset descargable en la release")
             raise UpdateCheckError("La actualización no tiene archivos descargables")
-        
+
+        checksum_url = _find_checksum_asset_url(assets, asset_name)
+
         release_info = ReleaseInfo(
             version=remote_version,
             tag_name=tag_name,
@@ -278,7 +383,8 @@ class UpdateService:
             published_at=data.get('published_at', ''),
             download_url=download_url,
             asset_name=asset_name or '',
-            asset_size=asset_size
+            asset_size=asset_size,
+            checksum_url=checksum_url
         )
         
         logger.info(f"Actualización disponible: {release_info.version} ({release_info.size_mb:.1f} MB)")
@@ -290,41 +396,46 @@ class UpdateService:
         on_progress: Optional[Callable[[int, int], None]] = None
     ) -> Path:
         """
-        Descarga la actualización.
-        
+        Descarga la actualización y verifica su integridad SHA256.
+
+        El checksum esperado se resuelve contra (1) el asset .sha256
+        del release si existe, o (2) el hash parseado del body como
+        fallback. Fail-closed: sin checksum publicado no hay update.
+
         Args:
             release: Información de la release a descargar
             on_progress: Callback con (bytes_descargados, total_bytes)
-            
+
         Returns:
-            Ruta al archivo descargado
-            
+            Ruta al archivo descargado y verificado
+
         Raises:
-            UpdateDownloadError: Si hay error en la descarga
+            UpdateDownloadError: Si hay error en la descarga o
+                el checksum falta/difiere ("checksum mismatch").
         """
         logger.info(f"Descargando actualización: {release.download_url}")
-        
+
         # Crear directorio de descargas
         UPDATE_DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
-        
+
         # Ruta destino
         dest_path = UPDATE_DOWNLOAD_DIR / release.asset_name
-        
+
         # Si ya existe, eliminarlo
         if dest_path.exists():
             dest_path.unlink()
-        
+
         request = urllib.request.Request(
             release.download_url,
             headers={'User-Agent': 'Glosaap-Updater/1.0'}
         )
-        
+
         try:
             with urllib.request.urlopen(request, context=self._ssl_context, timeout=300) as response:
                 total_size = int(response.headers.get('Content-Length', release.asset_size))
                 downloaded = 0
                 chunk_size = 8192
-                
+
                 with open(dest_path, 'wb') as f:
                     while True:
                         chunk = response.read(chunk_size)
@@ -332,14 +443,12 @@ class UpdateService:
                             break
                         f.write(chunk)
                         downloaded += len(chunk)
-                        
+
                         if on_progress:
                             on_progress(downloaded, total_size)
-            
+
             logger.info(f"Descarga completada: {dest_path}")
-            self._downloaded_file = dest_path
-            return dest_path
-            
+
         except urllib.error.HTTPError as e:
             logger.error(f"Error HTTP descargando: {e.code}")
             raise UpdateDownloadError(f"Error al descargar: {e.code} {e.reason}")
@@ -352,7 +461,79 @@ class UpdateService:
         except Exception as e:
             logger.error(f"Error inesperado descargando: {e}")
             raise UpdateDownloadError(f"Error inesperado: {str(e)}")
-    
+
+        # Tras la descarga, antes de permitir launch_updater: verificar SHA256.
+        expected_checksum = self._resolve_expected_checksum(release)
+        if not expected_checksum:
+            logger.error("Sin checksum publicado para la release; se rechaza la actualización")
+            try:
+                dest_path.unlink(missing_ok=True)
+            except OSError as e:
+                logger.error(f"No se pudo borrar ZIP sin checksum: {e}")
+            self._downloaded_file = None
+            self._verified_sha256 = None
+            raise UpdateDownloadError("checksum mismatch")
+
+        if not _verify_sha256(dest_path, expected_checksum):
+            logger.error(f"Checksum mismatch para {dest_path}; se rechaza la actualización")
+            try:
+                dest_path.unlink(missing_ok=True)
+            except OSError as e:
+                logger.error(f"No se pudo borrar ZIP con checksum inválido: {e}")
+            self._downloaded_file = None
+            self._verified_sha256 = None
+            raise UpdateDownloadError("checksum mismatch")
+
+        logger.info(f"Checksum SHA256 verificado correctamente: {dest_path}")
+        self._downloaded_file = dest_path
+        self._verified_sha256 = expected_checksum
+        return dest_path
+
+    def _fetch_checksum_asset(self, checksum_url: str) -> Optional[str]:
+        """
+        Descarga y parsea el contenido del asset .sha256.
+
+        Formato esperado: "<sha256>  <nombre-zip>".
+
+        Returns:
+            Hash en minúsculas si se pudo obtener y parsear, None si no.
+        """
+        try:
+            request = urllib.request.Request(
+                checksum_url,
+                headers={'User-Agent': 'Glosaap-Updater/1.0'}
+            )
+            with urllib.request.urlopen(request, context=self._ssl_context, timeout=30) as response:
+                content = response.read().decode('utf-8', errors='strict')
+            parsed = _parse_sha256_file_content(content)
+            if not parsed:
+                logger.warning(f"Asset .sha256 sin hash válido: {checksum_url}")
+            return parsed
+        except Exception as e:
+            logger.warning(f"No se pudo obtener checksum del asset .sha256: {e}")
+            return None
+
+    def _resolve_expected_checksum(self, release: ReleaseInfo) -> Optional[str]:
+        """
+        Resuelve el checksum esperado para una release.
+
+        Orden: (1) asset .sha256 si existe, (2) hash del body como fallback.
+
+        Returns:
+            Hash esperado en minúsculas, o None si no hay checksum publicado.
+        """
+        checksum_url = getattr(release, "checksum_url", None)
+        if checksum_url:
+            logger.info(f"Obteniendo checksum desde asset .sha256: {checksum_url}")
+            fetched = self._fetch_checksum_asset(checksum_url)
+            if fetched:
+                return fetched
+            logger.warning("Fallo al obtener checksum del asset .sha256, usando fallback del body")
+        body_hash = _parse_sha256_from_body(release.body or "")
+        if body_hash:
+            logger.info("Checksum obtenido del body de la release")
+        return body_hash
+
     def launch_updater(self, downloaded_file: Optional[Path] = None) -> bool:
         """
         Lanza el proceso de actualización.
@@ -374,6 +555,23 @@ class UpdateService:
         update_file = downloaded_file or self._downloaded_file
         if not update_file or not update_file.exists():
             raise UpdateLaunchError("No hay archivo de actualización para instalar")
+
+        # Antes de lanzar: re-verificar integridad si el archivo proviene
+        # de download_update (tenemos su checksum verificado guardado).
+        if (
+            self._verified_sha256
+            and self._downloaded_file
+            and Path(update_file) == Path(self._downloaded_file)
+        ):
+            if not _verify_sha256(update_file, self._verified_sha256):
+                logger.error(f"Checksum mismatch antes de lanzar updater: {update_file}")
+                try:
+                    Path(update_file).unlink(missing_ok=True)
+                except OSError as e:
+                    logger.error(f"No se pudo borrar ZIP inválido antes de lanzar: {e}")
+                self._downloaded_file = None
+                self._verified_sha256 = None
+                raise UpdateDownloadError("checksum mismatch")
         
         # Determinar ruta del updater
         if getattr(sys, 'frozen', False):
@@ -493,7 +691,8 @@ class UpdateService:
                     published_at=item.get('published_at', ''),
                     download_url=download_url,
                     asset_name=asset_name or '',
-                    asset_size=asset_size
+                    asset_size=asset_size,
+                    checksum_url=_find_checksum_asset_url(assets, asset_name)
                 ))
         
         return releases

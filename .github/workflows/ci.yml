@@ -111,7 +111,7 @@ jobs:
 
       - name: Build executable
         run: |
-          pyinstaller --noconfirm --onefile --windowed --icon=assets/icons/app_logo.ico --name=Glosaap --add-data="assets;assets" app/main.py
+          pyinstaller --noconfirm --onefile --windowed --icon=assets/icons/app_logo.ico --name=Glosaap --add-data="assets;assets" main.py
         continue-on-error: true
 
       - name: Upload build artifact

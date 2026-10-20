@@ -3,6 +3,8 @@
 Script de build automático para Glosaap
 Crea ejecutable portable usando PyInstaller
 """
+import argparse
+import hashlib
 import os
 import sys
 import shutil
@@ -25,6 +27,62 @@ APP_NAME = "Glosaap"
 BUILD_DIR = "build"
 DIST_DIR = "dist"
 FINAL_DIR = "release"
+
+# Specs trackeados en git: clean_directories() NUNCA debe borrarlos.
+# Solo se eliminan .spec generados (no trackeados) de corridas de PyInstaller.
+TRACKED_SPECS = frozenset({"glosaap.spec", "updater.spec"})
+
+# RIESGO CONOCIDO (supply-chain, documentado aquí porque docs/** está fuera
+# del alcance de este script): el updater hoy solo descarga por HTTPS y no
+# verifica firma. Como mitigación, este build publica <zip>.sha256 junto al
+# ZIP para que el updater verifique el hash (contrato update-system Fase 1).
+
+def compute_sha256(file_path):
+    """Calcula el hash SHA-256 hex de un archivo (lectura por bloques de 1 MB)."""
+    digest = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def write_sha256_file(zip_path):
+    """Genera al lado del ZIP su checksum.
+
+    Crea `<nombre-zip>.sha256` con formato estilo sha256sum:
+    `"<sha256>  <nombre-zip>"`. Devuelve la ruta del .sha256.
+    """
+    zip_path = Path(zip_path)
+    sha256_hash = compute_sha256(zip_path)
+    sha_path = zip_path.with_name(zip_path.name + ".sha256")
+    sha_path.write_text(f"{sha256_hash}  {zip_path.name}\n", encoding="utf-8")
+    print(f"🔐 SHA-256: {sha256_hash}")
+    print(f"📄 Checksum escrito: {sha_path}")
+    return str(sha_path)
+
+
+def parse_args(argv=None):
+    """Argumentos CLI (con --help; sin input() bloqueante para CI)."""
+    parser = argparse.ArgumentParser(
+        description="Build de Glosaap: genera release/Glosaap_vX.Y.Z_<ts>.zip + .sha256"
+    )
+    parser.add_argument(
+        "-y", "--yes", "--non-interactive",
+        dest="non_interactive",
+        action="store_true",
+        help="Modo no interactivo: no pide Enter al final ni abre el explorer (para CI).",
+    )
+    parser.add_argument(
+        "--skip-clean",
+        action="store_true",
+        help="No limpiar directorios de builds anteriores.",
+    )
+    parser.add_argument(
+        "--skip-open",
+        action="store_true",
+        help="No abrir la carpeta release/ en el explorer al finalizar.",
+    )
+    return parser.parse_args(argv)
 
 def print_step(message):
     """Imprime un paso con formato bonito"""
@@ -53,8 +111,13 @@ def clean_directories():
             shutil.rmtree(dir_name)
             print(f"🗑️  Eliminado: {dir_name}")
     
-    # Limpiar archivos spec
+    # Limpiar archivos spec GENERADOS (nunca los trackeados en git).
+    # Bug conocido: antes se borraba todo *.spec, incluyendo glosaap.spec
+    # y updater.spec que sí están versionados (ver git ls-files "*.spec").
     for spec_file in Path(".").glob("*.spec"):
+        if spec_file.name in TRACKED_SPECS:
+            print(f"⏭️  Conservado (trackeado en git): {spec_file}")
+            continue
         spec_file.unlink()
         print(f"🗑️  Eliminado: {spec_file}")
 
@@ -234,44 +297,54 @@ La aplicación verifica automáticamente las actualizaciones desde GitHub.
                 zipf.write(file_path, arc_name)
     
     print(f"🗜️  ZIP creado: {zip_path}")
-    
+
+    # Checksum SHA-256 del ZIP (contrato update-system Fase 1, lado publicación):
+    # genera release/Glosaap_vX.Y.Z_<ts>.zip.sha256 al lado del ZIP y loguea el hash.
+    # release.py lo sube junto al ZIP e incluye "SHA256: <hash>" en el body.
+    write_sha256_file(zip_path)
+
     # Mostrar información final
     zip_size = os.path.getsize(zip_path) / (1024 * 1024)
     print(f"📊 Tamaño final: {zip_size:.1f} MB")
     
     return zip_path
 
-def main():
+def main(args=None):
     """Función principal del build"""
+    if args is None:
+        args = parse_args([])
     print("🚀 GLOSAAP BUILD AUTOMÁTICO")
     print("=" * 60)
-    
+
     # Verificar requisitos
     if not check_requirements():
         return False
-    
+
     try:
-        # 1. Limpiar
-        clean_directories()
-        
+        # 1. Limpiar (salvo --skip-clean)
+        if not args.skip_clean:
+            clean_directories()
+        else:
+            print_step("Limpieza omitida (--skip-clean)")
+
         # 2. Build
         if not build_executables():
             return False
-        
+
         # 3. Empaquetar
         zip_path = create_portable_package()
         if not zip_path:
             return False
-        
+
         # 4. Éxito
         print_step("BUILD COMPLETADO")
         print(f"✅ Ejecutable listo: {zip_path}")
         print(f"📁 Abre la carpeta: {os.path.abspath(FINAL_DIR)}")
-        
-        # Abrir carpeta en explorer
-        if sys.platform == 'win32':
+
+        # Abrir carpeta en explorer (solo local interactivo, nunca en CI)
+        if sys.platform == 'win32' and not args.non_interactive and not args.skip_open:
             subprocess.run(f'explorer "{os.path.abspath(FINAL_DIR)}"', shell=True)
-        
+
         return True
         
     except Exception as e:
@@ -281,10 +354,14 @@ def main():
         return False
 
 if __name__ == "__main__":
-    success = main()
+    args = parse_args()
+    success = main(args)
     if success:
         print(f"\n🎉 ¡Build exitoso! Archivo listo para distribuir.")
     else:
         print(f"\n💥 Build falló. Revisa los errores arriba.")
-    
-    input("\nPresiona Enter para salir...")
+
+    # Bug conocido: input() bloqueaba CI. Solo pausar en terminal interactiva
+    # y fuera de modo no-interactivo.
+    if not args.non_interactive and sys.stdin.isatty():
+        input("\nPresiona Enter para salir...")
