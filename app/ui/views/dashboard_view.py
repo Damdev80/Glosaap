@@ -108,7 +108,22 @@ class DashboardView:
             image_path=os.path.join(self.assets_dir, "img", "responder_glosa.png")
         )
         
-        # Contenido principal
+        # Contenido principal: "Manejar Glosa" protagonista; el resto en
+        # sección colapsada "Próximamente" (Evitar/Responder no funcionales).
+        upcoming_section = ft.ExpansionTile(
+            title=ft.Text("Próximamente", weight=ft.FontWeight.W_600),
+            subtitle=ft.Text(
+                "Evitar Glosa y Responder Glosa estarán disponibles pronto",
+                size=12,
+            ),
+            initially_expanded=False,
+            controls=[
+                ft.Row([
+                    card_evitar,
+                    card_responder
+                ], alignment=ft.MainAxisAlignment.CENTER, spacing=30),
+            ],
+        )
         main_content = ft.Column([
             ft.Container(height=30),
             # Header
@@ -118,12 +133,15 @@ class DashboardView:
                 ft.Text("Sistema de Gestión de Glosas", size=16, weight=ft.FontWeight.W_400),
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
             ft.Container(height=30),
-            # Cards
+            # Card protagonista
             ft.Row([
-                card_evitar,
-                card_manejar,
-                card_responder
+                card_manejar
             ], alignment=ft.MainAxisAlignment.CENTER, spacing=30),
+            ft.Container(height=20),
+            ft.Container(
+                content=upcoming_section,
+                padding=ft.padding.symmetric(horizontal=40),
+            ),
             ft.Container(height=30),
             # Info de usuario
             ft.Container(
@@ -138,7 +156,7 @@ class DashboardView:
                 ], alignment=ft.MainAxisAlignment.CENTER),
                 padding=10
             )
-        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO)
         
         # Botones flotantes
         tools_btn = ft.Container(

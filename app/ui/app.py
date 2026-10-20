@@ -98,6 +98,31 @@ def _open_folder_in_explorer(folder_path):
         logger.warning("No se pudo abrir carpeta %s: %s", folder_path, ex)
 
 
+def _open_file_default(file_path):
+    """Abre un archivo con la app por defecto (único punto; las vistas no llaman subprocess).
+
+    Usado por el botón "Ver no homologados" del resumen post-procesado.
+    """
+    if not file_path:
+        return False
+    try:
+        if sys.platform.startswith("win"):
+            try:
+                os.startfile(file_path)  # type: ignore[attr-defined]
+                return True
+            except Exception:
+                pass
+        import subprocess as _sp
+        if sys.platform.startswith("darwin"):
+            _sp.Popen(["open", file_path])
+        else:
+            _sp.Popen(["xdg-open", file_path])
+        return True
+    except Exception as ex:
+        logger.warning("No se pudo abrir archivo %s: %s", file_path, ex)
+        return False
+
+
 def main(page: ft.Page):
     """Función principal de la aplicación (bootstrap + inyección)"""
 
@@ -516,22 +541,50 @@ def main(page: ft.Page):
                         messages_view.set_processing(False, msg)
                         messages_view.processing_status.color = ft.Colors.GREEN
 
-                        # Mostrar diálogo de procesamiento completado
+                        # Mostrar diálogo de procesamiento completado (resumen post-procesado)
                         output_files = [resultado['output_file']]
                         if resultado.get('objeciones_file'):
                             output_files.append(resultado['objeciones_file'])
 
                         _mutualser_output = str(resultado['output_file'])
+                        _objeciones_output = str(resultado.get('objeciones_file') or "")
+                        try:
+                            _total = int(resumen.get('total_registros', 0) or 0)
+                        except (TypeError, ValueError):
+                            _total = 0
+                        try:
+                            _hom = int(resumen.get('codigos_homologados', 0) or 0)
+                        except (TypeError, ValueError):
+                            _hom = 0
+                        resumen_summary = dict(resumen)
+                        resumen_summary['no_homologados'] = max(_total - _hom, 0) if _total else 0
+                        resumen_summary['output_dir'] = os.path.dirname(_mutualser_output)
 
                         def open_output_folder():
                             _open_folder_in_explorer(os.path.dirname(_mutualser_output))
 
+                        def open_non_homologated():
+                            if _objeciones_output and os.path.exists(_objeciones_output):
+                                if not _open_file_default(_objeciones_output):
+                                    AlertDialog.show_info(
+                                        page=page,
+                                        title="No homologados",
+                                        message=f"Hay {resumen_summary['no_homologados']} registro(s) no homologados.\n\nArchivo:\n{_objeciones_output}",
+                                    )
+                            else:
+                                AlertDialog.show_info(
+                                    page=page,
+                                    title="No homologados",
+                                    message=f"Hay {resumen_summary['no_homologados']} registro(s) no homologados.",
+                                )
+
                         AlertDialog.show_processing_complete(
                             page=page,
                             eps_name="MUTUALSER",
-                            stats=resumen,
+                            stats=resumen_summary,
                             output_files=output_files,
-                            on_open_folder=open_output_folder
+                            on_open_folder=open_output_folder,
+                            on_view_non_homologated=open_non_homologated if resumen_summary['no_homologados'] > 0 else None
                         )
                     else:
                         messages_view.set_processing(False, f"❌ Error: {resultado['message']}")
@@ -599,13 +652,25 @@ def main(page: ft.Page):
                         messages_view.set_processing(False, f"✅ {message}")
                         messages_view.processing_status.color = ft.Colors.GREEN
 
-                        # Preparar estadísticas desde los DataFrames
+                        # Preparar estadísticas desde los DataFrames (resumen post-procesado)
                         total_detalles = len(result_data.get('detalle', [])) if isinstance(result_data, dict) else 0
                         total_glosas = len(result_data.get('glosa', [])) if isinstance(result_data, dict) else 0
 
+                        _coosalud_total = total_detalles + total_glosas
+                        _coosalud_hom = 0
+                        try:
+                            _detalle_df = result_data.get('detalle') if isinstance(result_data, dict) else None
+                            if _detalle_df is not None and hasattr(_detalle_df, 'columns') and "Codigo homologado DGH" in _detalle_df.columns:
+                                _coosalud_hom = int((_detalle_df["Codigo homologado DGH"] != "").sum())
+                        except Exception:
+                            _coosalud_hom = 0
+
                         stats = {
                             'archivos_procesados': len(excel_files),
-                            'total_registros': total_detalles + total_glosas,
+                            'total_registros': _coosalud_total,
+                            'codigos_homologados': _coosalud_hom,
+                            'no_homologados': max(_coosalud_total - _coosalud_hom, 0) if _coosalud_total else 0,
+                            'output_dir': str(output_dir),
                         }
 
                         # Extraer nombre del archivo del mensaje
@@ -619,16 +684,25 @@ def main(page: ft.Page):
                                         output_files.append(path)
 
                         _coosalud_dir = str(output_dir)
+                        _coosalud_no_hom = int(stats.get('no_homologados', 0) or 0)
 
                         def open_coosalud_folder():
                             _open_folder_in_explorer(_coosalud_dir)
+
+                        def open_coosalud_non_homologated():
+                            AlertDialog.show_info(
+                                page=page,
+                                title="No homologados",
+                                message=f"Hay {_coosalud_no_hom} registro(s) no homologados.\n\nRevisa el Excel generado en:\n{_coosalud_dir}",
+                            )
 
                         AlertDialog.show_processing_complete(
                             page=page,
                             eps_name="COOSALUD",
                             stats=stats,
                             output_files=output_files if output_files else [f"📁 {output_dir}"],
-                            on_open_folder=open_coosalud_folder
+                            on_open_folder=open_coosalud_folder,
+                            on_view_non_homologated=open_coosalud_non_homologated if _coosalud_no_hom > 0 else None
                         )
                     else:
                         messages_view.set_processing(False, f"❌ {message}")
