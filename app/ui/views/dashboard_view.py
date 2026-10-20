@@ -25,9 +25,9 @@ class DashboardView:
         
         self.container = self._build()
         
-    def _create_dashboard_card(self, icon, title, subtitle, action_key, image_path=None):
+    def _create_dashboard_card(self, icon, title, subtitle, action_key, image_path=None, featured=False, in_development=False):
         """Crea una card del dashboard usando Card de Flet (respeta temas)"""
-        
+
         # Decidir si usar imagen o icono
         if image_path and os.path.exists(image_path):
             visual_element = ft.Image(
@@ -44,11 +44,15 @@ class DashboardView:
                 border_radius=40,
                 alignment=ft.alignment.center
             )
-        
+
         def on_click(e):
             if self.on_card_click:
                 self.on_card_click(action_key)
-        
+
+        # Protagonista más grande y con más elevación; en desarrollo atenuadas.
+        card_width = 230 if featured else 210
+        card_height = 260 if featured else 240
+
         # Usar Card de Flet que respeta temas automáticamente
         card = ft.Card(
             content=ft.Container(
@@ -57,7 +61,7 @@ class DashboardView:
                     ft.Container(height=15),
                     ft.Text(
                         title,
-                        size=18,
+                        size=20 if featured else 18,
                         weight=ft.FontWeight.BOLD,
                         text_align=ft.TextAlign.CENTER
                     ),
@@ -68,18 +72,46 @@ class DashboardView:
                         text_align=ft.TextAlign.CENTER,
                         weight=ft.FontWeight.W_400
                     )
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, 
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                    alignment=ft.MainAxisAlignment.CENTER),
                 padding=28,
-                width=210,
-                height=240,
+                width=card_width,
+                height=card_height,
                 on_click=on_click,
                 ink=True,
             ),
-            elevation=2,
+            elevation=4 if featured else 2,
+            opacity=0.6 if in_development else 1.0,
         )
-        
-        return card
+
+        if not in_development:
+            return card
+
+        # Card en desarrollo: badge "En desarrollo" superpuesto (mismo
+        # patrón que eps_card.py). El click se mantiene en la card interna.
+        badge = ft.Container(
+            content=ft.Text(
+                "En desarrollo",
+                size=10,
+                weight=ft.FontWeight.W_600,
+                color=ft.Colors.ON_PRIMARY,
+            ),
+            bgcolor=ft.Colors.PRIMARY,
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=8,
+        )
+        return ft.Stack(
+            controls=[
+                card,
+                ft.Container(
+                    content=badge,
+                    alignment=ft.alignment.top_center,
+                    padding=ft.padding.only(top=6),
+                ),
+            ],
+            width=card_width,
+            height=card_height,
+        )
     
     def _build(self):
         """Construye la vista del dashboard"""
@@ -89,41 +121,31 @@ class DashboardView:
             title="Evitar Glosa",
             subtitle="Prevención y validación\nantes de facturar",
             action_key="evitar",
-            image_path=os.path.join(self.assets_dir, "img", "evitar_glosa.png")
+            image_path=os.path.join(self.assets_dir, "img", "evitar_glosa.png"),
+            in_development=True,
         )
-        
+
         card_manejar = self._create_dashboard_card(
             icon=ft.Icons.BUILD_OUTLINED,
             title="Manejar Glosa",
             subtitle="Gestión y seguimiento\nde glosas activas",
             action_key="manejar",
-            image_path=os.path.join(self.assets_dir, "img", "manejar_glosa.png")
+            image_path=os.path.join(self.assets_dir, "img", "manejar_glosa.png"),
+            featured=True,
         )
-        
+
         card_responder = self._create_dashboard_card(
             icon=ft.Icons.REPLY_ALL_OUTLINED,
             title="Responder Glosa",
             subtitle="Respuesta a objeciones\ny documentación",
             action_key="responder",
-            image_path=os.path.join(self.assets_dir, "img", "responder_glosa.png")
+            image_path=os.path.join(self.assets_dir, "img", "responder_glosa.png"),
+            in_development=True,
         )
-        
-        # Contenido principal: "Manejar Glosa" protagonista; el resto en
-        # sección colapsada "Próximamente" (Evitar/Responder no funcionales).
-        upcoming_section = ft.ExpansionTile(
-            title=ft.Text("Próximamente", weight=ft.FontWeight.W_600),
-            subtitle=ft.Text(
-                "Evitar Glosa y Responder Glosa estarán disponibles pronto",
-                size=12,
-            ),
-            initially_expanded=False,
-            controls=[
-                ft.Row([
-                    card_evitar,
-                    card_responder
-                ], alignment=ft.MainAxisAlignment.CENTER, spacing=30),
-            ],
-        )
+
+        # Las 3 cards visibles en fila: "Manejar Glosa" protagonista
+        # (primera, más grande); Evitar/Responder atenuadas con badge
+        # "En desarrollo". El click mantiene su diálogo actual.
         main_content = ft.Column([
             ft.Container(height=30),
             # Header
@@ -133,15 +155,12 @@ class DashboardView:
                 ft.Text("Sistema de Gestión de Glosas", size=16, weight=ft.FontWeight.W_400),
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
             ft.Container(height=30),
-            # Card protagonista
+            # Fila de 3 cards: Manejar protagonista primero
             ft.Row([
-                card_manejar
+                card_manejar,
+                card_evitar,
+                card_responder
             ], alignment=ft.MainAxisAlignment.CENTER, spacing=30),
-            ft.Container(height=20),
-            ft.Container(
-                content=upcoming_section,
-                padding=ft.padding.symmetric(horizontal=40),
-            ),
             ft.Container(height=30),
             # Info de usuario
             ft.Container(
