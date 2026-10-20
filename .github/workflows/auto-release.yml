@@ -1,55 +1,168 @@
 name: Auto Release
 
+# Publica la release con el ZIP portable + checksum (.sha256).
+#
+# Flujo oficial (ver skill glosa-release):
+#   1. Bump APP_VERSION en app/config/settings.py (semver).
+#   2. Entrada "## [x.y.z] - YYYY-MM-DD" en CHANGELOG.md.
+#   3. Tag git coincidente:  git tag v<x.y.z> && git push origin v<x.y.z>
+#   4. Este workflow compila en Windows (~5-10 min, aceptable), genera
+#      release/Glosaap_v*.zip + .sha256 via build.py y los adjunta al release
+#      con el body extraido de CHANGELOG.md.
+#
+# Triggers:
+#   - push de tag v*  -> version = nombre del tag sin la "v".
+#   - workflow_dispatch -> version = input "version" (sin "v" inicial, opcional)
+#     o APP_VERSION de settings.py si se deja vacio. Crea el tag v<version>.
+#     (Antes se disparaba con push a main que tocara settings.py y creaba
+#     releases VACIOS sin assets ni tag previo: se elimina ese trigger para
+#     cumplir "no publicar sin tag coincidente".)
+#
+# Como probarlo SIN publicar basura:
+#   - NO hagas push de tags de prueba (v0.0.0-test crearia un release real).
+#   - Valida el build en local:  python build.py --yes --skip-open
+#   - Prueba manual real: Actions -> Auto Release -> Run workflow (solo cuando
+#     quieras publicar de verdad; re-ejecutarlo sobre una version existente
+#     solo re-compila y actualiza los assets, no crea basura nueva).
+#
+# Notas de implementacion:
+#   - Python 3.11 fijo (ver ci.yml; local 3.15 no soportado).
+#   - Build: "python build.py --yes --skip-open" (flags verificados con
+#     build.py --help). --yes ya evita el explorer y el input(); --skip-open
+#     se pasa explicito para CI. NO se pasa --skip-clean: en CI se quiere
+#     build limpio. build.py NO se modifico (ya era CI-safe).
+#   - Fail-closed sin checksum: el paso "Verify assets" falla si falta el ZIP
+#     o su .sha256, y softprops lleva fail_on_unmatched_files: true.
+#   - Solo usa el github.token default (secrets.GITHUB_TOKEN). Sin secretos.
+#   - release.py manual sigue valido y no se toca.
+#
+# RIESGO CONOCIDO (supply-chain): el updater solo descarga por HTTPS y no
+# verifica firma. Mitigacion: el .sha256 viaja junto al ZIP y el body incluye
+# la linea "SHA256: <hash>" para verificacion (contrato update-system Fase 1).
+
 on:
   push:
-    branches: [ main ]
-    paths:
-      - 'app/config/settings.py'
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version a publicar (ej. 0.11.17). Vacia = APP_VERSION de settings.py'
+        required: false
+        default: ''
 
 jobs:
-  release:
+  build-and-release:
     runs-on: windows-latest
-    
+    permissions:
+      contents: write # necesario para crear el release/tag con el token default
+    timeout-minutes: 30 # PyInstaller tarda ~5-10 min + instalacion de deps
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Get version from settings.py
-      id: version
-      run: |
-        $content = Get-Content app/config/settings.py
-        $versionLine = $content | Where-Object { $_ -match 'APP_VERSION = "(.+)"' }
-        $version = $matches[1]
-        echo "version=$version" >> $env:GITHUB_OUTPUT
-        echo "Found version: $version"
-    
-    - name: Check if release exists
-      id: check_release
-      run: |
-        $response = try { 
-          Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/releases/tags/v${{ steps.version.outputs.version }}" -Headers @{Authorization="token ${{ secrets.GITHUB_TOKEN }}"}
-          $true
-        } catch { 
-          $false 
-        }
-        echo "exists=$response" >> $env:GITHUB_OUTPUT
-    
-    - name: Create Release
-      if: steps.check_release.outputs.exists == 'false'
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: v${{ steps.version.outputs.version }}
-        name: Glosaap v${{ steps.version.outputs.version }}
-        body: |
-          🚀 **Glosaap v${{ steps.version.outputs.version }}**
-          
-          ✨ **Novedades:**
-          - Actualizaciones automáticas desde GitHub
-          - Mejoras en la interfaz
-          - Correcciones de bugs
-          
-          📥 **Instalación:**
-          1. Descarga el archivo ZIP
-          2. Extrae en tu carpeta deseada
-          3. Ejecuta Glosaap.exe
-        draft: false
-        prerelease: false
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # historial + tags disponibles para notas/diagnostico
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        env:
+          DISPATCH_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $version = $env:GITHUB_REF -replace 'refs/tags/v', ''
+            echo "Origen: tag push ($env:GITHUB_REF)"
+          } elseif ($env:DISPATCH_VERSION) {
+            $version = $env:DISPATCH_VERSION -replace '^v', ''
+            echo "Origen: workflow_dispatch input (version=$version)"
+          } else {
+            $content = Get-Content app/config/settings.py -Raw
+            if ($content -match 'APP_VERSION\s*=\s*"([^"]+)"') {
+              $version = $Matches[1]
+              echo "Origen: APP_VERSION de settings.py (version=$version)"
+            } else {
+              Write-Error 'No se pudo leer APP_VERSION de app/config/settings.py'
+              exit 1
+            }
+          }
+          if (-not $version) { Write-Error 'Version vacia, abortando'; exit 1 }
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "Version resuelta: $version"
+
+      - name: Build portable ZIP
+        run: python build.py --yes --skip-open
+
+      - name: Verify assets (fail-closed sin checksum)
+        shell: pwsh
+        run: |
+          $zips = Get-ChildItem release/*.zip -ErrorAction SilentlyContinue
+          if (-not $zips) { Write-Error 'Sin ZIP en release/: fallo el build'; exit 1 }
+          $zips | ForEach-Object { echo "ZIP: $($_.Name) ($([math]::Round($_.Length / 1MB, 1)) MB)" }
+          foreach ($zip in $zips) {
+            $sha = "$($zip.FullName).sha256"
+            if (-not (Test-Path $sha)) { Write-Error "Falta checksum: $($zip.Name).sha256 (prohibido publicar sin checksum)"; exit 1 }
+            echo "SHA256 OK: $(Split-Path $sha -Leaf)"
+          }
+
+      - name: Extract release notes from CHANGELOG.md
+        shell: python
+        run: |
+          import glob, os
+          version = "${{ steps.version.outputs.version }}"
+          body = ""
+          try:
+              lines = open("CHANGELOG.md", encoding="utf-8").read().splitlines()
+          except FileNotFoundError:
+              lines = []
+          start = end = None
+          for i, line in enumerate(lines):
+              if f"## [{version}]" in line and start is None:
+                  start = i
+              elif start is not None and line.startswith("## ["):
+                  end = i
+                  break
+          if start is not None:
+              body = "\n".join(lines[start:end or len(lines)]).strip()
+          if not body:
+              print(f"WARNING: sin seccion '## [{version}]' en CHANGELOG.md; body generico")
+              body = f"## Release {version}\n\nVer CHANGELOG.md del repositorio para detalles."
+          zips = sorted(glob.glob(f"release/Glosaap_v{version}_*.zip"),
+                        key=os.path.getmtime, reverse=True)
+          if zips:
+              sha_path = zips[0] + ".sha256"
+              try:
+                  digest = open(sha_path, encoding="utf-8").read().strip().split()[0]
+                  body += f"\n\nSHA256: {digest}"
+              except (FileNotFoundError, IndexError):
+                  raise SystemExit(f"ERROR: falta {sha_path} (fail-closed)")
+          open("release_body.md", "w", encoding="utf-8").write(body + "\n")
+          print(f"Body listo ({len(body)} chars) para v{version}")
+
+      - name: Publish release with ZIP+sha256
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Glosaap v${{ steps.version.outputs.version }}
+          body_path: release_body.md
+          files: |
+            release/*.zip
+            release/*.sha256
+          fail_on_unmatched_files: true
+          draft: false
+          prerelease: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

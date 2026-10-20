@@ -251,11 +251,110 @@ SPACING = {
     "xxl": 48,
 }
 
-# Dimensiones de ventana
+# Dimensiones de ventana (fuente única; NavigationController y app.py la usan).
+# Clave de persistencia en client_storage para recordar tamaño manual.
+WINDOW_STORAGE_KEY = "glosaap_window"
+
 WINDOW_SIZES = {
     "login": {"width": 480, "height": 520},
+    "method_selection": {"width": 900, "height": 600},
+    "dashboard": {"width": 800, "height": 550},
+    "tools": {"width": 800, "height": 500},
+    "homologacion": {"width": 900, "height": 600},
+    "mix_excel": {"width": 600, "height": 700},
+    "homologador_manual": {"width": 650, "height": 700},
+    "web_download": {"width": 1000, "height": 700},
+    "eps": {"width": 950, "height": 720},
+    "messages": {"width": 950, "height": 720},
     "main": {"width": 950, "height": 720},
 }
+
+
+def get_window_size_for_view(view_name: str):
+    """Retorna (width, height) por defecto para una vista.
+
+    Fuente única de tamaños consistentes; cae a "main" si la vista
+    no tiene entrada propia.
+    """
+    entry = WINDOW_SIZES.get(view_name) or WINDOW_SIZES.get("main")
+    try:
+        return int(entry["width"]), int(entry["height"])
+    except Exception:
+        fallback = WINDOW_SIZES["main"]
+        return int(fallback["width"]), int(fallback["height"])
+
+
+def _read_stored_sizes(page):
+    """Lee el dict persistido {vista: {width, height}} o None.
+
+    Tolerante a MagicMock en tests (retorna None si no es dict).
+    """
+    try:
+        stored = page.client_storage.get(WINDOW_STORAGE_KEY)
+    except Exception:
+        return None
+    if not isinstance(stored, dict):
+        return None
+    return stored
+
+
+def load_saved_window_size(page, view_name: str):
+    """Retorna (width, height) guardados para la vista o None.
+
+    Valida tipos y rangos razonables; nunca lanza.
+    """
+    try:
+        stored = _read_stored_sizes(page)
+        if not stored:
+            return None
+        entry = stored.get(view_name)
+        if not isinstance(entry, dict):
+            return None
+        width = entry.get("width")
+        height = entry.get("height")
+        width = float(width)
+        height = float(height)
+        if not (200 <= width <= 5000 and 200 <= height <= 5000):
+            return None
+        return int(width), int(height)
+    except Exception:
+        return None
+
+
+def save_window_size(page, view_name: str, width, height):
+    """Persiste el tamaño manual de una vista en client_storage.
+
+    Fusiona con lo ya guardado; nunca lanza (seguro en handlers).
+    Retorna True si guardó.
+    """
+    try:
+        width = int(float(width))
+        height = int(float(height))
+    except Exception:
+        return False
+    if not (200 <= width <= 5000 and 200 <= height <= 5000):
+        return False
+    if not view_name:
+        return False
+    try:
+        stored = _read_stored_sizes(page) or {}
+        stored = dict(stored)
+        stored[view_name] = {"width": width, "height": height}
+        page.client_storage.set(WINDOW_STORAGE_KEY, stored)
+        return True
+    except Exception:
+        return False
+
+
+def resolve_window_size(page, view_name: str):
+    """Tamaño efectivo: override guardado si existe, si no el de WINDOW_SIZES."""
+    try:
+        saved = load_saved_window_size(page, view_name)
+    except Exception:
+        saved = None
+    if saved is not None:
+        return saved
+    return get_window_size_for_view(view_name)
 
 
 def get_shadow(intensity: str = "md"):

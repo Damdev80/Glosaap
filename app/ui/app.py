@@ -21,7 +21,15 @@ if PROJECT_ROOT not in sys.path:
 from app.config.settings import PLAYWRIGHT_BROWSERS_PATH
 
 from app.service.email_service import EmailService
-from app.ui.styles import WINDOW_SIZES, ThemeManager, update_colors, get_colors
+from app.ui.styles import (
+    WINDOW_SIZES,
+    ThemeManager,
+    update_colors,
+    get_colors,
+    get_window_size_for_view,
+    resolve_window_size,
+    save_window_size,
+)
 from app.ui.screens.eps_screen import EpsScreen
 from app.ui.views import DashboardView, LoginView, ToolsView, MessagesView
 from app.ui.views.homologacion_view import HomologacionView
@@ -30,6 +38,7 @@ from app.ui.views.homologador_manual_view import HomologadorManualView
 from app.ui.views.web_download_view import WebDownloadView
 from app.ui.views.method_selection_view import MethodSelectionView
 from app.ui.components.alert_dialog import AlertDialog
+from app.ui.components.settings_dialog import show_settings_dialog
 from app.ui.components.update_dialog import UpdateChecker
 from app.ui.navigation import NavigationController
 from app.ui.app_state import AppState
@@ -128,21 +137,138 @@ def main(page: ft.Page):
 
     # ==================== CONFIGURACIÓN INICIAL ====================
     page.title = "Glosaap"
-    page.window.width = WINDOW_SIZES["login"]["width"]
-    page.window.height = WINDOW_SIZES["login"]["height"]
+    # Restaura el tamaño manual guardado (clave glosaap_window) si existe;
+    # si no, usa el tamaño consistente de WINDOW_SIZES para login.
+    try:
+        _init_width, _init_height = resolve_window_size(page, "login")
+    except Exception:
+        _init_width, _init_height = get_window_size_for_view("login")
+    page.window.width = _init_width
+    page.window.height = _init_height
     # Nota: Flet no soporta window_min_width/height directamente
     # El tamaño mínimo lo gestiona NavigationController por vista.
 
     # Estado global único (fuente de verdad para NavigationController)
     ui_state = AppState()
 
-    # Atajos de teclado (solo F5 para actualizar)
+    # Rastrea si un TextField tiene el foco (para no robar ESC mientras
+    # el usuario escribe). Se actualiza encadenando on_focus/on_blur de
+    # los campos conocidos tras crear las vistas (sin tocar las vistas).
+    focus_state = {"textfield_focused": False}
+
+    def _has_open_dialog():
+        """True si hay algún diálogo/control modal abierto en overlay.
+
+        Revisa page.overlay (en Flet 0.27.6 es el offstage donde
+        page.open() coloca los AlertDialog/FilePicker/DatePicker).
+        Cierra solo su diálogo el llamador; aquí solo se detecta.
+        """
+        try:
+            overlay = getattr(page, "overlay", None) or []
+            for control in list(overlay):
+                try:
+                    if getattr(control, "open", False):
+                        return True
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        return False
+
+    def _persist_window_size(view_name=None, width=None, height=None):
+        """Guarda el tamaño actual en client_storage (nunca lanza)."""
+        try:
+            name = view_name or getattr(ui_state, "current_view", None) or "login"
+            w = width
+            h = height
+            if w is None or h is None:
+                try:
+                    w = page.window.width
+                    h = page.window.height
+                except Exception:
+                    return False
+            return save_window_size(page, name, w, h)
+        except Exception:
+            return False
+
+    def _on_window_resized(e):
+        """Guarda el tamaño manual al redimensionar (hilo principal)."""
+        try:
+            width = getattr(e, "width", None)
+            height = getattr(e, "height", None)
+            if width is None or height is None:
+                width = page.window.width
+                height = page.window.height
+            _persist_window_size(width=width, height=height)
+        except Exception:
+            pass
+
+    def _on_page_close(e):
+        """Guarda el tamaño final al cerrar (hilo principal)."""
+        try:
+            _persist_window_size()
+        except Exception:
+            pass
+
+    try:
+        page.on_resized = _on_window_resized
+    except Exception:
+        pass
+    try:
+        page.on_close = _on_page_close
+    except Exception:
+        pass
+    try:
+        _prev_window_handler = getattr(page.window, "on_event", None)
+
+        def _window_event_handler(e):
+            try:
+                etype = str(getattr(e, "type", "") or "").upper()
+                if "RESIZ" in etype or "MOVE" in etype:
+                    _persist_window_size()
+                elif "CLOSE" in etype:
+                    _persist_window_size()
+            except Exception:
+                pass
+            try:
+                if callable(_prev_window_handler):
+                    _prev_window_handler(e)
+            except Exception:
+                pass
+
+        page.window.on_event = _window_event_handler
+    except Exception:
+        pass
+
+    # Atajos de teclado: F5 refresca la vista actual, ESC vuelve atrás.
     def handle_keyboard(e):
-        """Maneja los atajos de teclado"""
-        if e.key == "F5":
-            # F5 para actualizar en vista de mensajes
-            if ui_state.current_view == "messages":
-                load_messages(messages_view.search_info_text.value or "")
+        """Maneja los atajos de teclado (hilo principal: page.update OK)."""
+        try:
+            key = getattr(e, "key", "")
+            if key == "F5":
+                try:
+                    refresh_current_view()
+                except Exception:
+                    pass
+                return
+            if key == "Escape":
+                # No robar ESC a diálogos modales ni a campos de texto.
+                try:
+                    if _has_open_dialog():
+                        return
+                except Exception:
+                    pass
+                try:
+                    if focus_state.get("textfield_focused"):
+                        return
+                except Exception:
+                    pass
+                try:
+                    go_back()
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     page.on_keyboard_event = handle_keyboard
 
@@ -922,49 +1048,121 @@ def main(page: ft.Page):
         except Exception:
             pass
 
+    # ==================== REFRESH GLOBAL (F5) + FOCO ====================
+
+    def refresh_current_view():
+        """Re-ejecuta la acción de refresh de la vista actual (F5 global).
+
+        Solo messages tiene refresh real (recarga del servidor). Si la
+        vista actual no tiene refresh, no hace nada y nunca lanza.
+        """
+        try:
+            current = getattr(ui_state, "current_view", None)
+        except Exception:
+            return
+        try:
+            if current == "messages":
+                try:
+                    search_text = ""
+                    try:
+                        search_text = messages_view.search_info_text.value or ""
+                    except Exception:
+                        pass
+                    load_messages(search_text)
+                    return
+                except Exception:
+                    return
+            # Fallback genérico: si la vista expone on_refresh/refresh/reload,
+            # se invoca; si no existe, no hace nada (sin errores).
+            try:
+                view = views_dict.get(current) if isinstance(views_dict, dict) else None
+            except Exception:
+                view = None
+            if view is None:
+                return
+            for attr in ("on_refresh", "refresh", "reload", "refresh_view"):
+                try:
+                    fn = getattr(view, attr, None)
+                except Exception:
+                    continue
+                if callable(fn):
+                    try:
+                        fn()
+                    except TypeError:
+                        try:
+                            fn(None)
+                        except Exception:
+                            pass
+                    except Exception:
+                        pass
+                    return
+        except Exception:
+            pass
+
+    def _track_textfield_focus(field):
+        """Encadena on_focus/on_blur para rastrear foco sin romper handlers."""
+        if field is None:
+            return
+        try:
+            prev_focus = getattr(field, "on_focus", None)
+            prev_blur = getattr(field, "on_blur", None)
+
+            def _on_focus(e):
+                focus_state["textfield_focused"] = True
+                try:
+                    if callable(prev_focus):
+                        prev_focus(e)
+                except Exception:
+                    pass
+
+            def _on_blur(e):
+                focus_state["textfield_focused"] = False
+                try:
+                    if callable(prev_blur):
+                        prev_blur(e)
+                except Exception:
+                    pass
+
+            field.on_focus = _on_focus
+            field.on_blur = _on_blur
+        except Exception:
+            pass
+
+    # Registrar foco en los TextField conocidos (login, filtro messages,
+    # homologación, mix, web). Si una vista aún no construyó sus campos
+    # (homologación los crea al seleccionar EPS), se ignora sin errores.
+    try:
+        _known_fields = []
+        for _candidate in (
+            getattr(login_view, "email_input", None),
+            getattr(login_view, "password_input", None),
+            getattr(login_view, "server_input", None),
+            getattr(messages_view, "filter_field", None),
+            getattr(homologacion_view, "codigo_erp_field", None),
+            getattr(homologacion_view, "codigo_dgh_field", None),
+            getattr(homologacion_view, "buscar_field", None),
+            getattr(mix_excel_view, "tolerance_field", None),
+            getattr(web_download_view, "familiar_nit", None),
+            getattr(web_download_view, "familiar_usuario", None),
+            getattr(web_download_view, "familiar_password", None),
+            getattr(web_download_view, "familiar_fecha_inicio", None),
+            getattr(web_download_view, "familiar_fecha_fin", None),
+            getattr(web_download_view, "fomag_usuario", None),
+            getattr(web_download_view, "fomag_password", None),
+        ):
+            if _candidate is not None:
+                _known_fields.append(_candidate)
+        for _field in _known_fields:
+            _track_textfield_focus(_field)
+    except Exception:
+        pass
+
     # ==================== CONSTRUIR PÁGINA ====================
 
-    # Función para abrir configuración global
+    # Función para abrir configuración global (canónica reutilizada)
     def open_global_settings(e):
         """Abre el diálogo de configuración desde cualquier pantalla"""
-        is_dark = ThemeManager.is_dark()
-
-        def toggle_theme(ev):
-            page.close(settings_dialog)
-            ThemeManager.toggle_theme()
-            update_colors()
-
-        settings_dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("⚙️ Configuración", size=18, weight=ft.FontWeight.W_600),
-            content=ft.Container(
-                content=ft.Column([
-                    ft.Text("Apariencia", size=14, weight=ft.FontWeight.W_500),
-                    ft.Container(height=10),
-                    ft.Row([
-                        ft.Icon(ft.Icons.DARK_MODE if is_dark else ft.Icons.LIGHT_MODE, size=20),
-                        ft.Text("Modo oscuro", size=13),
-                        ft.Container(expand=True),
-                        ft.Switch(value=is_dark, on_change=toggle_theme)
-                    ], alignment=ft.MainAxisAlignment.START),
-                    ft.Divider(height=20),
-                    ft.Text("Información", size=14, weight=ft.FontWeight.W_500),
-                    ft.Container(height=10),
-                    ft.Row([
-                        ft.Icon(ft.Icons.INFO_OUTLINE, size=20),
-                        ft.Column([
-                            ft.Text(f"Versión: {APP_VERSION}", size=12),
-                            ft.Text("Glosaap - Gestión de Glosas", size=11),
-                        ], spacing=2)
-                    ], alignment=ft.MainAxisAlignment.START, spacing=10),
-                ], spacing=5, tight=True),
-                width=320,
-                padding=ft.padding.only(top=10)
-            ),
-            actions=[ft.TextButton("Cerrar", on_click=lambda e: page.close(settings_dialog))],
-            actions_alignment=ft.MainAxisAlignment.END
-        )
-        page.open(settings_dialog)
+        show_settings_dialog(page)
 
     # Botón de configuración global (visible en todas las pantallas)
     global_settings_btn = ft.Container(

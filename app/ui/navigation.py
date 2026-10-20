@@ -5,7 +5,11 @@ Maneja todas las transiciones entre vistas de la aplicación.
 """
 import flet as ft
 from typing import Dict, Callable, Any
-from app.ui.styles import WINDOW_SIZES
+from app.ui.styles import (
+    WINDOW_SIZES,
+    get_window_size_for_view,
+    resolve_window_size,
+)
 
 
 class NavigationController:
@@ -95,22 +99,13 @@ class NavigationController:
         # Limpiar loadings residuales de forma centralizada
         self._hide_loading_overlays()
         
-        # Configurar tamaño de ventana según vista
-        sizes = {
-            "login": (WINDOW_SIZES["login"]["width"], WINDOW_SIZES["login"]["height"]),
-            "method_selection": (900, 600),
-            "dashboard": (800, 550),
-            "tools": (800, 500),
-            "homologacion": (900, 600),
-            "mix_excel": (600, 700),
-            "homologador_manual": (650, 700),
-            "web_download": (1000, 700),
-            "eps": (WINDOW_SIZES["main"]["width"], WINDOW_SIZES["main"]["height"]),
-            "messages": (WINDOW_SIZES["main"]["width"], WINDOW_SIZES["main"]["height"]),
-        }
-        
-        if view_name in sizes:
-            self._set_window_size(*sizes[view_name])
+        # Configurar tamaño de ventana según vista (fuente única WINDOW_SIZES;
+        # respeta el tamaño manual guardado en client_storage si existe).
+        try:
+            width, height = resolve_window_size(self.page, view_name)
+        except Exception:
+            width, height = get_window_size_for_view(view_name)
+        self._set_window_size(width, height)
         
         self.page.update()
     
