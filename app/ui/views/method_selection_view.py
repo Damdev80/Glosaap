@@ -3,6 +3,7 @@ Vista de selección de método: Correo vs Web
 """
 import flet as ft
 import os
+from app.ui.components.alert_dialog import AlertDialog
 
 
 class MethodSelectionView:
@@ -112,7 +113,7 @@ class MethodSelectionView:
             ft.OutlinedButton(
                 "Cerrar sesión",
                 icon=ft.Icons.LOGOUT,
-                on_click=lambda e: self.on_logout() if self.on_logout else None,
+                on_click=lambda e: self._confirm_logout(e),
             )
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True)
         
@@ -123,6 +124,23 @@ class MethodSelectionView:
             visible=False
         )
     
+    def _confirm_logout(self, e):
+        """Antepone confirmación antes de cerrar sesión y limpiar datos."""
+        def do_logout(ev):
+            if self.on_logout:
+                self.on_logout()
+        AlertDialog.show_confirm(
+            self.page,
+            title="Cerrar sesión",
+            message=(
+                "¿Cerrar la sesión actual?\n\n"
+                "Se limpiará la sesión guardada y tendrás que iniciar sesión de nuevo."
+            ),
+            confirm_text="Cerrar sesión",
+            cancel_text="Cancelar",
+            on_confirm=do_logout,
+        )
+
     def rebuild(self):
         """Reconstruye la vista con el tema actual"""
         was_visible = self.container.visible if self.container else False

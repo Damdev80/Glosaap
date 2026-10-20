@@ -5,6 +5,7 @@ import flet as ft
 import os
 from app.ui.styles import FONT_SIZES, SPACING, ThemeManager, get_colors, update_colors
 from app.config.settings import APP_VERSION
+from app.ui.components.alert_dialog import AlertDialog
 from app.ui.components.loading_overlay import LoadingOverlay, ToastNotification
 
 
@@ -170,7 +171,7 @@ class DashboardView:
                     ft.Container(width=20),
                     ft.TextButton(
                         "Cerrar sesión",
-                        on_click=lambda e: self.on_logout() if self.on_logout else None,
+                        on_click=lambda e: self._confirm_logout(e),
                     )
                 ], alignment=ft.MainAxisAlignment.CENTER),
                 padding=10
@@ -272,6 +273,23 @@ class DashboardView:
             else:
                 self.toast.info(message)
     
+    def _confirm_logout(self, e):
+        """Antepone confirmación antes de cerrar sesión y limpiar datos."""
+        def do_logout(ev):
+            if self.on_logout:
+                self.on_logout()
+        AlertDialog.show_confirm(
+            self.page,
+            title="Cerrar sesión",
+            message=(
+                "¿Cerrar la sesión actual?\n\n"
+                "Se limpiará la sesión guardada y tendrás que iniciar sesión de nuevo."
+            ),
+            confirm_text="Cerrar sesión",
+            cancel_text="Cancelar",
+            on_confirm=do_logout,
+        )
+
     def _check_updates(self, e):
         """Abre el diálogo de verificación de actualizaciones"""
         try:

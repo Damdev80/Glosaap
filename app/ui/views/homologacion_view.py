@@ -6,6 +6,7 @@ import flet as ft
 import pandas as pd
 from app.ui.styles import FONT_SIZES, SPACING
 from app.ui.components.navigation_header import NavigationHeader
+from app.ui.components.alert_dialog import AlertDialog
 from app.core.homologacion_service import HomologacionService
 
 
@@ -161,8 +162,8 @@ class HomologacionView:
         self.codigo_erp_field = ft.TextField(
             label="Código ERP",
             hint_text="881141",
-            hint_style=ft.TextStyle(color="#000000"),
-            color="#000000",
+            hint_style=ft.TextStyle(color=ft.Colors.ON_SURFACE_VARIANT),
+            color=ft.Colors.ON_SURFACE,
             border_color=ft.Colors.OUTLINE,
             focused_border_color=ft.Colors.PRIMARY,
             border_radius=8,
@@ -175,8 +176,8 @@ class HomologacionView:
         self.codigo_dgh_field = ft.TextField(
             label="Código DGH",
             hint_text="881141",
-            hint_style=ft.TextStyle(color="#000000"),
-            color="#000000",
+            hint_style=ft.TextStyle(color=ft.Colors.ON_SURFACE_VARIANT),
+            color=ft.Colors.ON_SURFACE,
             border_color=ft.Colors.OUTLINE,
             focused_border_color=ft.Colors.PRIMARY,
             border_radius=8,
@@ -188,8 +189,8 @@ class HomologacionView:
         
         self.buscar_field = ft.TextField(
             hint_text="Buscar código...",
-            hint_style=ft.TextStyle(color="#000000"),
-            color="#000000",
+            hint_style=ft.TextStyle(color=ft.Colors.ON_SURFACE_VARIANT),
+            color=ft.Colors.ON_SURFACE,
             border_color=ft.Colors.OUTLINE,
             focused_border_color=ft.Colors.PRIMARY,
             border_radius=8,
@@ -554,8 +555,20 @@ class HomologacionView:
             ))
             
             self.tabla.rows.append(ft.DataRow(cells=celdas))  # type: ignore
-        
-        if filtro:
+        if df.empty:
+            if filtro:
+                self.status_text.value = (  # type: ignore
+                    f"Sin resultados para '{filtro}'. "
+                    "Prueba con otro código o pulsa Actualizar."
+                )
+            else:
+                self.status_text.value = (  # type: ignore
+                    "Sin códigos registrados. "
+                    "Agrega el primero con el formulario de arriba "
+                    "o usa la pestaña Carga Masiva."
+                )
+            self.status_text.color = ft.Colors.ON_SURFACE_VARIANT  # type: ignore
+        elif filtro:
             self.status_text.value = f"{len(df)} resultados"  # type: ignore
             self.status_text.color = ft.Colors.ON_SURFACE_VARIANT  # type: ignore
         else:
@@ -591,14 +604,12 @@ class HomologacionView:
         self.page.update()
     
     def _on_eliminar(self, e):
-        """Callback para eliminar código"""
+        """Callback para eliminar código (con confirmación estándar)."""
         if not self.service:
             return
-            
         codigo = e.control.data
-        
-        def confirmar(e):
-            self.page.close(dialog)
+        eps_nombre = (self.current_eps or "").upper() or "la EPS"
+        def confirmar(ev):
             if self.service.eliminar(codigo):  # type: ignore
                 self.status_text.value = f"✅ Código {codigo} eliminado"  # type: ignore
                 self.status_text.color = ft.Colors.GREEN  # type: ignore
@@ -608,21 +619,17 @@ class HomologacionView:
                 self.status_text.value = f"❌ Error eliminando {codigo}"  # type: ignore
                 self.status_text.color = ft.Colors.RED  # type: ignore
             self.page.update()
-        
-        dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Eliminar código", size=16, weight=ft.FontWeight.W_500),
-            content=ft.Text(f"¿Eliminar el código {codigo}?", size=14),
-            actions=[
-                ft.TextButton("Cancelar", style=ft.ButtonStyle(color=ft.Colors.ON_SURFACE_VARIANT),
-                             on_click=lambda e: self.page.close(dialog)),
-                ft.TextButton("Eliminar", style=ft.ButtonStyle(color=ft.Colors.RED),
-                             on_click=confirmar)
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
-            shape=ft.RoundedRectangleBorder(radius=12)
+        AlertDialog.show_confirm(
+            self.page,
+            title="Eliminar código",
+            message=(
+                f"¿Eliminar el código {codigo} de {eps_nombre}?\n\n"
+                "Esta acción no se puede deshacer."
+            ),
+            confirm_text="Eliminar",
+            cancel_text="Cancelar",
+            on_confirm=confirmar,
         )
-        self.page.open(dialog)
     
     def _actualizar_estadisticas(self):
         """Actualiza las estadísticas"""
@@ -639,10 +646,30 @@ class HomologacionView:
         
         if not eps_list:
             self.eps_cards_column.controls.append(
-                ft.Text(
-                    "No se encontraron archivos de homologación",
-                    size=14,
-                    color=ft.Colors.ON_SURFACE_VARIANT
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Icon(
+                                ft.Icons.FOLDER_OFF_OUTLINED,
+                                size=64,
+                                color=ft.Colors.OUTLINE,
+                            ),
+                            ft.Text(
+                                "Sin archivos de homologación",
+                                size=14,
+                                color=ft.Colors.ON_SURFACE,
+                            ),
+                            ft.Text(
+                                "Verifica la carpeta del homologador y pulsa Actualizar.",
+                                size=12,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                        ],
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=8,
+                    ),
+                    padding=24,
+                    alignment=ft.alignment.center,
                 )
             )
         else:
@@ -741,6 +768,11 @@ class HomologacionView:
         self.tabla_verificacion.rows.clear()  # type: ignore
         
         if not self.resultado_verificacion:
+            self.masiva_status_text.value = (  # type: ignore
+                "Sin archivo para verificar. "
+                "Selecciona un Excel con 2 columnas para empezar."
+            )
+            self.masiva_status_text.color = ft.Colors.ON_SURFACE_VARIANT  # type: ignore
             return
         
         # Agregar válidos

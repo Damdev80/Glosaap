@@ -229,6 +229,60 @@ class AlertDialog:
         return dialog
     
     @staticmethod
+    def show_confirm(page: ft.Page, title: str, message: str,
+                     confirm_text: str = "Eliminar",
+                     cancel_text: str = "Cancelar",
+                     confirm_color=None,
+                     on_confirm=None, on_cancel=None):
+        """Muestra un diálogo de confirmación antes de una acción destructiva.
+
+        Mismo estilo que el resto de diálogos (bgcolor SURFACE, radio 12,
+        cierra solo su diálogo vía page.close, sin overlay.clear()).
+
+        Args:
+            page: Página de Flet.
+            title: Título del diálogo.
+            message: Mensaje con el objeto afectado (ej: código, servicio).
+            confirm_text: Texto del botón de confirmación.
+            cancel_text: Texto del botón de cancelación.
+            confirm_color: Color del botón de confirmación (default RED).
+            on_confirm: Callback al confirmar (recibe el evento click).
+            on_cancel: Callback al cancelar (opcional).
+        """
+        _confirm_color = confirm_color or ft.Colors.RED
+
+        def close_cancel(e):
+            page.close(dialog)
+            if on_cancel:
+                on_cancel(e)
+
+        def close_confirm(e):
+            page.close(dialog)
+            if on_confirm:
+                on_confirm(e)
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Row([
+                ft.Icon(ft.Icons.WARNING, color=ft.Colors.ORANGE, size=28),
+                ft.Text(title, size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE)
+            ], spacing=10),
+            content=ft.Text(message, size=14, color=ft.Colors.ON_SURFACE_VARIANT),
+            actions=[
+                ft.TextButton(cancel_text, on_click=close_cancel,
+                              style=ft.ButtonStyle(color=ft.Colors.ON_SURFACE_VARIANT)),
+                ft.TextButton(confirm_text, on_click=close_confirm,
+                              style=ft.ButtonStyle(color=_confirm_color)),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+            shape=ft.RoundedRectangleBorder(radius=12),
+            bgcolor=ft.Colors.SURFACE
+        )
+
+        page.open(dialog)
+        return dialog
+
+    @staticmethod
     def show_search_complete(page: ft.Page, total_found: int, filtered_count: int, excel_count: int, eps_name: str, date_range: str, on_close=None):
         """Muestra un di�logo cuando termina la b�squeda de correos"""
         def close_dialog(e):

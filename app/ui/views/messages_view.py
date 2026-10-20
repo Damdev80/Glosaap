@@ -2,6 +2,7 @@
 Vista de mensajes - Muestra y gestiona los correos encontrados
 Soporte completo de temas claro/oscuro
 """
+import threading
 import flet as ft
 from app.ui.styles import FONT_SIZES, SPACING, WINDOW_SIZES
 from app.ui.components.message_row import MessageRow
@@ -33,6 +34,9 @@ class MessagesView:
         # Estado
         self.selected_messages = set()
         self.message_rows = {}  # Diccionario para acceder a MessageRow por ID
+        # Cancelación de procesados largos (flag + generación anti-tardíos)
+        self._cancel_event = threading.Event()
+        self._processing_seq = 0
         
         # Componentes de loading y feedback
         self.loading_overlay = LoadingOverlay(page)
@@ -58,6 +62,22 @@ class MessagesView:
             stroke_width=2
         )
         self.processing_status = ft.Text("", size=FONT_SIZES["small"])
+        # Botón Cancelar visible durante el procesado (hilo principal)
+        self.cancel_btn = ft.OutlinedButton(
+            "Cancelar",
+            icon=ft.Icons.CANCEL_OUTLINED,
+            visible=False,
+            on_click=lambda e: self.cancel_processing(),
+            style=ft.ButtonStyle(color=ft.Colors.RED),
+        )
+        # Botón Cancelar para la carga/búsqueda (misma señal de cancelación)
+        self.loading_cancel_btn = ft.TextButton(
+            "Cancelar",
+            icon=ft.Icons.CANCEL_OUTLINED,
+            visible=False,
+            on_click=lambda e: self.cancel_processing(),
+            style=ft.ButtonStyle(color=ft.Colors.RED),
+        )
         
         # Contenedor de progreso (se muestra/oculta completo)
         self.processing_container = ft.Container(
@@ -67,6 +87,7 @@ class MessagesView:
                     self.processing_status,
                     ft.Container(expand=True),
                     self.processing_percentage,
+                    self.cancel_btn,
                 ], spacing=8, alignment=ft.MainAxisAlignment.START),
                 self.processing_progress,
             ], spacing=6, tight=True),
@@ -251,7 +272,12 @@ class MessagesView:
                     margin=0,
                 ),
                 ft.Container(
-                    content=self.messages_status,
+                    content=ft.Row(
+                        [
+                            ft.Container(content=self.messages_status, expand=True),
+                            self.loading_cancel_btn,
+                        ]
+                    ),
                     padding=SPACING["md"],
                 )
             ], expand=True, spacing=0),
@@ -309,21 +335,64 @@ class MessagesView:
             self._current_page += 1
             self._render_page()
 
+    def _build_empty_state(self):
+        """Estado vacío decente: icono + explicación + sugerencia de acción."""
+        if self._filter_text and self._all_messages:
+            query = (self.filter_field.value or "").strip()
+            title = f"Sin resultados para '{query}'." if query else "Sin resultados para el filtro actual."
+            hint = "Prueba con otro texto o limpia el filtro."
+            icon = ft.Icons.SEARCH_OFF
+            action = ft.TextButton(
+                "Limpiar filtro",
+                icon=ft.Icons.CLEAR,
+                on_click=self._on_clear_filter,
+                style=ft.ButtonStyle(color=ft.Colors.PRIMARY),
+            )
+        elif not self._all_messages:
+            title = "Sin mensajes todavía."
+            hint = "Ajusta el rango de fechas y pulsa Actualizar para buscar."
+            icon = ft.Icons.MAIL_OUTLINE
+            action = ft.TextButton(
+                "Actualizar",
+                icon=ft.Icons.REFRESH,
+                on_click=lambda e: self.on_refresh() if self.on_refresh else None,
+                style=ft.ButtonStyle(color=ft.Colors.PRIMARY),
+            )
+        else:
+            title = "No se encontraron mensajes."
+            hint = "Prueba con otro rango de fechas."
+            icon = ft.Icons.INBOX
+            action = None
+        controls = [
+            ft.Icon(icon, size=64, color=ft.Colors.OUTLINE),
+            ft.Text(title, size=FONT_SIZES["body"], color=ft.Colors.ON_SURFACE),
+            ft.Text(hint, size=FONT_SIZES["small"], color=ft.Colors.ON_SURFACE_VARIANT),
+        ]
+        if action is not None:
+            controls.append(action)
+        return ft.Container(
+            content=ft.Column(
+                controls,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=SPACING["md"],
+            ),
+            padding=SPACING["xxl"],
+            alignment=ft.alignment.center,
+        )
+
+    def _on_clear_filter(self, e):
+        """Limpia el filtro de texto (hilo principal: page.update OK)."""
+        self.filter_field.value = ""
+        self._filter_text = ""
+        self._current_page = 1
+        self._apply_filter()
+        self._render_page()
+
     def _render_page(self):
         """Renderiza la página actual desde los mensajes filtrados."""
         self.messages_list.controls.clear()
         if not self._filtered_messages:
-            self.messages_list.controls.append(
-                ft.Container(
-                    content=ft.Column([
-                        ft.Icon(ft.Icons.INBOX, size=64, color=ft.Colors.OUTLINE),
-                        ft.Text("No se encontraron mensajes",
-                               size=FONT_SIZES["body"])
-                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=SPACING["md"]),
-                    padding=SPACING["xxl"],
-                    alignment=ft.alignment.center
-                )
-            )
+            self.messages_list.controls.append(self._build_empty_state())
         else:
             start = (self._current_page - 1) * self._page_size
             end = start + self._page_size
@@ -447,8 +516,9 @@ class MessagesView:
         """Muestra/oculta el indicador de carga"""
         self.loading_bar.visible = is_loading
         self.messages_status.value = status_text
+        self.loading_cancel_btn.visible = bool(is_loading)
         self.page.update()
-    
+
     def set_processing(self, is_processing, status_text="", progress=None):
         """
         Muestra/oculta el indicador de procesamiento
@@ -461,6 +531,7 @@ class MessagesView:
         # Mostrar/ocultar el contenedor de progreso completo
         self.processing_container.visible = is_processing
         self.processing_status.value = status_text
+        self.cancel_btn.visible = bool(is_processing)
         
         if is_processing:
             if progress is not None:
@@ -478,6 +549,56 @@ class MessagesView:
         """Muestra/oculta el botón de procesar EPS"""
         self.process_eps_btn.visible = visible
         self.page.update()
+
+    @property
+    def cancel_event(self):
+        """Flag de cancelación que los workers chequean entre pasos."""
+        return self._cancel_event
+
+    def new_generation(self):
+        """Inicia una generación nueva y limpia el flag de cancelación.
+
+        Los workers capturan el valor retornado y lo pasan a is_cancelled()
+        para evitar aplicar resultados tardíos tras una cancelación.
+        """
+        self._cancel_event.clear()
+        self._processing_seq += 1
+        return self._processing_seq
+
+    def get_processing_seq(self):
+        """Retorna el número de secuencia/generación actual."""
+        return self._processing_seq
+
+    def is_cancelled(self, seq=None):
+        """True si se pidió cancelar o si seq ya no es la vigente (tardío)."""
+        if self._cancel_event.is_set():
+            return True
+        if seq is not None and seq != self._processing_seq:
+            return True
+        return False
+
+    def cancel_processing(self, e=None):
+        """Cancela el procesado en curso (solo hilo principal).
+
+        Pone el flag, invalida resultados tardíos vía generación, cierra
+        el estado de procesado/carga y avisa con Toast. No toca el overlay
+        (sin overlay.clear() destructivo).
+        """
+        self._cancel_event.set()
+        self._processing_seq += 1
+        self.processing_container.visible = False
+        self.cancel_btn.visible = False
+        self.loading_bar.visible = False
+        self.loading_cancel_btn.visible = False
+        self.process_eps_btn.disabled = False
+        try:
+            self.toast_notification.warning("Procesado cancelado")
+        except Exception:
+            pass
+        try:
+            self.page.update()
+        except Exception:
+            pass
     
     def show_download_controls(self, visible=True):
         """Muestra/oculta los controles de descarga manual"""

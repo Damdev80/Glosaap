@@ -6,6 +6,7 @@ import flet as ft
 import threading
 import os
 from app.service.credential_manager import CredentialManager
+from app.ui.components.alert_dialog import AlertDialog
 
 
 class WebDownloadView:
@@ -246,6 +247,13 @@ class WebDownloadView:
             )
         )
         
+        self.familiar_forget_btn = ft.TextButton(
+            "Olvidar credenciales guardadas",
+            icon=ft.Icons.DELETE_OUTLINE,
+            on_click=self._confirm_forget_familiar,
+            style=ft.ButtonStyle(color=ft.Colors.ON_SURFACE_VARIANT),
+        )
+
         self.familiar_status = ft.Text(
             "",
             size=12,
@@ -298,6 +306,7 @@ class WebDownloadView:
                 ], alignment=ft.MainAxisAlignment.CENTER),
                 ft.Container(height=5),
                 self.familiar_remember,
+                self.familiar_forget_btn,
                 ft.Container(height=25),
                 self.familiar_btn,
                 ft.Container(height=10),
@@ -350,6 +359,13 @@ class WebDownloadView:
             )
         )
         
+        self.fomag_forget_btn = ft.TextButton(
+            "Olvidar credenciales guardadas",
+            icon=ft.Icons.DELETE_OUTLINE,
+            on_click=self._confirm_forget_fomag,
+            style=ft.ButtonStyle(color=ft.Colors.ON_SURFACE_VARIANT),
+        )
+
         # Nota sobre CAPTCHA y sesión
         captcha_note = ft.Container(
             content=ft.Column([
@@ -430,6 +446,7 @@ class WebDownloadView:
                 self.fomag_password,
                 ft.Container(height=5),
                 self.fomag_remember,
+                self.fomag_forget_btn,
                 ft.Container(height=25),
                 self.fomag_btn,
                 ft.Container(height=10),
@@ -517,6 +534,49 @@ class WebDownloadView:
             self.fomag_password.value = creds.get("password", "")
             self.fomag_remember.value = True
             self.page.update()
+
+    def _confirm_forget_familiar(self, e):
+        """Antepone confirmación antes de eliminar credenciales de Familiar."""
+        username = (self.familiar_usuario.value or "").strip()
+        detail = f" (usuario '{username}')" if username else ""
+        def do_delete(ev):
+            self._forget_credentials("familiar", self.update_familiar_status)
+        AlertDialog.show_confirm(
+            self.page,
+            title="Olvidar credenciales",
+            message=(
+                f"¿Eliminar las credenciales guardadas de Familiar{detail}?\n\n"
+                "Tendrás que escribirlas de nuevo la próxima vez."
+            ),
+            confirm_text="Eliminar",
+            cancel_text="Cancelar",
+            on_confirm=do_delete,
+        )
+
+    def _confirm_forget_fomag(self, e):
+        """Antepone confirmación antes de eliminar credenciales de Fomag."""
+        username = (self.fomag_usuario.value or "").strip()
+        detail = f" (usuario '{username}')" if username else ""
+        def do_delete(ev):
+            self._forget_credentials("fomag", self.update_fomag_status)
+        AlertDialog.show_confirm(
+            self.page,
+            title="Olvidar credenciales",
+            message=(
+                f"¿Eliminar las credenciales guardadas de Fomag{detail}?\n\n"
+                "Tendrás que escribirlas de nuevo la próxima vez."
+            ),
+            confirm_text="Eliminar",
+            cancel_text="Cancelar",
+            on_confirm=do_delete,
+        )
+
+    def _forget_credentials(self, service, status_fn):
+        """Elimina credenciales guardadas (lógica de borrado sin cambios)."""
+        if self.credential_manager.delete_credentials(service):
+            status_fn("Credenciales eliminadas. Escribe las nuevas para guardar.")
+        else:
+            status_fn("No se pudieron eliminar las credenciales.")
     
     def show(self):
         """Muestra la vista"""

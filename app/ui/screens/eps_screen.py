@@ -131,9 +131,21 @@ class EpsScreen:
             self.on_back()
     
     def _handle_logout(self, e):
-        """Maneja el cierre de sesión"""
-        if self.on_logout:
-            self.on_logout()
+        """Maneja el cierre de sesión (con confirmación previa)."""
+        def do_logout(ev):
+            if self.on_logout:
+                self.on_logout()
+        AlertDialog.show_confirm(
+            self.page,
+            title="Cerrar sesión",
+            message=(
+                "¿Cerrar la sesión actual?\n\n"
+                "Se limpiará la sesión guardada y tendrás que iniciar sesión de nuevo."
+            ),
+            confirm_text="Cerrar sesión",
+            cancel_text="Cancelar",
+            on_confirm=do_logout,
+        )
     
     def _create_view(self):
         """Crea la vista de la pantalla"""

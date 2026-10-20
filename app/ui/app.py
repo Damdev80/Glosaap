@@ -337,6 +337,7 @@ def main(page: ft.Page):
     def load_messages(search_info=""):
         """Carga mensajes del servidor y descarga adjuntos automáticamente"""
         def worker():
+            load_seq = messages_view.new_generation()
             try:
                 # IMPORTANTE: Limpiar archivos antiguos para que los nuevos tengan metadatos frescos
                 logger.info("[CLEANUP] Limpiando archivos temporales antiguos...")
@@ -351,6 +352,8 @@ def main(page: ft.Page):
                 all_msgs = []
 
                 def on_found(msg):
+                    if messages_view.is_cancelled(load_seq):
+                        return
                     all_msgs.append(msg)
                     # Filtrar en tiempo real (lógica centralizada en MessageFilter)
                     filtered = filter_messages_by_eps(all_msgs)
@@ -359,7 +362,7 @@ def main(page: ft.Page):
                     messages_view.set_loading(True, f"🔍 Encontrados {len(all_msgs)} correo(s), mostrando {len(filtered)} filtrados...")
 
                     # Descargar adjuntos automáticamente para mensajes de la EPS seleccionada
-                    if msg in filtered:
+                    if msg in filtered and not messages_view.is_cancelled(load_seq):
                         msg_id = msg.get("id")
                         if msg_id:
                             messages_view.update_message_status(msg_id, "📥 Descargando...")
@@ -401,6 +404,12 @@ def main(page: ft.Page):
                     date_to=ui_state.date_to
                 )
 
+                # Cancelado entre pasos: abortar limpio sin aplicar resultados tardíos
+                if messages_view.is_cancelled(load_seq):
+                    messages_view.set_loading(False, "⚠️ Procesado cancelado")
+                    messages_view.show_toast("Procesado cancelado", is_success=False)
+                    return
+
                 # Filtrar por EPS (filtrado final)
                 msgs = filter_messages_by_eps(all_msgs)
                 ui_state.found_messages = msgs
@@ -439,6 +448,9 @@ def main(page: ft.Page):
                     )
 
             except Exception as ex:
+                if messages_view.is_cancelled(load_seq):
+                    messages_view.set_loading(False, "⚠️ Procesado cancelado")
+                    return
                 messages_view.set_loading(False, f"❌ Error: {str(ex)}")
                 AlertDialog.show_error(
                     page=page,
@@ -451,6 +463,7 @@ def main(page: ft.Page):
     def download_selected_messages():
         """Descarga adjuntos de los mensajes seleccionados"""
         def worker():
+            dl_seq = messages_view.new_generation()
             try:
                 selected_ids = messages_view.get_selected_messages()
                 if not selected_ids:
@@ -464,6 +477,8 @@ def main(page: ft.Page):
                 total_files = 0
 
                 for msg in ui_state.found_messages:
+                    if messages_view.is_cancelled(dl_seq):
+                        break
                     if msg.get("id") in selected_ids:
                         messages_view.update_message_status(msg["id"], "Descargando...")
 
@@ -483,10 +498,17 @@ def main(page: ft.Page):
                             messages_view.update_message_status(msg["id"], "❌ Error", is_error=True)
 
                 messages_view.download_selected_btn.disabled = False
+                if messages_view.is_cancelled(dl_seq):
+                    messages_view.set_loading(False, "⚠️ Procesado cancelado")
+                    messages_view.show_toast("Procesado cancelado", is_success=False)
+                    return
                 messages_view.set_loading(False, f"✅ Descargados {total_files} archivo(s) de {downloaded} correo(s)")
 
             except Exception as ex:
                 messages_view.download_selected_btn.disabled = False
+                if messages_view.is_cancelled(dl_seq):
+                    messages_view.set_loading(False, "⚠️ Procesado cancelado")
+                    return
                 messages_view.set_loading(False, f"❌ Error: {str(ex)}")
 
         threading.Thread(target=worker, daemon=True).start()
@@ -498,6 +520,7 @@ def main(page: ft.Page):
         page.update()
 
         def worker():
+            proc_seq = messages_view.new_generation()
             try:
                 eps_type = messages_view.process_eps_btn.data
                 if not eps_type:
@@ -530,6 +553,14 @@ def main(page: ft.Page):
                     messages_view.set_processing(True, f"📊 Procesando {len(excel_files)} archivo(s) Excel...")
 
                     resultado = email_service.procesar_mutualser()
+
+                    # Cancelado durante el procesado (no divisible): no aplicar tardíos
+                    if messages_view.is_cancelled(proc_seq):
+                        messages_view.process_eps_btn.disabled = False
+                        messages_view.set_processing(False, "⚠️ Procesado cancelado")
+                        messages_view.show_toast("Procesado cancelado", is_success=False)
+                        messages_view.show_process_button(True)
+                        return
 
                     if resultado['success']:
                         resumen = resultado['resumen']
@@ -645,6 +676,14 @@ def main(page: ft.Page):
                         attachment_service=email_service.attachment_service
                     )
 
+                    # Cancelado durante el procesado (no divisible): no aplicar tardíos
+                    if messages_view.is_cancelled(proc_seq):
+                        messages_view.process_eps_btn.disabled = False
+                        messages_view.set_processing(False, "⚠️ Procesado cancelado")
+                        messages_view.show_toast("Procesado cancelado", is_success=False)
+                        messages_view.show_process_button(True)
+                        return
+
                     # Rehabilitar botón después de procesar
                     messages_view.process_eps_btn.disabled = False
 
@@ -718,6 +757,11 @@ def main(page: ft.Page):
                     messages_view.show_process_button(True)
 
             except Exception as ex:
+                if messages_view.is_cancelled(proc_seq):
+                    messages_view.process_eps_btn.disabled = False
+                    messages_view.set_processing(False, "⚠️ Procesado cancelado")
+                    messages_view.show_process_button(True)
+                    return
                 messages_view.set_processing(False, f"❌ Error: {str(ex)}")
                 messages_view.processing_status.color = ft.Colors.RED
                 messages_view.process_eps_btn.disabled = False
