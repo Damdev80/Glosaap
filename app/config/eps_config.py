@@ -109,6 +109,22 @@ class CoosaludEps(EpsInfo):
         )
 
 
+class SanitasEps(EpsInfo):
+    """Configuración para Sanitas EPS (sin procesador: visible, en desarrollo)"""
+
+    def __init__(self):
+        super().__init__(
+            name="Sanitas",
+            icon="🔵",
+            description="Sanitas EPS",
+            filter_value="sanitas",
+            filter_type="keyword",
+            processor_class=None,
+            enabled=True,
+            image_path=os.path.join(ASSETS_DIR, "img", "eps", "sanitas.png"),
+        )
+
+
 class NuevaEps(EpsInfo):
     """Configuración para Nueva EPS (sin procesador: deshabilitada)"""
     
@@ -175,6 +191,7 @@ class CosaludEps(EpsInfo):
 EPS_CONFIG = [
     MutualserEps(),
     CoosaludEps(),
+    SanitasEps(),
     NuevaEps(),
     CompensarEps(),
     FamisanarEps(),

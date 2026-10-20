@@ -62,21 +62,14 @@ class EpsScreen:
         # Verificar si la EPS tiene procesador implementado
         if not eps_info.get("processor_class"):
             eps_name = eps_info.get("name", "Esta EPS")
-            
-            def close_dialog(e):
-                self.page.close(dialog)
-            
-            # Crear alerta simple
-            dialog = ft.AlertDialog(
-                modal=True,
-                title=ft.Text(f"🚧 {eps_name} en Desarrollo"),
-                content=ft.Text(f"El procesador automático para {eps_name} aún no está disponible.\n\nEstamos trabajando en integrar esta EPS al sistema."),
-                actions=[
-                    ft.TextButton("Entendido", on_click=close_dialog)
-                ]
+
+            # Diálogo informativo estándar (modal, botón Entendido que
+            # solo cierra su diálogo vía page.close interno).
+            AlertDialog.show_info(
+                self.page,
+                f"{eps_name} en Desarrollo",
+                f"El procesador automático para {eps_name} aún no está disponible.\n\nEstamos trabajando en integrar esta EPS al sistema.",
             )
-            
-            self.page.open(dialog)
             return
         
         date_from, date_to = self.date_picker.get_dates()
