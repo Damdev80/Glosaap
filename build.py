@@ -143,8 +143,11 @@ def build_main_executable():
     print(f"📋 Versión detectada: {version}")
     
     # Comando PyInstaller para ejecutable principal
+    # (via python -m para no depender del PATH)
     cmd = [
-        "pyinstaller",
+        sys.executable,
+        "-m",
+        "PyInstaller",
         "--onefile",                    # Un solo archivo ejecutable
         "--windowed",                   # Sin ventana de consola
         "--name", APP_NAME,             # Nombre del ejecutable
@@ -184,8 +187,11 @@ def build_updater():
     print_step("Construyendo updater")
     
     # Comando PyInstaller para updater
+    # (via python -m para no depender del PATH)
     cmd = [
-        "pyinstaller",
+        sys.executable,
+        "-m",
+        "PyInstaller",
         "--onefile",                    # Un solo archivo ejecutable
         "--console",                    # Con ventana de consola para debugging
         "--name", "updater",            # Nombre del ejecutable
