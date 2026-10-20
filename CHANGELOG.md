@@ -6,6 +6,23 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.11.17] - 2026-10-20
+
+### 🔄 Actualizaciones verificadas
+- Verificación SHA256 del ZIP antes de instalar (fail-closed)
+- Rollback automático si la instalación falla
+- Updater auto-actualizable, botón omitir versión e intervalo real
+
+### ✨ Nuevas Características
+- EPS Sanitas visible con aviso de en desarrollo
+- Resumen post-procesado con homologados y no homologados
+- Búsqueda exacta por patrón de asunto de cada EPS
+- Progreso con botón cancelar y confirmaciones antes de borrados
+
+### 🔧 Mejoras Técnicas
+- Secretos migrados a keyring/DPAPI, navegación por canal único
+- Logs silenciosos en búsquedas masivas, botones minimalistas
+
 ## [Unreleased]
 
 ### ✨ Nuevas Características
