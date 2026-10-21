@@ -118,10 +118,12 @@ class SanitasEps(EpsInfo):
             icon="🔵",
             description="Sanitas EPS",
             filter_value="sanitas",
-            filter_type="keyword",
+            filter_type="subject_exact_pattern",
+            subject_pattern="Referencia: Informe Glosas EPS Sanitas",
             processor_class=None,
             enabled=True,
             image_path=os.path.join(ASSETS_DIR, "img", "eps", "sanitas.png"),
+            sender_filter="cuentasmedicaseps@epssanitas.notify-it.com",
         )
 
 

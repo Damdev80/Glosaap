@@ -178,7 +178,8 @@ class ImapClient:
         self, 
         keyword: Optional[str] = None, 
         date_from: Optional[datetime] = None, 
-        date_to: Optional[datetime] = None
+        date_to: Optional[datetime] = None,
+        from_addr: Optional[str] = None
     ) -> str:
         """
         Construye el criterio de búsqueda IMAP.
@@ -187,6 +188,8 @@ class ImapClient:
             keyword: Palabra clave para buscar en SUBJECT
             date_from: Fecha inicio (SINCE)
             date_to: Fecha fin (BEFORE)
+            from_addr: Remitente para filtrar a nivel IMAP (FROM).
+                Opcional; None = sin filtro por remitente.
             
         Returns:
             String con criterio IMAP formateado
@@ -198,6 +201,12 @@ class ImapClient:
             safe_keyword = keyword.replace('"', '\\"')
             criteria_parts.append(f'SUBJECT "{safe_keyword}"')
             logger.info(f"Buscando por asunto: {keyword}")
+
+        # Filtro por remitente a nivel IMAP (opcional)
+        if from_addr:
+            safe_from = from_addr.replace('"', '\\"')
+            criteria_parts.append(f'FROM "{safe_from}"')
+            logger.info(f"Filtrando por remitente: {from_addr}")
         
         # Rango de fechas
         if date_from:
@@ -376,7 +385,8 @@ class ImapClient:
         timeout: int = 120, 
         on_found: Optional[Callable[[Dict[str, Any]], None]] = None, 
         date_from: Optional[datetime] = None, 
-        date_to: Optional[datetime] = None
+        date_to: Optional[datetime] = None,
+        from_addr: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Busca correos que contengan una palabra clave en el asunto.
@@ -389,6 +399,8 @@ class ImapClient:
             on_found: Callback por cada mensaje encontrado
             date_from: Fecha inicio del rango
             date_to: Fecha fin del rango
+            from_addr: Remitente para filtrar a nivel IMAP (FROM).
+                Opcional; None = sin filtro por remitente.
             
         Returns:
             Lista de diccionarios con información de los mensajes
@@ -400,7 +412,7 @@ class ImapClient:
             self.select_folder(folder)
             
             # 1. Construir criterio de búsqueda
-            criteria = self._build_search_criteria(keyword, date_from, date_to)
+            criteria = self._build_search_criteria(keyword, date_from, date_to, from_addr=from_addr)
             
             # 2. Ejecutar búsqueda
             ids = self._execute_search(criteria)

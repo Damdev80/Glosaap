@@ -74,7 +74,7 @@ class EmailService:
         return True
     
 
-    def search_messages(self, keyword, limit=None, timeout=120, on_found=None, date_from=None, date_to=None):
+    def search_messages(self, keyword, limit=None, timeout=120, on_found=None, date_from=None, date_to=None, from_addr=None):
         """
         Busca mensajes por palabra clave en el asunto con filtros opcionales.
         
@@ -85,6 +85,8 @@ class EmailService:
             on_found (callable, optional): Función callback(message) ejecutada al encontrar cada mensaje
             date_from (datetime|str, optional): Fecha inicio del rango. Formato: datetime o 'YYYY-MM-DD'
             date_to (datetime|str, optional): Fecha fin del rango. Formato: datetime o 'YYYY-MM-DD'
+            from_addr (str, optional): Remitente para filtrar a nivel IMAP (FROM).
+                None = sin filtro por remitente (comportamiento anterior).
             
         Returns:
             list: Lista de diccionarios con información de mensajes encontrados.
@@ -130,7 +132,8 @@ class EmailService:
             timeout=timeout, 
             on_found=on_found,
             date_from=date_from,
-            date_to=date_to
+            date_to=date_to,
+            from_addr=from_addr
         )
         return self.messages
     

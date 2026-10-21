@@ -543,6 +543,14 @@ def main(page: ft.Page):
                 # Palabra clave de búsqueda según EPS (centralizada en MessageFilter)
                 search_keyword = MessageFilter.get_search_keyword(ui_state.selected_eps)
                 logger.debug("Palabra clave seleccionada: '%s'", search_keyword)
+                # Remitente a nivel IMAP (opcional): si la EPS tiene sender_filter
+                # se envía como FROM para no descargar de más. Mismo flujo para
+                # todas las EPS (dedupe + matches() sin rama especial).
+                _eps_sel = ui_state.selected_eps or {}
+                if isinstance(_eps_sel, dict):
+                    _from_addr = (_eps_sel.get("sender_filter") or None)
+                else:
+                    _from_addr = (getattr(_eps_sel, "sender_filter", None) or None)
 
                 # Buscar con filtro de fechas (timeout aumentado para búsquedas grandes)
                 email_service.search_messages(
@@ -551,7 +559,8 @@ def main(page: ft.Page):
                     timeout=120,  # 2 minutos de timeout
                     on_found=on_found,
                     date_from=ui_state.date_from,
-                    date_to=ui_state.date_to
+                    date_to=ui_state.date_to,
+                    from_addr=_from_addr
                 )
 
                 # Cancelado entre pasos: abortar limpio sin aplicar resultados tardíos

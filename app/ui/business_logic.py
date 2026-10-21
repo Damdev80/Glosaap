@@ -195,7 +195,14 @@ class EmailLoader:
         # Obtener palabra clave de búsqueda
         search_keyword = MessageFilter.get_search_keyword(eps)
         logger.debug("Buscando con palabra clave: '%s'", search_keyword)
-        
+        # Remitente a nivel IMAP (opcional): si la EPS tiene sender_filter
+        # se envía como FROM para no descargar de más. Mismo flujo para
+        # todas las EPS (dedupe + matches() sin rama especial).
+        if isinstance(eps, dict):
+            from_addr = (eps.get("sender_filter") or None)
+        else:
+            from_addr = (getattr(eps, "sender_filter", None) or None)
+
         # Buscar mensajes (timeout aumentado para búsquedas grandes)
         self.email_service.search_messages(
             search_keyword,
@@ -203,7 +210,8 @@ class EmailLoader:
             timeout=120,  # 2 minutos de timeout
             on_found=on_found,
             date_from=self.app_state.date_from,
-            date_to=self.app_state.date_to
+            date_to=self.app_state.date_to,
+            from_addr=from_addr
         )
         
         # Filtrar resultados finales
