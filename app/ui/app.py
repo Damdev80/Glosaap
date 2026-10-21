@@ -456,6 +456,14 @@ def main(page: ft.Page):
                 bgcolor=ft.Colors.BLUE,
             )
             messages_view.process_eps_btn.data = "coosalud"
+        elif eps_filter == "sanitas":
+            messages_view.show_process_button(True)
+            messages_view.process_eps_btn.text = " Procesar SANITAS"
+            messages_view.process_eps_btn.style = ft.ButtonStyle(
+                color=ft.Colors.WHITE,
+                bgcolor=ft.Colors.BLUE,
+            )
+            messages_view.process_eps_btn.data = "sanitas"
         else:
             messages_view.show_process_button(False)
 
@@ -929,6 +937,110 @@ def main(page: ft.Page):
                         )
 
                     # Refresca vía canal de la vista
+                    messages_view.show_process_button(True)
+
+                elif eps_type == "sanitas":
+                    # Usar session_only=True para procesar solo archivos de esta búsqueda
+                    excel_files = email_service.get_excel_files(exclude_devoluciones=True, session_only=True)
+
+                    # Verificación simple - solo verificar si hay archivos
+                    if not excel_files:
+                        messages_view.process_eps_btn.disabled = False
+                        messages_view.set_processing(False, "❌ No hay archivos Excel para procesar")
+
+                        # Mostrar diálogo informativo
+                        AlertDialog.show_warning(
+                            page=page,
+                            title="Sin archivos para procesar",
+                            message="No se descargaron archivos Excel de GLOSAS en esta búsqueda.\n\nPrimero descarga los adjuntos de los correos."
+                        )
+                        return
+
+                    logger.info("SANITAS procesando %s archivos Excel (devoluciones excluidas)", len(excel_files))
+                    messages_view.set_processing(True, f"📊 Procesando {len(excel_files)} archivo(s) Excel...")
+
+                    # Fecha del correo más reciente (helper centralizado)
+                    email_date = _latest_email_date_str(ui_state.found_messages)
+                    resultado = email_service.procesar_sanitas(email_date=email_date)
+
+                    # Cancelado durante el procesado (no divisible): no aplicar tardíos
+                    if messages_view.is_cancelled(proc_seq):
+                        messages_view.process_eps_btn.disabled = False
+                        messages_view.set_processing(False, "⚠️ Procesado cancelado")
+                        messages_view.show_toast("Procesado cancelado", is_success=False)
+                        messages_view.show_process_button(True)
+                        return
+
+                    # Rehabilitar botón después de procesar
+                    messages_view.process_eps_btn.disabled = False
+
+                    if resultado['success']:
+                        resumen = resultado['resumen']
+                        msg = f"✅ ¡Archivos generados!\n"
+                        msg += f"📄 {resultado['output_file']}\n"
+                        if resultado.get('objeciones_file'):
+                            msg += f"📋 {resultado['objeciones_file']}\n"
+                        msg += f"📊 {resumen['total_registros']} registros | {resumen['codigos_homologados']} homologados"
+                        messages_view.set_processing(False, msg)
+                        messages_view.processing_status.color = ft.Colors.GREEN
+
+                        # Mostrar diálogo de procesamiento completado (resumen post-procesado)
+                        output_files = [resultado['output_file']]
+                        if resultado.get('objeciones_file'):
+                            output_files.append(resultado['objeciones_file'])
+
+                        _sanitas_output = str(resultado['output_file'])
+                        _objeciones_output = str(resultado.get('objeciones_file') or "")
+                        try:
+                            _total = int(resumen.get('total_registros', 0) or 0)
+                        except (TypeError, ValueError):
+                            _total = 0
+                        try:
+                            _hom = int(resumen.get('codigos_homologados', 0) or 0)
+                        except (TypeError, ValueError):
+                            _hom = 0
+                        resumen_summary = dict(resumen)
+                        resumen_summary['no_homologados'] = max(_total - _hom, 0) if _total else 0
+                        resumen_summary['output_dir'] = os.path.dirname(_sanitas_output)
+
+                        def open_sanitas_folder():
+                            _open_folder_in_explorer(os.path.dirname(_sanitas_output))
+
+                        def open_sanitas_non_homologated():
+                            if _objeciones_output and os.path.exists(_objeciones_output):
+                                if not _open_file_default(_objeciones_output):
+                                    AlertDialog.show_info(
+                                        page=page,
+                                        title="No homologados",
+                                        message=f"Hay {resumen_summary['no_homologados']} registro(s) no homologados.\n\nArchivo:\n{_objeciones_output}",
+                                    )
+                            else:
+                                AlertDialog.show_info(
+                                    page=page,
+                                    title="No homologados",
+                                    message=f"Hay {resumen_summary['no_homologados']} registro(s) no homologados.",
+                                )
+
+                        AlertDialog.show_processing_complete(
+                            page=page,
+                            eps_name="SANITAS",
+                            stats=resumen_summary,
+                            output_files=output_files,
+                            on_open_folder=open_sanitas_folder,
+                            on_view_non_homologated=open_sanitas_non_homologated if resumen_summary['no_homologados'] > 0 else None
+                        )
+                    else:
+                        messages_view.set_processing(False, f"❌ Error: {resultado['message']}")
+                        messages_view.processing_status.color = ft.Colors.RED
+
+                        AlertDialog.show_error(
+                            page=page,
+                            title="Error al procesar",
+                            message=f"No se pudo procesar los archivos:\n\n{resultado['message']}"
+                        )
+
+                    messages_view.process_eps_btn.disabled = False
+                    # Refresca vía canal de la vista (set_processing/show hacen page.update)
                     messages_view.show_process_button(True)
 
             except Exception as ex:

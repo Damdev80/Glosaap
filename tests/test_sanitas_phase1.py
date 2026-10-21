@@ -1,8 +1,9 @@
-"""Fase 1 Sanitas: búsqueda IMAP con filtro FROM (sin procesador).
+"""Fase 1 Sanitas: búsqueda IMAP con filtro FROM.
+Fase 2: SanitasEps ya expone processor_class="SanitasProcessor".
 
 Cubre:
 - SanitasEps: sender_filter + subject_pattern + filter_type subject_exact_pattern,
-  processor_class None, enabled True.
+  processor_class SanitasProcessor, enabled True.
 - MessageFilter.get_search_keyword para Sanitas retorna patrón completo.
 - ImapClient._build_search_criteria incluye FROM cuando se pasa from_addr,
   y sin from_addr sigue igual (sin FROM).
@@ -30,9 +31,9 @@ class TestSanitasEpsConfig:
         assert eps.subject_pattern == SANITAS_PATTERN
         assert eps.filter_type == "subject_exact_pattern"
 
-    def test_sanitas_sin_procesador_pero_habilitada(self):
+    def test_sanitas_con_procesador_y_habilitada(self):
         eps = get_eps_by_name("Sanitas")
-        assert eps.processor_class is None
+        assert eps.processor_class == "SanitasProcessor"
         assert eps.enabled is True
 
     def test_sanitas_to_dict_expone_sender(self):

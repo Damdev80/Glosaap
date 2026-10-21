@@ -110,7 +110,7 @@ class CoosaludEps(EpsInfo):
 
 
 class SanitasEps(EpsInfo):
-    """Configuración para Sanitas EPS (sin procesador: visible, en desarrollo)"""
+    """Configuración para Sanitas EPS"""
 
     def __init__(self):
         super().__init__(
@@ -120,10 +120,11 @@ class SanitasEps(EpsInfo):
             filter_value="sanitas",
             filter_type="subject_exact_pattern",
             subject_pattern="Referencia: Informe Glosas EPS Sanitas",
-            processor_class=None,
+            processor_class="SanitasProcessor",
             enabled=True,
             image_path=os.path.join(ASSETS_DIR, "img", "eps", "sanitas.png"),
             sender_filter="cuentasmedicaseps@epssanitas.notify-it.com",
+            homologador_file="sanitas",
         )
 
 

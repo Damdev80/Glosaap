@@ -54,12 +54,14 @@ NETWORK_PATHS = {
     "resultados": os.path.join(NETWORK_BASE, "REPOSITORIO DE RESULTADOS"),
     "mutualser_output": os.path.join(NETWORK_BASE, "REPOSITORIO DE RESULTADOS", "MUTUALSER"),
     "coosalud_output": os.path.join(NETWORK_BASE, "REPOSITORIO DE RESULTADOS", "COOSALUD"),
+    "sanitas_output": os.path.join(NETWORK_BASE, "REPOSITORIO DE RESULTADOS", "SANITAS"),
 }
 
 # Archivos de homologación por EPS
 HOMOLOGADOR_FILES = {
     "mutualser": os.path.join(NETWORK_PATHS["homologador"], "mutualser_homologacion.xlsx"),
     "coosalud": os.path.join(NETWORK_PATHS["homologador"], "coosalud_homologacion.xlsx"),
+    "sanitas": os.path.join(NETWORK_PATHS["homologador"], "sanitas_homologador.xlsx"),
 }
 
 # ==================== CONFIGURACIÓN IMAP ====================

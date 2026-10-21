@@ -5,10 +5,12 @@ Cada EPS tiene su propio procesador que sabe cómo manejar sus archivos específ
 
 from .base_processor import BaseProcessor
 from .coosalud_processor import CoosaludProcessor
+from .sanitas_processor import SanitasProcessor
 
 __all__ = [
     "BaseProcessor",
     "CoosaludProcessor",
+    "SanitasProcessor",
     "MutualserProcessor",
 ]
 

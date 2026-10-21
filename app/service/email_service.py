@@ -7,6 +7,7 @@ from app.core.imap_client import ImapClient
 from app.service.attachment_service import AttachmentService
 from app.core.mutualser_processor import MutualserProcessor
 from app.service.processors.coosalud_processor import CoosaludProcessor
+from app.service.processors.sanitas_processor import SanitasProcessor
 from app.config.settings import NETWORK_PATHS, HOMOLOGADOR_FILES, logger
 
 
@@ -45,6 +46,24 @@ class EmailService:
             coosalud_homologador = ""
         self.coosalud_processor = CoosaludProcessor(homologador_path=coosalud_homologador)
         logger.info("COOSALUD guardara en: %s", coosalud_output)
+
+        # Procesador SANITAS - fuente unica de rutas en app/config/settings.py
+        sanitas_output = self._get_output_path(
+            NETWORK_PATHS.get("sanitas_output", "outputs/sanitas"),
+            "outputs/sanitas",
+        )
+        self.sanitas_output_dir = sanitas_output
+        sanitas_homologador = HOMOLOGADOR_FILES.get("sanitas", "")
+        # Si el homologador de red no existe (entorno local/tests), iniciar sin
+        # homologador para permitir procesamiento sin homologacion.
+        if sanitas_homologador and not os.path.exists(sanitas_homologador):
+            logger.warning(
+                "Homologador Sanitas no encontrado (%s); se continua sin homologacion",
+                sanitas_homologador,
+            )
+            sanitas_homologador = ""
+        self.sanitas_processor = SanitasProcessor(homologador_path=sanitas_homologador)
+        logger.info("SANITAS guardara en: %s", sanitas_output)
     
     def _get_output_path(self, network_path, fallback_path):
         """
@@ -599,7 +618,165 @@ class EmailService:
             'path': output_file,
             'resumen': resumen,
         }
-    
+
+    def procesar_sanitas(self, archivos=None, email_date=None):
+        """
+        Procesa archivos de respuesta de glosas de SANITAS y genera Excel consolidado.
+
+        Usa SanitasProcessor con el mismo contrato que procesar_cosalud para
+        que el caller (app/ui/app.py) pueda tratar ambos EPS de forma uniforme.
+        Solo se procesan .xlsx (el PDF adjunto se ignora tanto en
+        get_excel_files como en identify_files del procesador).
+
+        Args:
+            archivos (list, optional): Lista de rutas de archivos Excel a procesar.
+                Si None, usa archivos Excel descargados en la sesion actual
+                (excluyendo devoluciones; los PDF ya quedan excluidos).
+            email_date (str, optional): Fecha del correo en formato
+                '%Y-%m-%d %H:%M:%S'. Si None, se usan los metadatos
+                individuales de attachment_service con fallback a fecha actual.
+
+        Returns:
+            dict: Resultado del procesamiento con las siguientes claves:
+                - success (bool): True si el procesamiento fue exitoso
+                - message (str): Mensaje descriptivo del resultado
+                - output_file (str): Ruta del archivo consolidado generado
+                - objeciones_file (str|None): Ruta del archivo de objeciones
+                - path (str): Alias de output_file para compatibilidad
+                - resumen (dict): Estadisticas del procesamiento
+        """
+        # Si no se especifican archivos, usar los Excel descargados (sin devoluciones;
+        # get_excel_files ya excluye los PDF por extension).
+        if archivos is None:
+            archivos = self.get_excel_files(
+                exclude_devoluciones=True, session_only=True
+            )
+
+        if not archivos:
+            return {
+                'success': False,
+                'message': 'No hay archivos para procesar'
+            }
+
+        # Asegurar procesador disponible (compatibilidad con instancias antiguas)
+        if not hasattr(self, 'sanitas_processor') or self.sanitas_processor is None:
+            sanitas_homologador = HOMOLOGADOR_FILES.get("sanitas", "")
+            if sanitas_homologador and not os.path.exists(sanitas_homologador):
+                logger.warning(
+                    "Homologador Sanitas no encontrado (%s); se continua sin homologacion",
+                    sanitas_homologador,
+                )
+                sanitas_homologador = ""
+            self.sanitas_processor = SanitasProcessor(
+                homologador_path=sanitas_homologador
+            )
+        if not hasattr(self, 'sanitas_output_dir') or not self.sanitas_output_dir:
+            self.sanitas_output_dir = self._get_output_path(
+                NETWORK_PATHS.get("sanitas_output", "outputs/sanitas"),
+                "outputs/sanitas",
+            )
+
+        output_dir = self.sanitas_output_dir
+        try:
+            os.makedirs(output_dir, exist_ok=True)
+        except Exception as exc:
+            logger.warning("No se pudo crear directorio Sanitas %s: %s", output_dir, exc)
+
+        # Registrar archivos existentes para detectar los generados en esta corrida
+        try:
+            archivos_previos = set(os.listdir(output_dir)) if os.path.exists(output_dir) else set()
+        except Exception:
+            archivos_previos = set()
+
+        try:
+            result_data, message = self.sanitas_processor.process_glosas(
+                archivos,
+                output_dir=output_dir,
+                email_date=email_date,
+                attachment_service=self.attachment_service,
+            )
+        except Exception as exc:
+            logger.exception("Error al procesar Sanitas: %s", exc)
+            return {
+                'success': False,
+                'message': f'Error al procesar archivos de Sanitas: {exc}'
+            }
+
+        if result_data is None:
+            return {
+                'success': False,
+                'message': message or 'No se pudo procesar ningun archivo'
+            }
+
+        detalle_df = result_data.get("detalle") if isinstance(result_data, dict) else None
+        glosa_df = None
+        if isinstance(result_data, dict):
+            glosa_df = result_data.get("objeciones", result_data.get("glosa"))
+        total_detalles = len(detalle_df) if detalle_df is not None else 0
+        total_glosas = len(glosa_df) if glosa_df is not None else 0
+
+        # Localizar archivos generados (consolidado + objeciones)
+        output_file = None
+        objeciones_file = None
+        try:
+            actuales = os.listdir(output_dir) if os.path.exists(output_dir) else []
+            nuevos = [f for f in actuales if f not in archivos_previos]
+            candidatos = nuevos if nuevos else actuales
+
+            consolidados = [
+                os.path.join(output_dir, f) for f in candidatos
+                if f.startswith("SANITAS_GLOSAS_") and f.endswith(".xlsx")
+            ]
+            objeciones = [
+                os.path.join(output_dir, f) for f in candidatos
+                if f.startswith("Objeciones_SANITAS_") and f.endswith(".xlsx")
+            ]
+            if consolidados:
+                output_file = max(consolidados, key=os.path.getmtime)
+            if objeciones:
+                objeciones_file = max(objeciones, key=os.path.getmtime)
+        except Exception as exc:
+            logger.warning("No se pudieron localizar archivos generados: %s", exc)
+
+        # Construir resumen compatible con procesar_mutualser/procesar_cosalud
+        try:
+            facturas_unicas = 0
+            if detalle_df is not None and not detalle_df.empty:
+                if "_FACTURA" in detalle_df.columns:
+                    facturas_unicas = int(detalle_df["_FACTURA"].nunique())
+                elif "CRNCXC" in detalle_df.columns:
+                    facturas_unicas = int(detalle_df["CRNCXC"].nunique())
+            codigos_homologados = 0
+            if detalle_df is not None and "SLNSERPRO" in detalle_df.columns:
+                codigos_homologados = int((detalle_df["SLNSERPRO"] != "").sum())
+        except Exception:
+            facturas_unicas = 0
+            codigos_homologados = 0
+
+        resumen = {
+            'total_registros': total_detalles,
+            'total_detalles': total_detalles,
+            'total_glosas': total_glosas,
+            'archivos_procesados': len(archivos),
+            'facturas_unicas': facturas_unicas,
+            'codigos_homologados': codigos_homologados,
+            'errores': len(getattr(self.sanitas_processor, 'errors', []) or []),
+        }
+
+        logger.info(
+            "Sanitas procesado: %s detalles, %s glosas, %s archivos",
+            total_detalles, total_glosas, len(archivos),
+        )
+
+        return {
+            'success': True,
+            'message': message or 'Procesamiento Sanitas completado',
+            'output_file': output_file,
+            'objeciones_file': objeciones_file,
+            'path': output_file,
+            'resumen': resumen,
+        }
+
 
 
 # Procesar adjunto de acuerdo a la EPS
