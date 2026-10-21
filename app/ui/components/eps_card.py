@@ -44,8 +44,6 @@ class EpsCard:
     
     def build(self):
         """Construye y retorna la tarjeta"""
-        # Badge "En desarrollo" si no hay procesador implementado
-        is_in_dev = self.eps_info.get("processor_class") is None
         # Decidir si usar imagen o emoji
         image_path = self.eps_info.get("image_path")
         
@@ -104,33 +102,5 @@ class EpsCard:
             animate_scale=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
             animate=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
             scale=1.0,
-            opacity=0.6 if is_in_dev else 1.0,
         )
-        if not is_in_dev:
-            return self.container
-        # Tarjeta sin procesador: badge "En desarrollo" superpuesto.
-        # El click se mantiene en la tarjeta interna (el diálogo
-        # existente de eps_screen.py no se modifica).
-        badge = ft.Container(
-            content=ft.Text(
-                "En desarrollo",
-                size=10,
-                weight=ft.FontWeight.W_600,
-                color=ft.Colors.ON_PRIMARY,
-            ),
-            bgcolor=ft.Colors.PRIMARY,
-            padding=ft.padding.symmetric(horizontal=8, vertical=4),
-            border_radius=8,
-        )
-        return ft.Stack(
-            controls=[
-                self.container,
-                ft.Container(
-                    content=badge,
-                    alignment=ft.alignment.top_center,
-                    padding=ft.padding.only(top=6),
-                ),
-            ],
-            width=150,
-            height=135,
-        )
+        return self.container
