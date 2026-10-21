@@ -34,7 +34,7 @@ INSUMOS_PROCEDIMIENTO_LABEL = "INSUMOS Y MEDICAMENTOS INTRAHOSPITALARIOS"
 # nombre exacto esperado). Si falta alguna requerida se registra el error
 # explícito "Falta columna X (candidatas: ...)".
 FACTURA_CANDIDATES = ["NUMERO DE FACTURA", "NUMERO FACTURA", "N° FACTURA", "FACTURA"]
-VALOR_CANDIDATES = ["VALOR GLOSADO", "VALOR", "VLR GLOSADO", "VALOR OBJETADO"]
+VALOR_CANDIDATES = ["VALOR GLOSADO GLOSA", "VALOR GLOSADO", "VALOR", "VLR GLOSADO", "VALOR OBJETADO"]
 SERVICIO_NOMBRE_CANDIDATES = ["NOMBRE PROCEDIMIENTO", "PROCEDIMIENTO", "SERVICIO"]
 # TODO (confirmar): columna del código de servicio en el xlsx de Sanitas.
 # Supuesto: existe una columna de código (no solo el nombre del
