@@ -78,7 +78,7 @@ Este documento describe el sistema de actualización automática implementado pa
 
 ### 2. Verificación Manual
 
-El usuario puede verificar actualizaciones manualmente haciendo clic en el indicador de versión (`v0.11.17`) en la esquina inferior izquierda del Dashboard.
+El usuario puede verificar actualizaciones manualmente haciendo clic en el indicador de versión (`v0.11.18`) en la esquina inferior izquierda del Dashboard.
 
 ### 3. Proceso de Actualización
 
@@ -113,7 +113,7 @@ El usuario puede verificar actualizaciones manualmente haciendo clic en el indic
 
 ```python
 # Versión actual (actualizar manualmente en cada release)
-APP_VERSION = "0.11.17"
+APP_VERSION = "0.11.18"
 
 # Repositorio de GitHub
 GITHUB_REPO = "tu-organizacion/glosaap"

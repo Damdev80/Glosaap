@@ -6,6 +6,18 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.11.18] - 2026-10-21
+
+### ✨ Nuevas Características
+- Búsqueda Sanitas por remitente y asunto exacto a nivel IMAP
+- Ventana con memoria, atajos ESC/F5, diálogo de settings único
+- Release automático desde tag con ZIP + checksum en CI
+
+### 🐛 Correcciones
+- Build invoca PyInstaller vía python -m (sin depender del PATH)
+- Tarjeta Sanitas sin badge de desarrollo
+
+
 ## [0.11.17] - 2026-10-20
 
 ### 🔄 Actualizaciones verificadas
