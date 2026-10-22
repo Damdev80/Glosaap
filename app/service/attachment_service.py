@@ -44,7 +44,7 @@ class AttachmentService:
     def _ensure_directory(self):
         """Crea el directorio si no existe y carga archivos existentes"""
         os.makedirs(self.base_dir, exist_ok=True)
-        print(f"[ATTACH] Directorio de trabajo: {self.base_dir}")
+        logger.debug("[ATTACH] Directorio de trabajo: %s", self.base_dir)
         
         # Cargar archivos existentes en el directorio
         self._scan_directory()
@@ -52,7 +52,7 @@ class AttachmentService:
     def _scan_directory(self):
         """Escanea el directorio y carga todos los archivos existentes"""
         if not os.path.exists(self.base_dir):
-            print(f"[ATTACH] Directorio no existe todavía: {self.base_dir}")
+            logger.debug("[ATTACH] Directorio no existe todavia: %s", self.base_dir)
             return
         
         # Limpiar lista antes de escanear
@@ -67,19 +67,19 @@ class AttachmentService:
                 if file_path not in self.downloaded_files:
                     self.downloaded_files.append(file_path)
         
-        print(f"[ATTACH] Total archivos en directorio: {len(all_files_in_dir)}")
-        print(f"[ATTACH] Archivos cargados en lista: {len(self.downloaded_files)}")
+        logger.debug("[ATTACH] Total archivos en directorio: %s", len(all_files_in_dir))
+        logger.debug("[ATTACH] Archivos cargados en lista: %s", len(self.downloaded_files))
         
         excel_count = len([f for f in self.downloaded_files if f.endswith(('.xlsx', '.xls', '.xlsm', '.xlsb', '.csv'))])
-        print(f"[ATTACH] Archivos Excel detectados: {excel_count}")
-        
+        logger.debug("[ATTACH] Archivos Excel detectados: %s", excel_count)
+
         # Mostrar primeros 5 archivos para debug
         if self.downloaded_files:
-            print(f"[ATTACH] Primeros archivos:")
+            logger.debug("[ATTACH] Primeros archivos:")
             for i, f in enumerate(self.downloaded_files[:5]):
-                print(f"  {i+1}. {os.path.basename(f)}")
+                logger.debug("  %s. %s", i + 1, os.path.basename(f))
         else:
-            print(f"[ATTACH] ⚠️ No se encontraron archivos en: {self.base_dir}")
+            logger.debug("[ATTACH] No se encontraron archivos en: %s", self.base_dir)
     
     def add_files(self, file_paths, metadata=None):
         """Agrega archivos a la lista de descargados Y de sesión
@@ -104,11 +104,15 @@ class AttachmentService:
                     # Si no, asumir que metadata es para aplicar a todos
                     else:
                         self.file_metadata[path] = metadata.copy()
-        print(f"[ATTACH] Archivos sesión: {len(self.session_files)} | Total dir: {len(self.downloaded_files)}")
+        logger.debug(
+            "[ATTACH] Archivos sesion: %s | Total dir: %s",
+            len(self.session_files),
+            len(self.downloaded_files),
+        )
     
     def rescan(self):
         """Re-escanea el directorio para actualizar la lista de archivos"""
-        print(f"[ATTACH] Re-escaneando directorio...")
+        logger.debug("[ATTACH] Re-escaneando directorio...")
         self._scan_directory()
         return len(self.downloaded_files)
     
@@ -197,7 +201,7 @@ class AttachmentService:
             if f.endswith(('.xlsx', '.xls', '.xlsm', '.xlsb', '.csv'))
         ]
         
-        print(f"[SESSION] Archivos Excel en sesión: {len(excel_files)}")
+        logger.debug("[SESSION] Archivos Excel en sesion: %s", len(excel_files))
         
         if not exclude_devoluciones:
             return excel_files
@@ -214,8 +218,8 @@ class AttachmentService:
             filtered.append(f)
         
         if archivos_devolucion > 0:
-            print(f"[SESSION] Devoluciones excluidas: {archivos_devolucion}")
-        print(f"[SESSION] Archivos a procesar: {len(filtered)}")
+            logger.debug("[SESSION] Devoluciones excluidas: %s", archivos_devolucion)
+        logger.debug("[SESSION] Archivos a procesar: %s", len(filtered))
         
         return filtered
     
@@ -269,10 +273,10 @@ class AttachmentService:
                 
                 filtered.append(f)
             
-            print(f"[FILTER] Total archivos Excel: {total_inicial}")
-            print(f"[FILTER] Archivos DEVOLUCION excluidos: {archivos_devolucion}")
-            print(f"[FILTER] Archivos FC asociados excluidos: {archivos_fc_asociados}")
-            print(f"[FILTER] Archivos a procesar: {len(filtered)}")
+            logger.debug("[FILTER] Total archivos Excel: %s", total_inicial)
+            logger.debug("[FILTER] Archivos DEVOLUCION excluidos: %s", archivos_devolucion)
+            logger.debug("[FILTER] Archivos FC asociados excluidos: %s", archivos_fc_asociados)
+            logger.debug("[FILTER] Archivos a procesar: %s", len(filtered))
             
             return filtered
             

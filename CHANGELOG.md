@@ -6,6 +6,18 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.11.19] - 2026-10-22
+
+### ✨ Nuevas Características
+- Sanitas end-to-end: reglas de negocio, homologación y cableado UI (`3d084b6`)
+
+### 🐛 Correcciones
+- Sanitas: nombre exacto de columna de valor (`f9dedc8`)
+- Arranque en Windows: prints de diagnóstico con emojis movidos a logger (crash `UnicodeEncodeError` en consola cp1252)
+- `imap_client`: import faltante de `email.message` (fallaba según orden de imports)
+- `main.py`: stdout/stderr forzados a UTF-8 al arrancar
+
+
 ## [0.11.18] - 2026-10-21
 
 ### ✨ Nuevas Características
