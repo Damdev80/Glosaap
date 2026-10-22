@@ -3,19 +3,21 @@ Vista de mensajes - Muestra y gestiona los correos encontrados
 Soporte completo de temas claro/oscuro
 """
 import threading
+
 import flet as ft
-from app.ui.styles import FONT_SIZES, SPACING, WINDOW_SIZES
+
+from app.ui.components.loading_overlay import LoadingOverlay, ToastNotification
 from app.ui.components.message_row import MessageRow
-from app.ui.components.loading_overlay import LoadingOverlay, ToastNotification, LoadingButton
+from app.ui.styles import FONT_SIZES, SPACING
 
 
 class MessagesView:
     """Vista para listar y gestionar mensajes de correo"""
-    
+
     def __init__(self, page: ft.Page, on_back, on_refresh, on_download_selected, on_process, navigation_controller=None):
         """
         Inicializa la vista de mensajes
-        
+
         Args:
             page: Página de Flet
             on_back: Callback para volver atrás (messages -> eps)
@@ -30,25 +32,25 @@ class MessagesView:
         self.on_download_selected = on_download_selected
         self.on_process = on_process
         self.navigation_controller = navigation_controller
-        
+
         # Estado
         self.selected_messages = set()
         self.message_rows = {}  # Diccionario para acceder a MessageRow por ID
         # Cancelación de procesados largos (flag + generación anti-tardíos)
         self._cancel_event = threading.Event()
         self._processing_seq = 0
-        
+
         # Componentes de loading y feedback
         self.loading_overlay = LoadingOverlay(page)
         self.toast_notification = ToastNotification(page)
-        
+
         # Componentes - sin colores hardcodeados para soporte de temas
         self.messages_list = ft.Column([], scroll=ft.ScrollMode.AUTO, expand=True, spacing=0)
         self.messages_status = ft.Text(
             "", size=FONT_SIZES["caption"], color=ft.Colors.ON_SURFACE_VARIANT
         )
         self.loading_bar = ft.ProgressBar(visible=False)
-        
+
         # Barra de progreso mejorada
         self.processing_progress = ft.ProgressBar(
             value=None  # None = indeterminado
@@ -95,7 +97,7 @@ class MessagesView:
                 text_style=ft.TextStyle(size=12),
             ),
         )
-        
+
         # Contenedor de progreso (se muestra/oculta completo)
         self.processing_container = ft.Container(
             content=ft.Column([
@@ -111,11 +113,11 @@ class MessagesView:
             visible=False,
             padding=ft.padding.only(top=10)
         )
-        
+
         self.search_info_text = ft.Text(
             "", size=FONT_SIZES["caption"], color=ft.Colors.ON_SURFACE_VARIANT
         )
-        
+
         # Acción principal + secundaria minimalista:
         # un solo Elevated primario; el secundario como TextButton sutil
         self.process_eps_btn = ft.ElevatedButton(
@@ -143,14 +145,14 @@ class MessagesView:
                 text_style=ft.TextStyle(size=12),
             ),
         )
-        
+
         self.select_all_checkbox = ft.Checkbox(
             label="Seleccionar todos",
             value=False,
             visible=False,  # Ocultar - ya no es necesario
             on_change=self._on_select_all_changed
         )
-        
+
         self.selected_count_text = ft.Text(
             "0 seleccionados",
             size=FONT_SIZES["caption"],
@@ -194,10 +196,10 @@ class MessagesView:
             size=FONT_SIZES["caption"],
             color=ft.Colors.ON_SURFACE_VARIANT,
         )
-        
+
         # Crear vista
         self.container = self._create_view()
-    
+
     def _create_view(self):
         """Crea el contenedor de la vista"""
         back_btn = ft.IconButton(
@@ -205,13 +207,13 @@ class MessagesView:
             tooltip="Volver (ESC)",
             on_click=lambda e: self.on_back()
         )
-        
+
         refresh_btn = ft.IconButton(
             icon=ft.Icons.REFRESH,
             tooltip="Actualizar (F5)",
             on_click=lambda e: self.on_refresh()
         )
-        
+
         # Breadcrumb navigation (usa NavigationController; sin page.data)
         # Minimalista: PRIMARY sutil + separadores ON_SURFACE_VARIANT
         breadcrumb = ft.Row([
@@ -237,7 +239,7 @@ class MessagesView:
             ft.Text(" > ", color=ft.Colors.ON_SURFACE_VARIANT, size=12),
             ft.Text("Mensajes", weight=ft.FontWeight.BOLD, size=12),
         ], spacing=0)
-        
+
         # Usar Card para el header - soporte de temas automático
         return ft.Container(
             content=ft.Column([
@@ -248,7 +250,7 @@ class MessagesView:
                             ft.Row([
                                 ft.Row([
                                     back_btn,
-                                    ft.Text("Correos con 'glosa'", size=FONT_SIZES["heading"], 
+                                    ft.Text("Correos con 'glosa'", size=FONT_SIZES["heading"],
                                            weight=ft.FontWeight.W_400),
                                 ], spacing=0),
                                 refresh_btn
@@ -311,7 +313,7 @@ class MessagesView:
                 ft.Card(
                     content=ft.Container(
                         content=ft.Column([
-                            ft.Row([self.process_eps_btn], spacing=SPACING["md"], 
+                            ft.Row([self.process_eps_btn], spacing=SPACING["md"],
                                   alignment=ft.MainAxisAlignment.CENTER),
                             # Indicador de progreso mejorado
                             self.processing_container,
@@ -335,7 +337,7 @@ class MessagesView:
             expand=True,
             visible=False
         )
-    
+
     def _on_filter_changed(self, e):
         """Filtra asunto/remitente en memoria y vuelve a la página 1."""
         self._filter_text = (e.control.value or "").strip().lower()
@@ -493,18 +495,18 @@ class MessagesView:
                 row.checkbox.value = is_checked
 
         self._update_selection_ui()
-    
+
     def _on_message_checkbox_changed(self, message_data, is_checked):
         """Maneja el cambio de checkbox individual de mensaje"""
         msg_id = message_data.get("id")
-        
+
         if is_checked:
             self.selected_messages.add(msg_id)
         else:
             self.selected_messages.discard(msg_id)
-        
+
         self._update_selection_ui()
-    
+
     def _update_selection_ui(self, publish=True):
         """Actualiza la UI según los mensajes seleccionados"""
         count = len(self.selected_messages)
@@ -517,34 +519,34 @@ class MessagesView:
 
         if publish:
             self.page.update()
-    
+
     # ==================== MÉTODOS DE LOADING Y FEEDBACK ====================
-    
+
     def show_loading(self, message: str):
         """Muestra overlay de carga con mensaje"""
         self.loading_overlay.show(message)
-    
+
     def hide_loading(self):
         """Oculta overlay de carga"""
         self.loading_overlay.hide()
-    
+
     def show_toast(self, message: str, is_success: bool = True):
         """Muestra notificación toast"""
         if is_success:
             self.toast_notification.success(message)
         else:
             self.toast_notification.error(message)
-    
+
     def set_loading_progress(self, current: int, total: int, message: str = ""):
         """Actualiza progreso de carga"""
         if total > 0:
             progress = current / total
             self.processing_progress.value = progress
             self.processing_percentage.value = f"{int(progress * 100)}%"
-        
+
         if message:
             self.processing_status.value = message
-        
+
         self.page.update()
 
     def show_messages(self, messages, search_info=""):
@@ -571,7 +573,7 @@ class MessagesView:
         self._render_page()
         self.search_info_text.value = search_info
         self.page.update()
-    
+
     def set_loading(self, is_loading, status_text=""):
         """Muestra/oculta el indicador de carga"""
         self.loading_bar.visible = is_loading
@@ -582,7 +584,7 @@ class MessagesView:
     def set_processing(self, is_processing, status_text="", progress=None):
         """
         Muestra/oculta el indicador de procesamiento
-        
+
         Args:
             is_processing: Si está procesando
             status_text: Texto de estado
@@ -592,7 +594,7 @@ class MessagesView:
         self.processing_container.visible = is_processing
         self.processing_status.value = status_text
         self.cancel_btn.visible = bool(is_processing)
-        
+
         if is_processing:
             if progress is not None:
                 self.processing_progress.value = progress
@@ -602,9 +604,9 @@ class MessagesView:
                 self.processing_percentage.value = ""
         else:
             self.processing_percentage.value = ""
-        
+
         self.page.update()
-    
+
     def show_process_button(self, visible=True):
         """Muestra/oculta el botón de procesar EPS"""
         self.process_eps_btn.visible = visible
@@ -659,30 +661,30 @@ class MessagesView:
             self.page.update()
         except Exception:
             pass
-    
+
     def show_download_controls(self, visible=True):
         """Muestra/oculta los controles de descarga manual"""
         self.download_selected_btn.visible = visible
         self.page.update()
-    
+
     def show(self):
         """Muestra la vista"""
         self.container.visible = True
         self.page.update()
-    
+
     def hide(self):
         """Oculta la vista"""
         self.container.visible = False
         self.page.update()
-    
+
     def get_selected_messages(self):
         """Retorna los IDs de mensajes seleccionados"""
         return self.selected_messages
-    
+
     def update_message_status(self, message_id, status_text, is_error=False):
         """
         Actualiza el estado de un mensaje específico
-        
+
         Args:
             message_id: ID del mensaje
             status_text: Texto de estado

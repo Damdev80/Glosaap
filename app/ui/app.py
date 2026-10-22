@@ -5,12 +5,12 @@ Con soporte completo de temas claro/oscuro.
 Bootstrap + inyección: crea servicios, estado (AppState) y vistas, y
 delega TODA la navegación al NavigationController (canal único).
 """
-import flet as ft
 import os
 import sys
 import threading
 from datetime import datetime as _dt
-from typing import Optional, List
+
+import flet as ft
 
 # Configurar path para imports - agregar el directorio raíz del proyecto
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -18,32 +18,37 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 # Importar settings (configura Playwright automáticamente)
-from app.config.settings import PLAYWRIGHT_BROWSERS_PATH
 
-from app.service.email_service import EmailService
-from app.ui.styles import (
-    WINDOW_SIZES,
-    ThemeManager,
-    update_colors,
-    get_colors,
-    get_window_size_for_view,
-    resolve_window_size,
-    save_window_size,
+from app.config.settings import (
+    APP_VERSION,
+    AUTO_UPDATE_CONFIG,
+    GITHUB_REPO,
+    ensure_dir,
+    get_homologador_path,
+    get_output_dir,
+    logger,
 )
-from app.ui.screens.eps_screen import EpsScreen
-from app.ui.views import DashboardView, LoginView, ToolsView, MessagesView
-from app.ui.views.homologacion_view import HomologacionView
-from app.ui.views.mix_excel_view import MixExcelView
-from app.ui.views.homologador_manual_view import HomologadorManualView
-from app.ui.views.web_download_view import WebDownloadView
-from app.ui.views.method_selection_view import MethodSelectionView
+from app.service.email_service import EmailService
+from app.ui.app_state import AppState
+from app.ui.business_logic import MessageFilter
 from app.ui.components.alert_dialog import AlertDialog
 from app.ui.components.settings_dialog import show_settings_dialog
 from app.ui.components.update_dialog import UpdateChecker
 from app.ui.navigation import NavigationController
-from app.ui.app_state import AppState
-from app.ui.business_logic import MessageFilter
-from app.config.settings import APP_VERSION, GITHUB_REPO, AUTO_UPDATE_CONFIG, logger, get_homologador_path, get_output_dir, ensure_dir
+from app.ui.screens.eps_screen import EpsScreen
+from app.ui.styles import (
+    ThemeManager,
+    get_window_size_for_view,
+    resolve_window_size,
+    save_window_size,
+    update_colors,
+)
+from app.ui.views import DashboardView, LoginView, MessagesView, ToolsView
+from app.ui.views.homologacion_view import HomologacionView
+from app.ui.views.homologador_manual_view import HomologadorManualView
+from app.ui.views.method_selection_view import MethodSelectionView
+from app.ui.views.mix_excel_view import MixExcelView
+from app.ui.views.web_download_view import WebDownloadView
 
 # Ruta de assets (carpeta con imágenes)
 ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "assets"))
@@ -747,7 +752,7 @@ def main(page: ft.Page):
 
                     if resultado['success']:
                         resumen = resultado['resumen']
-                        msg = f"✅ ¡Archivos generados!\n"
+                        msg = "✅ ¡Archivos generados!\n"
                         msg += f"📄 {resultado['output_file']}\n"
                         if resultado.get('objeciones_file'):
                             msg += f"📋 {resultado['objeciones_file']}\n"
@@ -976,7 +981,7 @@ def main(page: ft.Page):
 
                     if resultado['success']:
                         resumen = resultado['resumen']
-                        msg = f"✅ ¡Archivos generados!\n"
+                        msg = "✅ ¡Archivos generados!\n"
                         msg += f"📄 {resultado['output_file']}\n"
                         if resultado.get('objeciones_file'):
                             msg += f"📋 {resultado['objeciones_file']}\n"

@@ -1,14 +1,15 @@
 """
 Vista de selección de método: Correo vs Web
 """
+
 import flet as ft
-import os
+
 from app.ui.components.alert_dialog import AlertDialog
 
 
 class MethodSelectionView:
     """Vista para elegir entre descarga por correo o web"""
-    
+
     def __init__(self, page, assets_dir, on_email_method=None, on_web_method=None, on_logout=None):
         self.page = page
         self.assets_dir = assets_dir
@@ -16,16 +17,16 @@ class MethodSelectionView:
         self.on_web_method = on_web_method
         self.on_logout = on_logout
         self.container = self._build()
-    
+
     def _create_method_card(self, title, description, action_key, icon, is_primary=True):
         """Crea una card de método usando Card de Flet (respeta temas)"""
-        
+
         def on_click(e):
             if action_key == "email" and self.on_email_method:
                 self.on_email_method()
             elif action_key == "web" and self.on_web_method:
                 self.on_web_method()
-        
+
         card = ft.Card(
             content=ft.Container(
                 content=ft.Column([
@@ -60,12 +61,12 @@ class MethodSelectionView:
             ),
             elevation=3,
         )
-        
+
         return card
-    
+
     def _build(self):
         """Construye la interfaz"""
-        
+
         # Header
         header = ft.Column([
             ft.Text(
@@ -81,7 +82,7 @@ class MethodSelectionView:
                 text_align=ft.TextAlign.CENTER
             )
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER)
-        
+
         # Cards de métodos
         email_card = self._create_method_card(
             title="📧 Glosa por Correo",
@@ -90,7 +91,7 @@ class MethodSelectionView:
             icon=ft.Icons.EMAIL_OUTLINED,
             is_primary=True
         )
-        
+
         web_card = self._create_method_card(
             title="🌐 Glosa por Web",
             description="Descarga automática desde portales web de EPS.\nAcceso directo a Familiar, Fomag, etc.",
@@ -98,7 +99,7 @@ class MethodSelectionView:
             icon=ft.Icons.LANGUAGE,
             is_primary=False
         )
-        
+
         # Layout
         content = ft.Column([
             ft.Container(height=40),
@@ -116,14 +117,14 @@ class MethodSelectionView:
                 on_click=lambda e: self._confirm_logout(e),
             )
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True)
-        
+
         return ft.Container(
             content=content,
             bgcolor=ft.Colors.SURFACE,  # Fondo sólido
             expand=True,
             visible=False
         )
-    
+
     def _confirm_logout(self, e):
         """Antepone confirmación antes de cerrar sesión y limpiar datos."""
         def do_logout(ev):
@@ -144,18 +145,18 @@ class MethodSelectionView:
     def rebuild(self):
         """Reconstruye la vista con el tema actual"""
         was_visible = self.container.visible if self.container else False
-        
+
         # El container ya tiene bgcolor=ft.Colors.SURFACE que se adapta automáticamente
         # Flet se encarga de actualizar los colores del tema
         if self.container:
             self.container.visible = was_visible
         self.page.update()
-    
+
     def show(self):
         """Muestra la vista"""
         self.container.visible = True
         self.page.update()
-    
+
     def hide(self):
         """Oculta la vista"""
         self.container.visible = False

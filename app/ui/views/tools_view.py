@@ -1,16 +1,17 @@
 """
 Vista de Herramientas - Con soporte de temas
 """
-import flet as ft
 import os
-from app.ui.styles import FONT_SIZES
+
+import flet as ft
+
+from app.ui.components.loading_overlay import LoadingOverlay, ToastNotification
 from app.ui.components.navigation_header import NavigationHeader
-from app.ui.components.loading_overlay import LoadingOverlay, ToastNotification, LoadingButton
 
 
 class ToolsView:
     """Vista del menú de herramientas"""
-    
+
     def __init__(self, page: ft.Page, assets_dir: str, navigation_controller=None, on_back=None, on_homologacion=None, on_mix_excel=None, on_homologador_manual=None):
         self.page = page
         self.assets_dir = assets_dir
@@ -20,13 +21,13 @@ class ToolsView:
         self.on_mix_excel = on_mix_excel
         self.on_homologador_manual = on_homologador_manual
         self.nav_header = NavigationHeader(page, navigation_controller)
-        
+
         # Componentes de loading
         self.loading_overlay = LoadingOverlay(page)
         self.toast = ToastNotification(page)
-        
+
         self.container = self.build()
-        
+
     def _create_tool_card(self, icon, title, description, color, on_click_action, image_src=None):
         """Crea una card de herramienta usando Card de Flet (respeta temas)"""
         # Contenido del icono: imagen o icono
@@ -34,7 +35,7 @@ class ToolsView:
             icon_content = ft.Image(src=image_src, width=36, height=36, fit=ft.ImageFit.CONTAIN)
         else:
             icon_content = ft.Icon(icon, size=30, color=ft.Colors.ON_PRIMARY)
-        
+
         card = ft.Card(
             content=ft.Container(
                 content=ft.Row([
@@ -60,18 +61,18 @@ class ToolsView:
             elevation=2,
         )
         return card
-    
+
     def build(self):
         """Construye la vista de herramientas"""
-        
+
         # Header con navegación
         header = self.nav_header.build(
             title="⚙️ Herramientas",
             back_text="← Volver al Dashboard",
             custom_back_action=lambda: self.navigation_controller.go_to_dashboard() if self.navigation_controller else None,
-            
+
         )
-        
+
         self.container = ft.Container(
             content=ft.Column([
                 # Header con navegación
@@ -107,7 +108,7 @@ class ToolsView:
                                 lambda e: self._handle_homologador_manual(),
                                 image_src=os.path.join(self.assets_dir, "img", "homologador_manual.png")
                             ),
-                            
+
                         ], spacing=20, alignment=ft.MainAxisAlignment.CENTER),
                     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                     padding=30,
@@ -118,19 +119,19 @@ class ToolsView:
             expand=True,
             visible=False
         )
-        
+
         return self.container
-    
+
     def show_loading(self, message="Cargando..."):
         """Muestra el overlay de carga"""
         if self.loading_overlay:
             self.loading_overlay.show(message)
-    
+
     def hide_loading(self):
         """Oculta el overlay de carga"""
         if self.loading_overlay:
             self.loading_overlay.hide()
-    
+
     def show_toast(self, message, toast_type="success"):
         """Muestra una notificación toast"""
         if self.toast:
@@ -142,35 +143,35 @@ class ToolsView:
                 self.toast.warning(message)
             else:
                 self.toast.info(message)
-    
+
     def _handle_homologacion(self):
         """Maneja la navegación a homologación con loading"""
         if self.on_homologacion:
             self.show_loading("Cargando Gestión de Homologación...")
             self.on_homologacion()
-    
+
     def _handle_mix_excel(self):
         """Maneja la navegación a mix excel con loading"""
         if self.on_mix_excel:
             self.show_loading("Cargando Mix Excel...")
             self.on_mix_excel()
-    
+
     def _handle_homologador_manual(self):
         """Maneja la navegación a homologador manual con loading"""
         if self.on_homologador_manual:
             self.show_loading("Cargando Homologador Manual...")
             self.on_homologador_manual()
-    
+
     def _handle_settings(self):
         """Maneja el acceso a configuración"""
         self.show_toast("Configuración - Función en desarrollo", "info")
-    
+
     def show(self):
         """Muestra la vista"""
         if self.container:
             self.container.visible = True
             self.page.update()
-    
+
     def hide(self):
         """Oculta la vista"""
         if self.container:

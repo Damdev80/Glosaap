@@ -8,17 +8,15 @@ import json
 import os
 import sys
 from datetime import datetime, timezone
-from typing import Optional
 
 from app.config.settings import logger
 from app.core.secure_store import (
+    _chmod_600,
     atomic_write_json,
     keyring_delete,
     read_json_locked,
-    store_secret,
     retrieve_secret,
-    get_lock,
-    _chmod_600,
+    store_secret,
 )
 
 KEYRING_SERVICE = "Glosaap"
@@ -27,7 +25,7 @@ KEYRING_SERVICE = "Glosaap"
 class CredentialManager:
     """Gestor de credenciales guardadas localmente"""
 
-    def __init__(self, config_dir: Optional[str] = None):
+    def __init__(self, config_dir: str | None = None):
         if config_dir is None:
             # Usar AppData en Windows para persistencia (funciona en exe y desarrollo)
             if sys.platform == 'win32':
@@ -66,7 +64,7 @@ class CredentialManager:
             # Preservar copia para diagnostico.
             try:
                 bak = self.credentials_file + ".bak"
-                with open(self.credentials_file, "r", encoding="utf-8") as src:
+                with open(self.credentials_file, encoding="utf-8") as src:
                     content = src.read()
                 with open(bak, "w", encoding="utf-8") as dst:
                     dst.write(content)
@@ -134,7 +132,7 @@ class CredentialManager:
             logger.error("Error guardando credenciales: %s", e)
             return False
 
-    def load_credentials(self, service: str) -> Optional[dict]:
+    def load_credentials(self, service: str) -> dict | None:
         """
         Carga credenciales de un servicio.
 

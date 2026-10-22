@@ -16,6 +16,16 @@ import sys
 from datetime import date
 from pathlib import Path
 
+# La consola Windows usa cp1252 y los prints con emojis revientan
+# (UnicodeEncodeError). Fuerza UTF-8 con reemplazo seguro.
+try:
+    if sys.stdout is not None:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if sys.stderr is not None:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 ROOT = Path(__file__).resolve().parent
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 

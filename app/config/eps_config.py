@@ -1,4 +1,4 @@
-""" 
+"""
 Configuración de las EPS disponibles en el sistema
 Cada EPS tiene su propia configuración para filtrado y procesamiento
 
@@ -16,7 +16,7 @@ ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..",
 
 class EpsInfo:
     """Clase base para información de una EPS"""
-    
+
     def __init__(
         self,
         name: str,
@@ -52,7 +52,7 @@ class EpsInfo:
                 self.homologador_path = None
         else:
             self.homologador_path = None
-    
+
     def to_dict(self) -> dict:
         """Convierte a diccionario para compatibilidad con código existente"""
         return {
@@ -72,10 +72,10 @@ class EpsInfo:
 
 
 
-    
+
 class MutualserEps(EpsInfo):
     """Configuración para Mutualser EPS"""
-    
+
     def __init__(self):
         super().__init__(
             name="Mutualser",
@@ -93,7 +93,7 @@ class MutualserEps(EpsInfo):
 
 class CoosaludEps(EpsInfo):
     """Configuración para Coosalud EPS"""
-    
+
     def __init__(self):
         super().__init__(
             name="Coosalud",
@@ -130,7 +130,7 @@ class SanitasEps(EpsInfo):
 
 class NuevaEps(EpsInfo):
     """Configuración para Nueva EPS (sin procesador: deshabilitada)"""
-    
+
     def __init__(self):
         super().__init__(
             name="Nueva EPS",
@@ -145,7 +145,7 @@ class NuevaEps(EpsInfo):
 
 class CompensarEps(EpsInfo):
     """Configuración para Compensar EPS (sin procesador: deshabilitada)"""
-    
+
     def __init__(self):
         super().__init__(
             name="Compensar",
@@ -160,7 +160,7 @@ class CompensarEps(EpsInfo):
 
 class FamisanarEps(EpsInfo):
     """Configuración para Famisanar EPS (sin procesador: deshabilitada)"""
-    
+
     def __init__(self):
         super().__init__(
             name="Famisanar",
@@ -175,7 +175,7 @@ class FamisanarEps(EpsInfo):
 
 class CosaludEps(EpsInfo):
     """Configuración para Cosalud EPS (typo de Coosalud, procesador inexistente: deshabilitada)"""
-    
+
     def __init__(self):
         super().__init__(
             name="Cosalud",
@@ -205,7 +205,7 @@ EPS_CONFIG = [
 def get_eps_list() -> list:
     """
     Retorna la lista de EPS como diccionarios para compatibilidad
-    
+
     Returns:
         Lista de diccionarios con info de cada EPS
     """
@@ -215,10 +215,10 @@ def get_eps_list() -> list:
 def get_eps_by_name(name: str) -> EpsInfo | None:
     """
     Busca una EPS por nombre
-    
+
     Args:
         name: Nombre de la EPS
-        
+
     Returns:
         EpsInfo o None si no se encuentra
     """
@@ -231,7 +231,7 @@ def get_eps_by_name(name: str) -> EpsInfo | None:
 def get_all_eps() -> list:
     """
     Retorna todas las instancias de EPS
-    
+
     Returns:
         Lista de EpsInfo
     """
@@ -241,7 +241,7 @@ def get_all_eps() -> list:
 def get_enabled_eps() -> list:
     """
     Retorna solo las EPS habilitadas
-    
+
     Returns:
         Lista de EpsInfo habilitadas
     """

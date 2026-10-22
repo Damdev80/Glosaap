@@ -15,6 +15,15 @@ El resultado homologado se guarda en SANITAS_GLOSAS_<ts>.xlsx y las
 objeciones en Objeciones_SANITAS_<ts>.xlsx con el mismo set de columnas
 que Mutualser/Coosalud + CRNCLAOBJ (siempre vacía).
 """
+import os
+from datetime import datetime
+from typing import Any
+
+import pandas as pd
+
+from app.config.settings import logger
+
+from .base_processor import BaseProcessor
 
 # TODO (confirmar con el usuario): concepto de tarifas.
 # TARIFAS_GENERAL_CODES es el set de valores de CODIGO CONCEPTO GENERAL
@@ -109,22 +118,14 @@ OBJECIONES_COLUMNS = [
 
 GENUSUARIO4_FIJO = 1103858268
 
-import os
-import pandas as pd
-from datetime import datetime
-from typing import List, Dict, Optional, Any, Union, Tuple
-
-from .base_processor import BaseProcessor
-from app.config.settings import logger
-
 
 class SanitasProcessor(BaseProcessor):
     """Procesador de archivos de glosas de Sanitas EPS."""
 
-    def __init__(self, homologador_path: Optional[str] = None):
+    def __init__(self, homologador_path: str | None = None):
         super().__init__(homologador_path or "")
-        self.sanitas_df: Optional[pd.DataFrame] = None
-        self._last_objeciones_df: Optional[pd.DataFrame] = None
+        self.sanitas_df: pd.DataFrame | None = None
+        self._last_objeciones_df: pd.DataFrame | None = None
 
     # ==================== HOMOLOGADOR ====================
 
@@ -152,7 +153,7 @@ class SanitasProcessor(BaseProcessor):
 
     # ==================== TEMPLATE METHOD ====================
 
-    def identify_files(self, file_paths: List[str]) -> List[str]:
+    def identify_files(self, file_paths: list[str]) -> list[str]:
         """Retorna solo los .xlsx (el PDF se ignora).
 
         Sanitas envía UN xlsx por correo (no pares DETALLE+GLOSAS).
@@ -166,11 +167,11 @@ class SanitasProcessor(BaseProcessor):
         return xlsx
 
     def validate_files(
-        self, identified_files: Union[List[str], List[Dict[str, str]], Dict[str, Any]]
+        self, identified_files: list[str] | list[dict[str, str]] | dict[str, Any]
     ) -> bool:
         """Valida que cada xlsx identificado exista en disco."""
         if isinstance(identified_files, dict):
-            paths: List[Any] = list(identified_files.values())
+            paths: list[Any] = list(identified_files.values())
         elif isinstance(identified_files, list):
             paths = []
             for item in identified_files:
@@ -204,8 +205,8 @@ class SanitasProcessor(BaseProcessor):
         return ok
 
     def extract_data(
-        self, identified_files: Union[List[str], List[Dict[str, str]], Dict[str, Any]]
-    ) -> Dict[str, pd.DataFrame]:
+        self, identified_files: list[str] | list[dict[str, str]] | dict[str, Any]
+    ) -> dict[str, pd.DataFrame]:
         """Lee y concatena los xlsx de Sanitas en un solo DataFrame."""
         if isinstance(identified_files, dict):
             paths = list(identified_files.values())
@@ -239,8 +240,8 @@ class SanitasProcessor(BaseProcessor):
     # ==================== HELPERS ====================
 
     def _resolve_column(
-        self, df: pd.DataFrame, candidates: List[str], logical: str
-    ) -> Optional[str]:
+        self, df: pd.DataFrame, candidates: list[str], logical: str
+    ) -> str | None:
         """Mapeo tolerante: exacto insensible a mayúsculas/espacios.
 
         El nombre exacto esperado va primero en `candidates`. Si no hay
@@ -255,8 +256,8 @@ class SanitasProcessor(BaseProcessor):
         return None
 
     def _resolve_column_optional(
-        self, df: pd.DataFrame, candidates: List[str]
-    ) -> Optional[str]:
+        self, df: pd.DataFrame, candidates: list[str]
+    ) -> str | None:
         """Mapeo tolerante sin error si no existe (supuesto TODO)."""
         norm = {str(c).strip().upper(): c for c in df.columns}
         for cand in candidates:
@@ -266,8 +267,8 @@ class SanitasProcessor(BaseProcessor):
         return None
 
     def _find_homolog_column(
-        self, keywords: List[str], exact_match: Optional[str] = None
-    ) -> Optional[str]:
+        self, keywords: list[str], exact_match: str | None = None
+    ) -> str | None:
         if self.homologador_df is None:
             return None
         if exact_match:
@@ -280,7 +281,7 @@ class SanitasProcessor(BaseProcessor):
                 return col
         return None
 
-    def _build_homologation_dict(self) -> Dict[str, str]:
+    def _build_homologation_dict(self) -> dict[str, str]:
         """Construye {codigo_erp: codigo_dgh} estilo mutualser.
 
         Sin homologador cargado retorna {} con warning (se continúa sin
@@ -303,7 +304,7 @@ class SanitasProcessor(BaseProcessor):
             logger.warning("Homologador Sanitas sin columnas ERP/DGH esperadas")
             return {}
 
-        validos_cod_fact: Optional[set] = None
+        validos_cod_fact: set | None = None
         if HOMOLOGADOR_COD_FACT_COL in self.homologador_df.columns:
             validos_cod_fact = set(
                 self.homologador_df[HOMOLOGADOR_COD_FACT_COL]
@@ -316,7 +317,7 @@ class SanitasProcessor(BaseProcessor):
             validos_cod_fact.discard("0")
             validos_cod_fact.discard("")
 
-        homolog_dict: Dict[str, str] = {}
+        homolog_dict: dict[str, str] = {}
         for _, row in self.homologador_df.iterrows():
             codigo_erp = self._normalize_code(row[erp_col])
             codigo_dgh = self._normalize_code(row[dgh_col])
@@ -339,14 +340,14 @@ class SanitasProcessor(BaseProcessor):
 
     # ==================== HOMOLOGATE ====================
 
-    def homologate(self, data: Dict[str, pd.DataFrame]) -> pd.DataFrame:
+    def homologate(self, data: dict[str, pd.DataFrame]) -> pd.DataFrame:
         """Homologa filas de Sanitas y retorna DataFrame (contrato Base).
 
         Calcula por fila: CRNCXC, CRNCONOBJ (concatenación sin separador),
         CRDOBSERV (con fallback MVC si es tarifa), SLNSERPRO (homologado
         solo para INSUMOS, resto conserva original) y CROVALOBJ.
         """
-        df: Optional[pd.DataFrame] = None
+        df: pd.DataFrame | None = None
         if isinstance(data, dict):
             if isinstance(data.get("sanitas"), pd.DataFrame):
                 df = data["sanitas"]
@@ -419,7 +420,7 @@ class SanitasProcessor(BaseProcessor):
         work["CRDOBSERV"] = work.apply(_observacion, axis=1)
 
         # SLNSERPRO: solo INSUMOS homologa vía dict; resto conserva original.
-        sln: List[str] = []
+        sln: list[str] = []
         homologados = 0
         for _, row in work.iterrows():
             nombre_norm = self._normalizar_procedimiento(row[col_nombre])
@@ -453,7 +454,7 @@ class SanitasProcessor(BaseProcessor):
         if "CRNCXC" not in df_obj.columns or "SLNSERPRO" not in df_obj.columns:
             return df_obj
 
-        filas_eliminar: List[Any] = []
+        filas_eliminar: list[Any] = []
         procesadas = 0
 
         for (_, _), grupo in df_obj.groupby(["CRNCXC", "SLNSERPRO"]):
@@ -490,7 +491,7 @@ class SanitasProcessor(BaseProcessor):
         return df_obj
 
     def _build_objeciones_df(
-        self, detalle_df: pd.DataFrame, email_date: Optional[str] = None
+        self, detalle_df: pd.DataFrame, email_date: str | None = None
     ) -> pd.DataFrame:
         """Construye el DataFrame de objeciones (mismo set + CRNCLAOBJ)."""
         hoy_doc = (
@@ -554,8 +555,8 @@ class SanitasProcessor(BaseProcessor):
         self,
         detalle_df: pd.DataFrame,
         output_dir: str,
-        email_date: Optional[str] = None,
-    ) -> Optional[str]:
+        email_date: str | None = None,
+    ) -> str | None:
         """Genera Objeciones_SANITAS_<ts>.xlsx a partir del detalle."""
         if detalle_df is None or detalle_df.empty:
             self.errors.append("No hay datos para generar objeciones (Sanitas)")
@@ -577,7 +578,7 @@ class SanitasProcessor(BaseProcessor):
             logger.error("Error generando objeciones Sanitas: %s", e)
             return None
 
-    def save_to_excel(self, data: Dict[str, pd.DataFrame], output_path: str) -> bool:
+    def save_to_excel(self, data: dict[str, pd.DataFrame], output_path: str) -> bool:
         """Guarda el consolidado Sanitas (hoja Glosas, sin columnas internas)."""
         try:
             df = data.get("detalle") if isinstance(data, dict) else data
@@ -597,11 +598,11 @@ class SanitasProcessor(BaseProcessor):
 
     def process_glosas(
         self,
-        file_paths: List[str],
-        output_dir: Optional[str] = None,
-        email_date: Optional[str] = None,
+        file_paths: list[str],
+        output_dir: str | None = None,
+        email_date: str | None = None,
         attachment_service: Any = None,
-    ) -> Tuple[Optional[Dict[str, pd.DataFrame]], str]:
+    ) -> tuple[dict[str, pd.DataFrame] | None, str]:
         """Procesa los xlsx de Sanitas (patrón CoosaludProcessor.process_glosas).
 
         Args:
@@ -674,7 +675,7 @@ class SanitasProcessor(BaseProcessor):
             return None, f"[ERROR] Error: {'; '.join(self.errors) or 'sin datos homologados'}"
 
         objeciones_df = self._build_objeciones_df(detalle, email_date)
-        result_data: Dict[str, pd.DataFrame] = {
+        result_data: dict[str, pd.DataFrame] = {
             "detalle": detalle,
             "glosa": objeciones_df,
             "objeciones": objeciones_df,

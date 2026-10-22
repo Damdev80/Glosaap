@@ -172,12 +172,12 @@ class TestWindowSizesConfig:
     
     def test_window_sizes_imported(self):
         """WINDOW_SIZES se importa correctamente"""
-        from app.ui.navigation import WINDOW_SIZES
+        from app.ui.styles import WINDOW_SIZES
         assert WINDOW_SIZES is not None
     
     def test_login_size_defined(self):
         """Tamaño de login está definido"""
-        from app.ui.navigation import WINDOW_SIZES
+        from app.ui.styles import WINDOW_SIZES
         assert "login" in WINDOW_SIZES
 
 

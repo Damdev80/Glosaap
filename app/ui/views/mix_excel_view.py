@@ -2,49 +2,50 @@
 Vista Mix Excel - Transferencia de datos entre archivos Excel
 Estilo Minimalista con soporte de temas
 """
-import flet as ft
 from pathlib import Path
-from app.ui.styles import FONT_SIZES, SPACING
-from app.ui.components.navigation_header import NavigationHeader
+
+import flet as ft
+
 from app.core.mix_excel_service import MixExcelService
+from app.ui.components.navigation_header import NavigationHeader
 
 
 class MixExcelView:
     """Vista para transferir columnas entre archivos Excel"""
-    
+
     def __init__(self, page: ft.Page, navigation_controller=None, on_back=None):
         self.page = page
         self.navigation_controller = navigation_controller
         self.on_back = on_back
         self.nav_header = NavigationHeader(page, navigation_controller)
         self.service = MixExcelService()
-        
+
         # File picker
         self.file_picker = ft.FilePicker(on_result=self._on_file_picked)
         self.page.overlay.append(self.file_picker)
         self.current_picker_type = None
-        
+
         # Textos de archivos seleccionados
         self.source_file_text = ft.Text(
-            "Ningún archivo seleccionado", 
-            size=12, 
+            "Ningún archivo seleccionado",
+            size=12,
             color=ft.Colors.ON_SURFACE_VARIANT
         )
         self.dest_file_text = ft.Text(
-            "Ningún archivo seleccionado", 
-            size=12, 
+            "Ningún archivo seleccionado",
+            size=12,
             color=ft.Colors.ON_SURFACE_VARIANT
         )
-        
+
         # Dropdowns - Origen
         self.source_ref_dropdown = self._create_dropdown("Columna referencia (factura)")
         self.source_col_dropdown = self._create_dropdown("Columna con valores")
-        
+
         # Dropdowns - Destino
         self.dest_ref_dropdown = self._create_dropdown("Columna referencia (factura)")
         self.dest_adjacent_dropdown = self._create_dropdown("Columna adyacente (proporción)")
         self.dest_col_dropdown = self._create_dropdown("Columna destino")
-        
+
         # Tolerancia
         self.tolerance_field = ft.TextField(
             label="Tolerancia %",
@@ -57,13 +58,13 @@ class MixExcelView:
             text_size=14,
             keyboard_type=ft.KeyboardType.NUMBER
         )
-        
+
         # Status
         self.status_text = ft.Text("", size=13, color=ft.Colors.ON_SURFACE_VARIANT)
-        
+
         # Construir vista
         self.container = self._build()
-    
+
     def _create_dropdown(self, label: str) -> ft.Dropdown:
         """Crea un dropdown estilizado"""
         return ft.Dropdown(
@@ -77,7 +78,7 @@ class MixExcelView:
             text_size=13,
             expand=True
         )
-    
+
     def _create_file_button(self, label: str, picker_type: str) -> ft.ElevatedButton:
         """Crea un botón para seleccionar archivo"""
         return ft.ElevatedButton(
@@ -95,7 +96,7 @@ class MixExcelView:
             ),
             on_click=lambda e: self._pick_file(picker_type)
         )
-    
+
     def _build(self):
         """Construye la vista"""
         return ft.Container(
@@ -110,18 +111,18 @@ class MixExcelView:
                             tooltip="Volver",
                             on_click=lambda e: self.on_back()
                         ),
-                        ft.Text("Mix Excel", 
+                        ft.Text("Mix Excel",
                                size=18,
                                weight=ft.FontWeight.W_500,
                                color=ft.Colors.ON_SURFACE),
                         ft.Container(expand=True),
-                        ft.Text("Transferencia de datos", 
+                        ft.Text("Transferencia de datos",
                                size=12,
                                color=ft.Colors.ON_SURFACE_VARIANT)
                     ], alignment=ft.MainAxisAlignment.START, spacing=8),
                     padding=ft.padding.symmetric(horizontal=24, vertical=16),
                 ),
-                
+
                 # Contenido con scroll
                 ft.Container(
                     content=ft.Column([
@@ -130,8 +131,8 @@ class MixExcelView:
                             content=ft.Column([
                                 ft.Row([
                                     ft.Icon(ft.Icons.FILE_UPLOAD, size=20, color=ft.Colors.PRIMARY),
-                                    ft.Text("Archivo Origen", 
-                                           size=14, 
+                                    ft.Text("Archivo Origen",
+                                           size=14,
                                            weight=ft.FontWeight.W_500,
                                            color=ft.Colors.ON_SURFACE)
                                 ], spacing=8),
@@ -153,16 +154,16 @@ class MixExcelView:
                             border=ft.border.all(1, ft.Colors.OUTLINE),
                             padding=24
                         ),
-                        
+
                         ft.Container(height=16),
-                        
+
                         # Card Archivo Destino
                         ft.Container(
                             content=ft.Column([
                                 ft.Row([
                                     ft.Icon(ft.Icons.FILE_DOWNLOAD, size=20, color=ft.Colors.GREEN),
-                                    ft.Text("Archivo Destino", 
-                                           size=14, 
+                                    ft.Text("Archivo Destino",
+                                           size=14,
                                            weight=ft.FontWeight.W_500,
                                            color=ft.Colors.ON_SURFACE)
                                 ], spacing=8),
@@ -186,9 +187,9 @@ class MixExcelView:
                             border=ft.border.all(1, ft.Colors.OUTLINE),
                             padding=24
                         ),
-                        
+
                         ft.Container(height=16),
-                        
+
                         # Card Configuración
                         ft.Container(
                             content=ft.Row([
@@ -205,9 +206,9 @@ class MixExcelView:
                             border=ft.border.all(1, ft.Colors.OUTLINE),
                             padding=20
                         ),
-                        
+
                         ft.Container(height=24),
-                        
+
                         # Botón transferir y status
                         ft.Row([
                             self.status_text,
@@ -227,7 +228,7 @@ class MixExcelView:
                                 on_click=self._on_transferir
                             )
                         ], alignment=ft.MainAxisAlignment.END)
-                        
+
                     ], spacing=0, scroll=ft.ScrollMode.AUTO),
                     expand=True,
                     padding=ft.padding.symmetric(horizontal=24, vertical=0)
@@ -237,7 +238,7 @@ class MixExcelView:
             expand=True,
             visible=False
         )
-    
+
     def _pick_file(self, picker_type: str):
         """Abre el selector de archivos"""
         self.current_picker_type = picker_type
@@ -245,20 +246,20 @@ class MixExcelView:
             allowed_extensions=["xlsx", "xls"],
             dialog_title="Selecciona un archivo Excel"
         )
-    
+
     def _on_file_picked(self, e):
         """Maneja la selección de archivo"""
         if e.files and len(e.files) > 0:
             file_path = e.files[0].path
-            
+
             success, columns, message = self.service.cargar_archivo(
-                file_path, 
+                file_path,
                 self.current_picker_type
             )
-            
+
             if success:
                 options = [ft.dropdown.Option(col) for col in columns]
-                
+
                 if self.current_picker_type == "source":
                     self.source_file_text.value = Path(file_path).name
                     self.source_file_text.color = ft.Colors.PRIMARY
@@ -275,32 +276,32 @@ class MixExcelView:
                     self.dest_adjacent_dropdown.disabled = False
                     self.dest_col_dropdown.options = options
                     self.dest_col_dropdown.disabled = False
-                
+
                 self._show_status(message, ft.Colors.ON_SURFACE_VARIANT)
             else:
                 self._show_status(message, ft.Colors.RED)
-            
+
             self.page.update()
-    
+
     def _on_transferir(self, e):
         """Ejecuta la transferencia de datos"""
         # Validaciones
         if not self.source_ref_dropdown.value or not self.source_col_dropdown.value:
             self._show_status("Selecciona las columnas del archivo origen", ft.Colors.ORANGE)
             return
-        
+
         if not self.dest_ref_dropdown.value or not self.dest_adjacent_dropdown.value or not self.dest_col_dropdown.value:
             self._show_status("Selecciona las columnas del archivo destino", ft.Colors.ORANGE)
             return
-        
+
         try:
             tolerance = float(self.tolerance_field.value) / 100.0
         except:
             tolerance = 0.05
-        
+
         self._show_status("Procesando...", ft.Colors.PRIMARY)
         self.page.update()
-        
+
         # Transferir
         success, matches, message = self.service.transferir_datos(
             source_col=self.source_col_dropdown.value,
@@ -310,7 +311,7 @@ class MixExcelView:
             dest_adjacent_col=self.dest_adjacent_dropdown.value,
             tolerance=tolerance
         )
-        
+
         if success:
             # Guardar
             save_success, save_message = self.service.guardar_destino()
@@ -320,15 +321,15 @@ class MixExcelView:
                 self._show_status(f"⚠️ {save_message}", ft.Colors.RED)
         else:
             self._show_status(f"❌ {message}", ft.Colors.RED)
-        
+
         self.page.update()
-    
+
     def _show_status(self, message: str, color: str):
         """Muestra mensaje de estado"""
         self.status_text.value = message
         self.status_text.color = color
         self.page.update()
-    
+
     def show(self):
         """Muestra la vista"""
         self.service.reset()
@@ -349,7 +350,7 @@ class MixExcelView:
         self.status_text.value = ""
         self.container.visible = True
         self.page.update()
-    
+
     def hide(self):
         """Oculta la vista"""
         self.container.visible = False

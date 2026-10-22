@@ -3,10 +3,9 @@ Servicio para transferir datos entre archivos Excel
 Mix Excel - Transferencia de columnas con distribución proporcional
 """
 import shutil
+from pathlib import Path
 
 import pandas as pd
-from pathlib import Path
-from typing import Optional, List, Tuple, Dict
 
 try:
     from app.config.settings import logger
@@ -17,42 +16,42 @@ except Exception:  # pragma: no cover - fallback si settings no disponible
 
 class MixExcelService:
     """Servicio para mezclar/transferir datos entre archivos Excel"""
-    
+
     def __init__(self):
-        self.source_df: Optional[pd.DataFrame] = None
-        self.dest_df: Optional[pd.DataFrame] = None
-        self.source_file: Optional[str] = None
-        self.dest_file: Optional[str] = None
-    
-    def cargar_archivo(self, file_path: str, tipo: str = "source") -> Tuple[bool, List[str], str]:
+        self.source_df: pd.DataFrame | None = None
+        self.dest_df: pd.DataFrame | None = None
+        self.source_file: str | None = None
+        self.dest_file: str | None = None
+
+    def cargar_archivo(self, file_path: str, tipo: str = "source") -> tuple[bool, list[str], str]:
         """
         Carga un archivo Excel y retorna las columnas
-        
+
         Args:
             file_path: Ruta del archivo
             tipo: 'source' o 'dest'
-            
+
         Returns:
             Tuple[success, columns, message]
         """
         try:
             df = pd.read_excel(file_path)
             columns = df.columns.tolist()
-            
+
             if tipo == "source":
                 self.source_df = df
                 self.source_file = file_path
             else:
                 self.dest_df = df
                 self.dest_file = file_path
-            
+
             return True, columns, f"Archivo cargado: {len(df)} filas"
-            
+
         except PermissionError:
             return False, [], "El archivo está abierto. Ciérralo e intenta de nuevo."
         except Exception as e:
             return False, [], f"Error al cargar: {str(e)}"
-    
+
     def transferir_datos(
         self,
         source_col: str,
@@ -61,10 +60,10 @@ class MixExcelService:
         dest_ref_col: str,
         dest_adjacent_col: str,
         tolerance: float = 0.05
-    ) -> Tuple[bool, int, str]:
+    ) -> tuple[bool, int, str]:
         """
         Transfiere datos del origen al destino
-        
+
         Args:
             source_col: Columna con valores a transferir
             source_ref_col: Columna de referencia en origen (ej: factura)
@@ -72,42 +71,42 @@ class MixExcelService:
             dest_ref_col: Columna de referencia en destino
             dest_adjacent_col: Columna adyacente para calcular proporción
             tolerance: Tolerancia para comparación (default 5%)
-            
+
         Returns:
             Tuple[success, matches_found, message]
         """
         if self.source_df is None or self.dest_df is None:
             return False, 0, "Carga ambos archivos primero"
-        
+
         try:
             matches_found = 0
             processed_refs = set()
-            
-            for idx, dest_ref_value in self.dest_df[dest_ref_col].items():
+
+            for _idx, dest_ref_value in self.dest_df[dest_ref_col].items():
                 if pd.isna(dest_ref_value) or dest_ref_value in processed_refs:
                     continue
-                
+
                 # Buscar filas en destino con el mismo número de factura
                 dest_matching_indices = self.dest_df[
                     self.dest_df[dest_ref_col] == dest_ref_value
                 ].index.tolist()
-                
+
                 # Buscar facturas con el mismo número en origen
                 source_matching_rows = self.source_df[
                     self.source_df[source_ref_col] == dest_ref_value
                 ]
-                
+
                 if len(source_matching_rows) > 0 and len(dest_matching_indices) > 0:
                     # Obtener valores del origen
                     source_values = []
-                    for src_idx, src_row in source_matching_rows.iterrows():
+                    for _src_idx, src_row in source_matching_rows.iterrows():
                         src_val = src_row[source_col]
                         if pd.notna(src_val):
                             try:
                                 source_values.append(float(src_val))
                             except (ValueError, TypeError):
                                 continue
-                    
+
                     if len(source_values) > 0:
                         # Obtener valores adyacentes del destino
                         dest_adjacent_values = []
@@ -118,7 +117,7 @@ class MixExcelService:
                                     dest_adjacent_values.append((dest_idx, float(adj_val))) # pyright: ignore[reportArgumentType]
                                 except (ValueError, TypeError):
                                     pass
-                        
+
                         if len(dest_adjacent_values) > 0:
                             # CASO 1: Múltiples valores en origen - emparejar por similitud
                             # Se aplica tolerancia proporcional:
@@ -167,15 +166,15 @@ class MixExcelService:
 
                                         self.dest_df.at[dest_idx, dest_col] = assigned_value
                                         matches_found += 1
-                        
+
                         processed_refs.add(dest_ref_value)
-            
+
             return True, matches_found, f"Transferencia completada: {matches_found} coincidencias"
-            
+
         except Exception as e:
             return False, 0, f"Error en transferencia: {str(e)}"
-    
-    def guardar_destino(self, output_path: Optional[str] = None) -> Tuple[bool, str]:
+
+    def guardar_destino(self, output_path: str | None = None) -> tuple[bool, str]:
         """Guarda el archivo destino con los cambios.
 
         Args:
@@ -214,14 +213,14 @@ class MixExcelService:
         except Exception as e:
             logger.error("Error al guardar destino: %s", e)
             return False, f"Error al guardar: {str(e)}"
-    
+
     def get_preview(self, tipo: str = "source", limit: int = 5) -> pd.DataFrame:
         """Obtiene una vista previa del DataFrame"""
         df = self.source_df if tipo == "source" else self.dest_df
         if df is not None:
             return df.head(limit)
         return pd.DataFrame()
-    
+
     def reset(self):
         """Reinicia el servicio"""
         self.source_df = None

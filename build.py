@@ -13,6 +13,16 @@ import zipfile
 from pathlib import Path
 from datetime import datetime
 
+# La consola Windows usa cp1252 y los prints con emojis revientan
+# (UnicodeEncodeError), incluido en runners de CI. Fuerza UTF-8 seguro.
+try:
+    if sys.stdout is not None:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if sys.stderr is not None:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 # Si no está en el venv, redirigir al venv
 if not hasattr(sys, 'real_prefix') and not (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix):
     # No estamos en un venv, redirigir

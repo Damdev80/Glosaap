@@ -1,15 +1,17 @@
-"""" 
+""""
 Componente de tarjeta de EPS
 Con soporte de temas claro/oscuro
 """
-import flet as ft
 import os
-from app.ui.styles import FONT_SIZES, SPACING
+
+import flet as ft
+
+from app.ui.styles import FONT_SIZES
 
 
 class EpsCard:
     """Tarjeta visual para seleccionar una EPS"""
-    
+
     def __init__(self, eps_info: dict, on_click=None):
         """
         Args:
@@ -19,12 +21,12 @@ class EpsCard:
         self.eps_info = eps_info
         self.on_click_callback = on_click
         self.container = None
-    
+
     def _handle_click(self, e):
         """Maneja el click en la tarjeta"""
         if self.on_click_callback:
             self.on_click_callback(self.eps_info)
-    
+
     def _on_hover(self, e):
         """Efecto hover suave"""
         is_hovered = e.data == "true"
@@ -37,16 +39,16 @@ class EpsCard:
                 offset=ft.Offset(0, 8 if is_hovered else 3)
             )
             self.container.border = ft.border.all(
-                2 if is_hovered else 1.5, 
+                2 if is_hovered else 1.5,
                 ft.Colors.PRIMARY if is_hovered else ft.Colors.OUTLINE_VARIANT
             )
             self.container.update()
-    
+
     def build(self):
         """Construye y retorna la tarjeta"""
         # Decidir si usar imagen o emoji
         image_path = self.eps_info.get("image_path")
-        
+
         if image_path and os.path.exists(image_path):
             # Usar imagen
             visual_element = ft.Container(
@@ -64,7 +66,7 @@ class EpsCard:
                 content=ft.Text(self.eps_info.get("icon", "📋"), size=38),
                 padding=4,
             )
-        
+
         self.container = ft.Container(
             content=ft.Column([
                 visual_element,

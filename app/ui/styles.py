@@ -7,26 +7,26 @@ import flet as ft
 
 class ThemeManager:
     """Administrador de temas para la aplicación usando Flet nativo"""
-    
+
     _page = None
     _is_dark = False
     _rebuild_callback = None
-    
+
     @classmethod
     def init(cls, page: ft.Page, rebuild_callback=None):
         """Inicializa el ThemeManager con la página"""
         cls._page = page
         cls._rebuild_callback = rebuild_callback
-        
+
         # Cargar tema guardado
         try:
             saved_theme = page.client_storage.get("app_theme")
             cls._is_dark = saved_theme == "dark"
         except:
             cls._is_dark = False
-        
+
         cls._apply_flet_theme()
-    
+
     @classmethod
     def _apply_flet_theme(cls):
         """Aplica el tema usando el sistema nativo de Flet"""
@@ -82,34 +82,34 @@ class ThemeManager:
                         on_error="#ffffff",
                     )
                 )
-    
+
     @classmethod
     def toggle_theme(cls):
         """Alterna entre tema claro y oscuro"""
         cls._is_dark = not cls._is_dark
-        
+
         if cls._page:
             # Guardar preferencia
             try:
                 cls._page.client_storage.set("app_theme", "dark" if cls._is_dark else "light")
             except:
                 pass
-            
+
             cls._apply_flet_theme()
-            
+
             # Llamar callback para reconstruir UI
             if cls._rebuild_callback:
                 cls._rebuild_callback()
-            
+
             cls._page.update()
-        
+
         return cls._is_dark
-    
+
     @classmethod
     def is_dark(cls) -> bool:
         """Retorna True si el tema actual es oscuro"""
         return cls._is_dark
-    
+
     @classmethod
     def get_colors(cls) -> dict:
         """Retorna colores según el tema actual"""
@@ -126,7 +126,7 @@ LIGHT_COLORS = {
     "primary_dark": "#1E40AF",
     "primary_light": "#DBEAFE",
     "primary_hover": "#1D4ED8",
-    
+
     # Estados
     "success": "#10B981",
     "success_light": "#D1FAE5",
@@ -136,13 +136,13 @@ LIGHT_COLORS = {
     "warning_light": "#FEF3C7",
     "info": "#3B82F6",
     "info_light": "#DBEAFE",
-    
+
     # Textos
     "text_primary": "#1F2937",
     "text_secondary": "#6B7280",
     "text_light": "#9CA3AF",
     "text_muted": "#D1D5DB",
-    
+
     # Fondos
     "bg_white": "#FFFFFF",
     "bg_light": "#F9FAFB",
@@ -151,16 +151,16 @@ LIGHT_COLORS = {
     "bg_card": "#FFFFFF",
     "bg_surface": "#F9FAFB",
     "bg_page": "#F3F4F6",
-    
+
     # Bordes
     "border": "#D1D5DB",
     "border_light": "#E5E7EB",
     "border_focus": "#2563EB",
-    
+
     # Hover
     "hover": "#F3F4F6",
     "hover_primary": "#1D4ED8",
-    
+
     # Sombras
     "shadow_color": "#000000",
     "shadow_opacity": 0.08,
@@ -172,7 +172,7 @@ DARK_COLORS = {
     "primary_dark": "#3B82F6",
     "primary_light": "#1E3A5F",
     "primary_hover": "#93C5FD",
-    
+
     # Estados
     "success": "#34D399",
     "success_light": "#064E3B",
@@ -182,13 +182,13 @@ DARK_COLORS = {
     "warning_light": "#78350F",
     "info": "#60A5FA",
     "info_light": "#1E3A5F",
-    
+
     # Textos
     "text_primary": "#F9FAFB",
     "text_secondary": "#E5E7EB",
     "text_light": "#9CA3AF",
     "text_muted": "#6B7280",
-    
+
     # Fondos - OSCUROS REALES
     "bg_white": "#1a1a2e",
     "bg_light": "#16213e",
@@ -197,16 +197,16 @@ DARK_COLORS = {
     "bg_card": "#1a1a2e",
     "bg_surface": "#16213e",
     "bg_page": "#0f0f1a",
-    
+
     # Bordes
     "border": "#4B5563",
     "border_light": "#374151",
     "border_focus": "#60A5FA",
-    
+
     # Hover
     "hover": "#374151",
     "hover_primary": "#93C5FD",
-    
+
     # Sombras
     "shadow_color": "#000000",
     "shadow_opacity": 0.4,

@@ -8,7 +8,7 @@ import flet as ft
 
 class AlertDialog:
     """Di�logos de alerta modernos y reutilizables"""
-    
+
     @staticmethod
     def show_success(page: ft.Page, title: str, message: str, on_close=None):
         """Muestra un di�logo de �xito"""
@@ -16,7 +16,7 @@ class AlertDialog:
             page.close(dialog)
             if on_close:
                 on_close()
-        
+
         dialog = ft.AlertDialog(
             modal=True,
             title=ft.Row([
@@ -31,10 +31,10 @@ class AlertDialog:
             shape=ft.RoundedRectangleBorder(radius=12),
             bgcolor=ft.Colors.SURFACE
         )
-        
+
         page.open(dialog)
         return dialog
-    
+
     @staticmethod
     def show_error(page: ft.Page, title: str, message: str, on_close=None):
         """Muestra un di�logo de error"""
@@ -42,7 +42,7 @@ class AlertDialog:
             page.close(dialog)
             if on_close:
                 on_close()
-        
+
         dialog = ft.AlertDialog(
             modal=True,
             title=ft.Row([
@@ -57,10 +57,10 @@ class AlertDialog:
             shape=ft.RoundedRectangleBorder(radius=12),
             bgcolor=ft.Colors.SURFACE
         )
-        
+
         page.open(dialog)
         return dialog
-    
+
     @staticmethod
     def show_info(page: ft.Page, title: str, message: str, on_close=None):
         """Muestra un di�logo informativo"""
@@ -68,7 +68,7 @@ class AlertDialog:
             page.close(dialog)
             if on_close:
                 on_close()
-        
+
         dialog = ft.AlertDialog(
             modal=True,
             title=ft.Row([
@@ -83,10 +83,10 @@ class AlertDialog:
             shape=ft.RoundedRectangleBorder(radius=12),
             bgcolor=ft.Colors.SURFACE
         )
-        
+
         page.open(dialog)
         return dialog
-    
+
     @staticmethod
     def show_warning(page: ft.Page, title: str, message: str, on_close=None):
         """Muestra un di�logo de advertencia"""
@@ -94,7 +94,7 @@ class AlertDialog:
             page.close(dialog)
             if on_close:
                 on_close()
-        
+
         dialog = ft.AlertDialog(
             modal=True,
             title=ft.Row([
@@ -109,10 +109,10 @@ class AlertDialog:
             shape=ft.RoundedRectangleBorder(radius=12),
             bgcolor=ft.Colors.SURFACE
         )
-        
+
         page.open(dialog)
         return dialog
-    
+
     @staticmethod
     def show_processing_complete(page: ft.Page, eps_name: str, stats: dict, output_files: list, on_close=None, on_open_folder=None, on_view_non_homologated=None):
         """Muestra un diálogo detallado cuando termina el procesamiento.
@@ -187,7 +187,7 @@ class AlertDialog:
             stats_text.append(f"🧾 {stats['facturas_unicas']} facturas únicas")
         if output_dir:
             stats_text.append(f"📂 Salida: {output_dir}")
-        
+
         # Lista de archivos generados
         files_list = ft.Column([
             ft.Text(
@@ -195,7 +195,7 @@ class AlertDialog:
                 size=13, color=ft.Colors.ON_SURFACE, weight=ft.FontWeight.W_500
             ) for file in output_files
         ], spacing=6)
-        
+
         dialog = ft.AlertDialog(
             modal=True,
             title=ft.Row([
@@ -224,10 +224,10 @@ class AlertDialog:
             shape=ft.RoundedRectangleBorder(radius=12),
             bgcolor=ft.Colors.SURFACE
         )
-        
+
         page.open(dialog)
         return dialog
-    
+
     @staticmethod
     def show_confirm(page: ft.Page, title: str, message: str,
                      confirm_text: str = "Eliminar",
@@ -289,7 +289,7 @@ class AlertDialog:
             page.close(dialog)
             if on_close:
                 on_close()
-        
+
         dialog = ft.AlertDialog(
             modal=True,
             title=ft.Row([
@@ -311,6 +311,6 @@ class AlertDialog:
             shape=ft.RoundedRectangleBorder(radius=12),
             bgcolor=ft.Colors.SURFACE
         )
-        
+
         page.open(dialog)
         return dialog

@@ -15,12 +15,12 @@ Ejemplo de uso:
     ```python
     # Crear overlay
     loading = LoadingOverlay(page)
-    
+
     # Mostrar durante operación
     loading.show("Procesando archivos...")
     await process_files()
     loading.hide()
-    
+
     # O usar con contexto
     with loading.context("Cargando datos..."):
         data = await fetch_data()
@@ -29,26 +29,28 @@ Ejemplo de uso:
 Author: Glosaap Team
 Version: 1.0.0
 """
-import flet as ft
-from typing import Optional, Callable
+from collections.abc import Callable
 from contextlib import contextmanager
+
+import flet as ft
+
 from app.ui.styles import FONT_SIZES, SPACING
-from typing  import Optional, Callable
+
 
 class LoadingOverlay:
     """
     Overlay de carga modal con spinner animado y mensaje personalizable.
-    
+
     Crea una capa semi-transparente sobre toda la interfaz que bloquea
     la interacción del usuario mientras se ejecuta una operación.
-    
+
     Attributes:
         page (ft.Page): Página de Flet donde se mostrará el overlay.
         _overlay (ft.Container): Contenedor del overlay.
         _message (ft.Text): Texto del mensaje de carga.
         _progress (ft.ProgressRing): Indicador de progreso circular.
         _is_visible (bool): Estado de visibilidad actual.
-    
+
     Example:
         ```python
         loading = LoadingOverlay(page)
@@ -57,11 +59,11 @@ class LoadingOverlay:
         loading.hide()
         ```
     """
-    
+
     def __init__(self, page: ft.Page):
         """
         Inicializa el overlay de carga.
-        
+
         Args:
             page: Instancia de ft.Page donde se renderizará el overlay.
         """
@@ -85,11 +87,11 @@ class LoadingOverlay:
             color=ft.Colors.PRIMARY
         )
         self._overlay = self._build_overlay()
-    
+
     def _build_overlay(self) -> ft.Container:
         """
         Construye el contenedor del overlay.
-        
+
         Returns:
             ft.Container: Contenedor configurado con el overlay.
         """
@@ -121,17 +123,17 @@ class LoadingOverlay:
             expand=True,
             visible=False,
         )
-    
+
     def show(
-        self, 
-        message: str = "Cargando...", 
+        self,
+        message: str = "Cargando...",
         sub_message: str = "",
         determinate: bool = False,
         value: float = 0
     ) -> None:
         """
         Muestra el overlay de carga.
-        
+
         Args:
             message: Mensaje principal a mostrar.
             sub_message: Mensaje secundario opcional (útil para detalles).
@@ -141,24 +143,24 @@ class LoadingOverlay:
         self._message.value = message
         self._sub_message.value = sub_message
         self._sub_message.visible = bool(sub_message)
-        
+
         if determinate:
             self._progress.value = value
         else:
             self._progress.value = None  # Indeterminado
-        
+
         self._overlay.visible = True
         self._is_visible = True
-        
+
         if self._overlay not in self.page.overlay:
             self.page.overlay.append(self._overlay)
-        
+
         self.page.update()
-    
-    def update_progress(self, value: float, message: Optional[str] = None, sub_message: Optional[str] = None) -> None:
+
+    def update_progress(self, value: float, message: str | None = None, sub_message: str | None = None) -> None:
         """
         Actualiza el progreso del overlay.
-        
+
         Args:
             value: Nuevo valor de progreso (0.0 a 1.0).
             message: Nuevo mensaje principal (opcional).
@@ -171,18 +173,18 @@ class LoadingOverlay:
             self._sub_message.value = sub_message
             self._sub_message.visible = bool(sub_message)
         self.page.update()
-    
+
     def hide(self) -> None:
         """Oculta el overlay de carga."""
         self._overlay.visible = False
         self._is_visible = False
         self.page.update()
-    
+
     @property
     def is_visible(self) -> bool:
         """Retorna el estado de visibilidad del overlay."""
         return self._is_visible
-    
+
     @contextmanager
     def context(self, message: str = "Cargando...", sub_message: str = ""):
         """Context manager para mostrar/ocultar loading automáticamente."""
@@ -196,16 +198,16 @@ class LoadingOverlay:
 class LoadingButton(ft.ElevatedButton):
     """
     Botón con estado de carga integrado.
-    
+
     Extiende ElevatedButton para agregar funcionalidad de loading
     con spinner y deshabilitación automática durante la carga.
-    
+
     Attributes:
         _original_content: Contenido original del botón.
         _loading_content: Contenido durante la carga.
         _is_loading: Estado de carga actual.
         _on_click: Callback original del click.
-    
+
     Example:
         ```python
         btn = LoadingButton(
@@ -216,18 +218,18 @@ class LoadingButton(ft.ElevatedButton):
         btn.set_loading(True, "Guardando...")
         ```
     """
-    
+
     def __init__(
         self,
         text: str,
-        icon: Optional[str] = None,
-        on_click: Optional[Callable] = None,
+        icon: str | None = None,
+        on_click: Callable | None = None,
         loading_text: str = "Cargando...",
         **kwargs
     ):
         """
         Inicializa el botón con carga.
-        
+
         Args:
             text: Texto del botón.
             icon: Icono opcional del botón.
@@ -240,7 +242,7 @@ class LoadingButton(ft.ElevatedButton):
         self._loading_text = loading_text
         self._is_loading = False
         self._on_click_callback = on_click
-        
+
         # Construir contenido inicial
         if icon:
             content = ft.Row(
@@ -253,30 +255,30 @@ class LoadingButton(ft.ElevatedButton):
             )
         else:
             content = ft.Text(text, size=FONT_SIZES["button"])
-        
+
         super().__init__(
             content=content,
             on_click=self._handle_click,
             **kwargs
         )
-    
+
     def _handle_click(self, e):
         """Maneja el click con protección de doble-click."""
         if self._is_loading:
             return
         if self._on_click_callback:
             self._on_click_callback(e)
-    
-    def set_loading(self, loading: bool, text: Optional[str] = None) -> None:
+
+    def set_loading(self, loading: bool, text: str | None = None) -> None:
         """
         Establece el estado de carga del botón.
-        
+
         Args:
             loading: True para mostrar estado de carga.
             text: Texto opcional durante la carga.
         """
         self._is_loading = loading
-        
+
         if loading:
             self.content = ft.Row(
                 controls=[
@@ -300,21 +302,21 @@ class LoadingButton(ft.ElevatedButton):
             else:
                 self.content = ft.Text(self._original_text, size=FONT_SIZES["button"])
             self.disabled = False
-        
+
         self.update()
 
 
 class ToastNotification:
     """
     Sistema de notificaciones toast no-bloqueantes.
-    
+
     Muestra notificaciones temporales en la esquina de la pantalla
     que no interrumpen el flujo del usuario.
-    
+
     Attributes:
         page (ft.Page): Página donde se muestran las notificaciones.
         _snack_bar (ft.SnackBar): SnackBar de Flet para mostrar toasts.
-    
+
     Example:
         ```python
         toast = ToastNotification(page)
@@ -323,27 +325,27 @@ class ToastNotification:
         toast.info("Procesando 50 archivos...")
         ```
     """
-    
+
     def __init__(self, page: ft.Page):
         """
         Inicializa el sistema de notificaciones.
-        
+
         Args:
             page: Instancia de ft.Page donde se mostrarán los toasts.
         """
         self.page = page
         self._snack_bar = None
-    
+
     def _show(
-        self, 
-        message: str, 
+        self,
+        message: str,
         icon: str,
         bgcolor: str,
         duration: int = 3000
     ) -> None:
         """
         Muestra una notificación toast.
-        
+
         Args:
             message: Mensaje a mostrar.
             icon: Nombre del icono.
@@ -367,41 +369,41 @@ class ToastNotification:
         self.page.overlay.append(self._snack_bar)
         self._snack_bar.open = True
         self.page.update()
-    
+
     def success(self, message: str, duration: int = 3000) -> None:
         """
         Muestra una notificación de éxito.
-        
+
         Args:
             message: Mensaje a mostrar.
             duration: Duración en milisegundos (default: 3000).
         """
         self._show(message, ft.Icons.CHECK_CIRCLE, ft.Colors.GREEN, duration)
-    
+
     def error(self, message: str, duration: int = 4000) -> None:
         """
         Muestra una notificación de error.
-        
+
         Args:
             message: Mensaje a mostrar.
             duration: Duración en milisegundos (default: 4000).
         """
         self._show(message, ft.Icons.ERROR, ft.Colors.RED, duration)
-    
+
     def warning(self, message: str, duration: int = 3500) -> None:
         """
         Muestra una notificación de advertencia.
-        
+
         Args:
             message: Mensaje a mostrar.
             duration: Duración en milisegundos (default: 3500).
         """
         self._show(message, ft.Icons.WARNING, ft.Colors.ORANGE, duration)
-    
+
     def info(self, message: str, duration: int = 3000) -> None:
         """
         Muestra una notificación informativa.
-        
+
         Args:
             message: Mensaje a mostrar.
             duration: Duración en milisegundos (default: 3000).
@@ -412,23 +414,23 @@ class ToastNotification:
 class ProgressIndicator(ft.Container):
     """
     Indicador de progreso visual con porcentaje y etapa.
-    
+
     Muestra una barra de progreso con información detallada
     sobre la operación actual, útil para procesos largos.
-    
+
     Attributes:
         _progress_bar: Barra de progreso visual.
         _percentage_text: Texto con el porcentaje.
         _stage_text: Texto con la etapa actual.
         _detail_text: Texto con detalles adicionales.
-    
+
     Example:
         ```python
         progress = ProgressIndicator()
         progress.update(0.5, "Procesando", "Archivo 50 de 100")
         ```
     """
-    
+
     def __init__(self):
         """Inicializa el indicador de progreso."""
         self._progress_bar = ft.ProgressBar(
@@ -456,7 +458,7 @@ class ProgressIndicator(ft.Container):
             size=FONT_SIZES["small"],
             color=ft.Colors.ON_SURFACE_VARIANT,
         )
-        
+
         super().__init__(
             content=ft.Column(
                 controls=[
@@ -475,16 +477,16 @@ class ProgressIndicator(ft.Container):
             border_radius=12,
             border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
         )
-    
+
     def update_progress(
-        self, 
-        value: float, 
-        stage: Optional[str] = None, 
-        detail: Optional[str] = None
+        self,
+        value: float,
+        stage: str | None = None,
+        detail: str | None = None
     ) -> None:
         """
         Actualiza el progreso mostrado.
-        
+
         Args:
             value: Valor del progreso (0.0 a 1.0).
             stage: Texto de la etapa actual (opcional).
@@ -492,15 +494,15 @@ class ProgressIndicator(ft.Container):
         """
         self._progress_bar.value = value
         self._percentage_text.value = f"{int(value * 100)}%"
-        
+
         if stage:
             self._stage_text.value = stage
         if detail is not None:
             self._detail_text.value = detail
             self._detail_text.visible = bool(detail)
-        
+
         self.update()
-    
+
     def reset(self) -> None:
         """Resetea el indicador de progreso."""
         self.update_progress(0, "Iniciando...", "")

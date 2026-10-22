@@ -7,8 +7,8 @@ Fuente única del panel de settings (tema + versión). Lo reutilizan
 """
 import flet as ft
 
-from app.ui.styles import ThemeManager, update_colors
 from app.config.settings import APP_VERSION
+from app.ui.styles import ThemeManager, update_colors
 
 
 def show_settings_dialog(page: ft.Page, on_theme_change=None):

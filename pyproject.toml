@@ -39,6 +39,11 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
 
+# E402: app/ui/app.py necesita configurar sys.path en runtime antes de los
+# imports de app.* (bootstrap para ejecución como script). No es un error.
+[tool.ruff.lint.per-file-ignores]
+"app/ui/app.py" = ["E402"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

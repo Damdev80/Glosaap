@@ -2,16 +2,18 @@
 Vista para descarga automatizada de portales web
 Con soporte de temas claro/oscuro
 """
-import flet as ft
-import threading
 import os
+import threading
+
+import flet as ft
+
 from app.service.credential_manager import CredentialManager
 from app.ui.components.alert_dialog import AlertDialog
 
 
 class WebDownloadView:
     """Vista de descarga automática desde portales EPS"""
-    
+
     def __init__(self, page, assets_dir, on_back=None):
         self.page = page
         self.assets_dir = assets_dir
@@ -21,10 +23,10 @@ class WebDownloadView:
         self.selected_eps = None  # Para saber cuál EPS está activa
         self.credential_manager = CredentialManager()
         self.container = self.build()
-    
+
     def _create_eps_selection_card(self, eps_name, color, description):
         """Crea una card de selección de EPS"""
-        
+
         def on_hover(e):
             card_container.scale = 1.02 if e.data == "true" else 1.0
             card_container.shadow = ft.BoxShadow(
@@ -34,10 +36,10 @@ class WebDownloadView:
                 offset=ft.Offset(0, 6 if e.data == "true" else 2)
             )
             self.page.update()
-        
+
         def on_click(e):
             self.show_eps_form(eps_name)
-        
+
         card_content = ft.Column([
             ft.Text(
                 eps_name,
@@ -68,7 +70,7 @@ class WebDownloadView:
                 color=color
             )
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0)
-        
+
         card_container = ft.Container(
             content=card_content,
             width=320,
@@ -90,12 +92,12 @@ class WebDownloadView:
             on_click=on_click,
             ink=True
         )
-        
+
         return card_container
-    
+
     def build(self):
         """Construye la vista"""
-        
+
         # Header con botón de volver
         back_header = ft.Container(
             content=ft.Row([
@@ -117,7 +119,7 @@ class WebDownloadView:
             bgcolor=ft.Colors.SURFACE,
             border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.OUTLINE))
         )
-        
+
         # Header minimalista
         self.header = ft.Container(
             content=ft.Column([
@@ -139,20 +141,20 @@ class WebDownloadView:
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
             padding=ft.padding.only(top=20, bottom=35)
         )
-        
+
         # Cards de selección
         familiar_card = self._create_eps_selection_card(
             eps_name="Familiar de Colombia",
             color="#2196F3",
             description="Automatiza la descarga de archivos de glosas desde el portal web de Familiar"
         )
-        
+
         fomag_card = self._create_eps_selection_card(
             eps_name="Fomag (Horus)",
             color="#4CAF50",
             description="Descarga automática de facturas objetadas desde el sistema Horus de Fomag"
         )
-        
+
         # Vista de selección (inicial)
         self.selection_view = ft.Column([
             self.header,
@@ -163,7 +165,7 @@ class WebDownloadView:
             ], alignment=ft.MainAxisAlignment.CENTER),
             ft.Container(height=50)
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, visible=True)
-        
+
         # Vista de formulario (oculta inicialmente)
         self.form_view = ft.Column([
             ft.Container(height=20),
@@ -176,7 +178,7 @@ class WebDownloadView:
             ], alignment=ft.MainAxisAlignment.START),
             ft.Container(height=10)
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, visible=False, scroll=ft.ScrollMode.AUTO)
-        
+
         # ========== FAMILIAR DE COLOMBIA ==========
         self.familiar_nit = ft.TextField(
             label="NIT de la IPS",
@@ -188,7 +190,7 @@ class WebDownloadView:
             height=50,
             text_size=14
         )
-        
+
         self.familiar_usuario = ft.TextField(
             label="Usuario",
             hint_text="Ingresa tu usuario",
@@ -199,7 +201,7 @@ class WebDownloadView:
             height=50,
             text_size=14
         )
-        
+
         self.familiar_password = ft.TextField(
             label="Contraseña",
             password=True,
@@ -211,7 +213,7 @@ class WebDownloadView:
             height=50,
             text_size=14
         )
-        
+
         # Fechas
         self.familiar_fecha_inicio = ft.TextField(
             label="Fecha Inicio (opcional)",
@@ -224,7 +226,7 @@ class WebDownloadView:
             text_size=14,
             width=280
         )
-        
+
         self.familiar_fecha_fin = ft.TextField(
             label="Fecha Fin (opcional)",
             hint_text="2025/12/15",
@@ -236,7 +238,7 @@ class WebDownloadView:
             text_size=14,
             width=280
         )
-        
+
         # Checkbox para recordar credenciales de Familiar
         self.familiar_remember = ft.Checkbox(
             label="Recordar credenciales",
@@ -246,7 +248,7 @@ class WebDownloadView:
                 color=ft.Colors.ON_SURFACE
             )
         )
-        
+
         self.familiar_forget_btn = ft.TextButton(
             "Olvidar credenciales guardadas",
             icon=ft.Icons.DELETE_OUTLINE,
@@ -261,7 +263,7 @@ class WebDownloadView:
             text_align=ft.TextAlign.CENTER,
             weight=ft.FontWeight.W_500
         )
-        
+
         self.familiar_btn = ft.ElevatedButton(
             "Iniciar Descarga",
             on_click=self.download_familiar,
@@ -273,7 +275,7 @@ class WebDownloadView:
                 shape=ft.RoundedRectangleBorder(radius=8)
             )
         )
-        
+
         self.familiar_form = ft.Container(
             content=ft.Column([
                 ft.Text(
@@ -324,7 +326,7 @@ class WebDownloadView:
                 offset=ft.Offset(0, 2)
             )
         )
-        
+
         # ========== FOMAG ==========
         self.fomag_usuario = ft.TextField(
             label="Usuario",
@@ -336,7 +338,7 @@ class WebDownloadView:
             height=50,
             text_size=14
         )
-        
+
         self.fomag_password = ft.TextField(
             label="Contraseña",
             password=True,
@@ -348,7 +350,7 @@ class WebDownloadView:
             height=50,
             text_size=14
         )
-        
+
         # Checkbox para recordar credenciales
         self.fomag_remember = ft.Checkbox(
             label="Recordar credenciales",
@@ -358,7 +360,7 @@ class WebDownloadView:
                 color=ft.Colors.ON_SURFACE
             )
         )
-        
+
         self.fomag_forget_btn = ft.TextButton(
             "Olvidar credenciales guardadas",
             icon=ft.Icons.DELETE_OUTLINE,
@@ -404,7 +406,7 @@ class WebDownloadView:
             border_radius=8,
             border=ft.border.all(1, "#90CAF9")
         )
-        
+
         self.fomag_status = ft.Text(
             "",
             size=12,
@@ -412,7 +414,7 @@ class WebDownloadView:
             text_align=ft.TextAlign.CENTER,
             weight=ft.FontWeight.W_500
         )
-        
+
         self.fomag_btn = ft.ElevatedButton(
             "Iniciar Descarga",
             on_click=self.download_fomag,
@@ -424,7 +426,7 @@ class WebDownloadView:
                 shape=ft.RoundedRectangleBorder(radius=8)
             )
         )
-        
+
         self.fomag_form = ft.Container(
             content=ft.Column([
                 ft.Text(
@@ -464,7 +466,7 @@ class WebDownloadView:
                 offset=ft.Offset(0, 2)
             )
         )
-        
+
         # Contenedor principal con header de navegación
         content = ft.Column([
             back_header,
@@ -477,33 +479,33 @@ class WebDownloadView:
                 padding=20,
             )
         ], spacing=0, expand=True)
-        
+
         self.container = ft.Container(
             content=content,
             expand=True,
             bgcolor=ft.Colors.SURFACE,
             visible=False
         )
-        
+
         return self.container
-    
+
     def show_selection(self):
         """Muestra la vista de selección de EPS"""
         self.selection_view.visible = True
         self.form_view.visible = False
         self.selected_eps = None
         self.page.update()
-    
+
     def show_eps_form(self, eps_name):
         """Muestra el formulario de la EPS seleccionada"""
         self.selected_eps = eps_name
         self.selection_view.visible = False
         self.form_view.visible = True
-        
+
         # Limpiar formulario anterior
         while len(self.form_view.controls) > 2:
             self.form_view.controls.pop()
-        
+
         # Agregar formulario correspondiente
         if eps_name == "Familiar de Colombia":
             # Cargar credenciales guardadas
@@ -513,9 +515,9 @@ class WebDownloadView:
             # Cargar credenciales guardadas
             self._load_fomag_credentials()
             self.form_view.controls.append(self.fomag_form)
-        
+
         self.page.update()
-    
+
     def _load_familiar_credentials(self):
         """Carga las credenciales guardadas de Familiar"""
         creds = self.credential_manager.load_credentials("familiar")
@@ -525,7 +527,7 @@ class WebDownloadView:
             self.familiar_password.value = creds.get("password", "")
             self.familiar_remember.value = True
             self.page.update()
-    
+
     def _load_fomag_credentials(self):
         """Carga las credenciales guardadas de Fomag"""
         creds = self.credential_manager.load_credentials("fomag")
@@ -577,28 +579,28 @@ class WebDownloadView:
             status_fn("Credenciales eliminadas. Escribe las nuevas para guardar.")
         else:
             status_fn("No se pudieron eliminar las credenciales.")
-    
+
     def show(self):
         """Muestra la vista"""
         self.container.visible = True
         self.show_selection()
         self.page.update()
-    
+
     def hide(self):
         """Oculta la vista"""
         self.container.visible = False
         self.page.update()
-    
+
     def update_familiar_status(self, message):
         """Actualiza el estado de Familiar"""
         self.familiar_status.value = message
         self.page.update()
-    
+
     def update_fomag_status(self, message):
         """Actualiza el estado de Fomag"""
         self.fomag_status.value = message
         self.page.update()
-    
+
     def download_familiar(self, e):
         """Descarga desde Familiar de Colombia"""
         if not all([
@@ -608,7 +610,7 @@ class WebDownloadView:
         ]):
             self.update_familiar_status("❌ Completa todos los campos obligatorios")
             return
-        
+
         # Guardar credenciales si está marcado
         if self.familiar_remember.value:
             self.credential_manager.save_credentials(
@@ -617,19 +619,19 @@ class WebDownloadView:
                 self.familiar_password.value,
                 nit=self.familiar_nit.value
             )
-        
+
         self.familiar_btn.disabled = True
         self.update_familiar_status("🔄 Iniciando descarga...")
-        
+
         def worker():
             try:
                 from app.service.web_scraper import FamiliarScraper
-                
+
                 scraper = FamiliarScraper(
                     download_dir=os.path.join(os.path.expanduser("~"), "Desktop", "descargas_familiar"),
                     progress_callback=self.update_familiar_status
                 )
-                
+
                 if not self.familiar_nit.value:
                     raise ValueError("El NIT es obligatorio")
 
@@ -638,8 +640,8 @@ class WebDownloadView:
 
                 if not self.familiar_password.value:
                     raise ValueError("La contraseña es obligatoria")
-                
-                
+
+
 
                 result = scraper.login_and_download(
                     nit=self.familiar_nit.value,
@@ -648,20 +650,20 @@ class WebDownloadView:
                     fecha_inicio=self.familiar_fecha_inicio.value or None,
                     fecha_fin=self.familiar_fecha_fin.value or None
                 )
-                
+
                 if result["success"]:
                     self.update_familiar_status(f"✅ {result['message']}")
                 else:
                     self.update_familiar_status(f"❌ {result['message']}")
-                    
+
             except Exception as ex:
                 self.update_familiar_status(f"❌ Error: {str(ex)}")
             finally:
                 self.familiar_btn.disabled = False
                 self.page.update()
-        
+
         threading.Thread(target=worker, daemon=True).start()
-    
+
     def download_fomag(self, e):
         """Descarga desde Fomag"""
         if not all([
@@ -670,7 +672,7 @@ class WebDownloadView:
         ]):
             self.update_fomag_status("❌ Completa todos los campos")
             return
-        
+
         # Guardar credenciales si está marcado
         if self.fomag_remember.value:
             self.credential_manager.save_credentials(
@@ -678,17 +680,17 @@ class WebDownloadView:
                 self.fomag_usuario.value,
                 self.fomag_password.value
             )
-        
+
         self.fomag_btn.disabled = True
         self.update_fomag_status("🔄 Abriendo navegador con sesión persistente...")
-        
+
         def worker():
             try:
                 from app.service.web_scraper import FomagScraper
-                
+
                 # Ruta de red para resultados de glosa web
                 download_dir = r"\\MINERVA\Cartera\GLOSAAP\RESULTADO DE GLOSA WEB"
-                
+
                 # Crear directorio si no existe
                 try:
                     os.makedirs(download_dir, exist_ok=True)
@@ -697,26 +699,26 @@ class WebDownloadView:
                     download_dir = os.path.join(os.path.expanduser("~"), "Desktop", "descargas_fomag")
                     os.makedirs(download_dir, exist_ok=True)
                     self.update_fomag_status(f"⚠️ Sin acceso a red, guardando en: {download_dir}")
-                
+
                 scraper = FomagScraper(
                     download_dir=download_dir,
                     progress_callback=self.update_fomag_status
                 )
-                
+
                 result = scraper.login_and_download(
                     usuario=self.fomag_usuario.value,
                     contraseña=self.fomag_password.value
                 )
-                
+
                 if result["success"]:
                     self.update_fomag_status(f"✅ {result['message']}")
                 else:
                     self.update_fomag_status(f"❌ {result['message']}")
-                    
+
             except Exception as ex:
                 self.update_fomag_status(f"❌ Error: {str(ex)}")
             finally:
                 self.fomag_btn.disabled = False
                 self.page.update()
-        
+
         threading.Thread(target=worker, daemon=True).start()

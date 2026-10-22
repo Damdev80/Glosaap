@@ -35,10 +35,11 @@ Author: Glosaap Team
 Version: 1.1.0
 """
 import os
-import pandas as pd
-from datetime import datetime
 from abc import ABC, abstractmethod
-from typing import List, Dict, Tuple, Optional, Union, Any
+from datetime import datetime
+from typing import Any
+
+import pandas as pd
 
 from app.config.settings import logger
 
@@ -76,7 +77,7 @@ class BaseProcessor(ABC):
     #: Columnas internas que nunca deben exportarse al Excel entregado.
     INTERNAL_COLUMNS = ["_FACTURA", "fecha_correo"]
 
-    def __init__(self, homologador_path: Optional[str] = None):
+    def __init__(self, homologador_path: str | None = None):
         """
         Inicializa el procesador base.
 
@@ -87,8 +88,8 @@ class BaseProcessor(ABC):
         self.homologador_path = homologador_path
         self.homologador_df = None
         self.processing_date = datetime.now().strftime("%Y-%m-%d")
-        self.errors: List[str] = []
-        self.warnings: List[str] = []
+        self.errors: list[str] = []
+        self.warnings: list[str] = []
 
     # ==================== HELPERS COMPARTIDOS ====================
 
@@ -210,8 +211,8 @@ class BaseProcessor(ABC):
 
     @abstractmethod
     def identify_files(
-        self, file_paths: List[str]
-    ) -> Union[Dict[str, Any], List[Dict[str, str]]]:
+        self, file_paths: list[str]
+    ) -> dict[str, Any] | list[dict[str, str]]:
         """
         Identifica y clasifica los archivos de entrada.
 
@@ -229,7 +230,7 @@ class BaseProcessor(ABC):
 
     @abstractmethod
     def validate_files(
-        self, identified_files: Union[Dict[str, Any], List[Dict[str, str]]]
+        self, identified_files: dict[str, Any] | list[dict[str, str]]
     ) -> bool:
         """
         Valida que los archivos identificados sean correctos.
@@ -247,8 +248,8 @@ class BaseProcessor(ABC):
 
     @abstractmethod
     def extract_data(
-        self, identified_files: Union[Dict[str, Any], List[Dict[str, str]]]
-    ) -> Dict[str, pd.DataFrame]:
+        self, identified_files: dict[str, Any] | list[dict[str, str]]
+    ) -> dict[str, pd.DataFrame]:
         """
         Extrae los datos de los archivos identificados.
 
@@ -261,7 +262,7 @@ class BaseProcessor(ABC):
         pass
 
     @abstractmethod
-    def homologate(self, data: Dict[str, pd.DataFrame]) -> pd.DataFrame:
+    def homologate(self, data: dict[str, pd.DataFrame]) -> pd.DataFrame:
         """
         Realiza el proceso de homologación.
 
@@ -285,10 +286,10 @@ class BaseProcessor(ABC):
             DataFrame con los códigos no homologados
         """
         if "HOMOLOGADO" in df.columns:
-            return df[df["HOMOLOGADO"] == False][[code_column]].drop_duplicates()
+            return df[df["HOMOLOGADO"].eq(False)][[code_column]].drop_duplicates()
         return pd.DataFrame()
 
-    def process(self, file_paths: List[str]) -> Tuple[Optional[pd.DataFrame], List[str], List[str]]:
+    def process(self, file_paths: list[str]) -> tuple[pd.DataFrame | None, list[str], list[str]]:
         """
         Proceso principal de procesamiento (Template Method).
 

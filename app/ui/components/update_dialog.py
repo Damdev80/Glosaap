@@ -5,25 +5,18 @@ Este módulo proporciona un diálogo de actualización integrado
 con el sistema de UI de Flet existente.
 Con soporte de temas claro/oscuro
 """
-import flet as ft
 import json
 import os
 import threading
 import time
+from collections.abc import Callable
 from functools import partial
 from pathlib import Path
-from typing import Optional, Callable
 
-from app.ui.styles import FONT_SIZES
-from app.service.update_service import (
-    UpdateService,
-    ReleaseInfo,
-    UpdateError,
-    UpdateCheckError,
-    UpdateDownloadError
-)
+import flet as ft
+
 from app.config.settings import logger
-
+from app.service.update_service import ReleaseInfo, UpdateCheckError, UpdateDownloadError, UpdateService
 
 # ==================== ESTADO PERSISTENTE (Fase 3) ====================
 
@@ -48,12 +41,11 @@ def load_update_state() -> dict:
 
     Formato: {"skip_versions": [...], "last_check": <epoch>, "remind_at": <epoch>}
     """
-    defaults = {"skip_versions": [], "last_check": 0, "remind_at": 0}
     try:
         path = get_update_state_path()
         if not path.exists():
             return {"skip_versions": [], "last_check": 0, "remind_at": 0}
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
         if not isinstance(data, dict):
             return {"skip_versions": [], "last_check": 0, "remind_at": 0}
@@ -122,7 +114,7 @@ def save_update_state(state: dict) -> None:
             pass
 
 
-def is_version_skipped(version: str, state: Optional[dict] = None) -> bool:
+def is_version_skipped(version: str, state: dict | None = None) -> bool:
     """True si la versión está en skip_versions (solo silencia esa versión)."""
     try:
         st = state if isinstance(state, dict) else load_update_state()
@@ -132,7 +124,7 @@ def is_version_skipped(version: str, state: Optional[dict] = None) -> bool:
         return False
 
 
-def is_remind_active(state: Optional[dict] = None, now: Optional[float] = None) -> bool:
+def is_remind_active(state: dict | None = None, now: float | None = None) -> bool:
     """True si aún estamos dentro del periodo pospuesto (now < remind_at)."""
     try:
         st = state if isinstance(state, dict) else load_update_state()
@@ -157,7 +149,7 @@ def mark_check_now() -> dict:
 class UpdateDialog:
     """
     Diálogo de actualización que sigue el estilo visual de Glosaap.
-    
+
     Uso:
         dialog = UpdateDialog(page, current_version="1.0.0")
         dialog.check_for_updates()  # Verifica en segundo plano
@@ -165,18 +157,18 @@ class UpdateDialog:
         dialog.show_checking()
         dialog.check_and_show()
     """
-    
+
     def __init__(
         self,
         page: ft.Page,
         current_version: str,
         github_repo: str = "Damdev80/Glosaap",
-        on_update_complete: Optional[Callable] = None,
+        on_update_complete: Callable | None = None,
         auto_check: bool = True
     ):
         """
         Inicializa el diálogo de actualización.
-        
+
         Args:
             page: Página de Flet
             current_version: Versión actual de la aplicación
@@ -188,20 +180,20 @@ class UpdateDialog:
         self.current_version = current_version
         self.github_repo = github_repo
         self.on_update_complete = on_update_complete
-        
+
         self.update_service = UpdateService(current_version, github_repo)
-        self._dialog: Optional[ft.AlertDialog] = None
-        self._release_info: Optional[ReleaseInfo] = None
+        self._dialog: ft.AlertDialog | None = None
+        self._release_info: ReleaseInfo | None = None
         self._is_downloading = False
-        
+
         # Componentes UI
-        self._progress_bar: Optional[ft.ProgressBar] = None
-        self._progress_text: Optional[ft.Text] = None
-        self._download_btn: Optional[ft.ElevatedButton] = None
-        self._cancel_btn: Optional[ft.TextButton] = None
-        self._skip_btn: Optional[ft.TextButton] = None
-        self._remind_btn: Optional[ft.TextButton] = None
-        
+        self._progress_bar: ft.ProgressBar | None = None
+        self._progress_text: ft.Text | None = None
+        self._download_btn: ft.ElevatedButton | None = None
+        self._cancel_btn: ft.TextButton | None = None
+        self._skip_btn: ft.TextButton | None = None
+        self._remind_btn: ft.TextButton | None = None
+
         if auto_check:
             self.check_for_updates_async()
 
@@ -233,11 +225,11 @@ class UpdateDialog:
                 logger.warning("Error en callback UI de actualización: %s", ex)
             except Exception:
                 pass
-    
+
     def check_for_updates_async(self, silent: bool = True):
         """
         Verifica actualizaciones en segundo plano.
-        
+
         Args:
             silent: Si es True, no muestra diálogo si no hay actualización.
                 En modo silent se respetan skip_versions y remind_at;
@@ -282,18 +274,18 @@ class UpdateDialog:
                 logger.error(f"Error inesperado verificando actualizaciones: {e}")
                 if not silent:
                     self._run_on_ui(self._show_error, "Error inesperado al verificar actualizaciones")
-        
+
         threading.Thread(target=worker, daemon=True).start()
-    
+
     def check_and_show(self):
         """Verifica actualizaciones y muestra resultado (no silencioso)"""
         self.show_checking()
         self.check_for_updates_async(silent=False)
-    
+
     def show_checking(self):
         """Muestra diálogo indicando que se está verificando"""
         self._close_dialog()
-        
+
         content = ft.Column([
             ft.ProgressRing(width=40, height=40, color=ft.Colors.PRIMARY),
             ft.Container(height=16),
@@ -310,7 +302,7 @@ class UpdateDialog:
                 text_align=ft.TextAlign.CENTER
             )
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8)
-        
+
         self._dialog = ft.AlertDialog(
             modal=True,
             title=ft.Row([
@@ -321,7 +313,7 @@ class UpdateDialog:
             shape=ft.RoundedRectangleBorder(radius=12),
             bgcolor=ft.Colors.SURFACE
         )
-        
+
         self.page.overlay.append(self._dialog)
         self._dialog.open = True
         self.page.update()
@@ -359,16 +351,16 @@ class UpdateDialog:
             except Exception:
                 pass
         self._close_dialog()
-    
+
     def _show_update_available(self, release: ReleaseInfo):
         """Muestra diálogo con información de la actualización disponible"""
         self._close_dialog()
-        
+
         # Formatear changelog (limitar longitud y parsear markdown básico)
         changelog = release.changelog
         if len(changelog) > 500:
             changelog = changelog[:500] + "..."
-        
+
         # Barra de progreso (oculta inicialmente)
         self._progress_bar = ft.ProgressBar(
             width=350,
@@ -377,7 +369,7 @@ class UpdateDialog:
             bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
             visible=False
         )
-        
+
         self._progress_text = ft.Text(
             "",
             size=12,
@@ -397,7 +389,7 @@ class UpdateDialog:
             on_click=lambda e: self._on_remind_tomorrow(e),
             style=ft.ButtonStyle(color=ft.Colors.ON_SURFACE_VARIANT)
         )
-        
+
         # Contenido del diálogo
         content = ft.Column([
             # Información de versión
@@ -433,9 +425,9 @@ class UpdateDialog:
                 bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
                 border_radius=8
             ),
-            
+
             ft.Container(height=8),
-            
+
             # Changelog
             ft.Text(
                 "Novedades:",
@@ -468,15 +460,15 @@ class UpdateDialog:
                 alignment=ft.MainAxisAlignment.CENTER,
                 spacing=4,
             ),
-            
+
             ft.Container(height=4),
-            
+
             # Progreso de descarga
             self._progress_bar,
             self._progress_text,
-            
+
         ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
-        
+
         # Botones
         self._download_btn = ft.ElevatedButton(
             "⬇️ Actualizar ahora",
@@ -488,13 +480,13 @@ class UpdateDialog:
                 padding=ft.padding.symmetric(horizontal=20, vertical=12)
             )
         )
-        
+
         self._cancel_btn = ft.TextButton(
             "Más tarde",
             on_click=lambda e: self._close_dialog(),
             style=ft.ButtonStyle(color=ft.Colors.ON_SURFACE_VARIANT)
         )
-        
+
         self._dialog = ft.AlertDialog(
             modal=True,
             title=ft.Row([
@@ -512,15 +504,15 @@ class UpdateDialog:
             shape=ft.RoundedRectangleBorder(radius=12),
             bgcolor=ft.Colors.SURFACE
         )
-        
+
         self.page.overlay.append(self._dialog)
         self._dialog.open = True
         self.page.update()
-    
+
     def _show_no_updates(self):
         """Muestra diálogo indicando que no hay actualizaciones"""
         self._close_dialog()
-        
+
         content = ft.Column([
             ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.GREEN, size=48),
             ft.Container(height=12),
@@ -538,7 +530,7 @@ class UpdateDialog:
                 text_align=ft.TextAlign.CENTER
             )
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4)
-        
+
         self._dialog = ft.AlertDialog(
             modal=True,
             title=ft.Row([
@@ -557,15 +549,15 @@ class UpdateDialog:
             shape=ft.RoundedRectangleBorder(radius=12),
             bgcolor=ft.Colors.SURFACE
         )
-        
+
         self.page.overlay.append(self._dialog)
         self._dialog.open = True
         self.page.update()
-    
+
     def _show_error(self, message: str):
         """Muestra diálogo de error"""
         self._close_dialog()
-        
+
         content = ft.Column([
             ft.Icon(ft.Icons.ERROR_OUTLINE, color=ft.Colors.RED, size=48),
             ft.Container(height=12),
@@ -576,7 +568,7 @@ class UpdateDialog:
                 text_align=ft.TextAlign.CENTER
             )
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4)
-        
+
         self._dialog = ft.AlertDialog(
             modal=True,
             title=ft.Row([
@@ -595,23 +587,23 @@ class UpdateDialog:
             shape=ft.RoundedRectangleBorder(radius=12),
             bgcolor=ft.Colors.SURFACE
         )
-        
+
         self.page.overlay.append(self._dialog)
         self._dialog.open = True
         self.page.update()
-    
+
     def _start_download(self, release: ReleaseInfo):
         """Inicia la descarga de la actualización"""
         if self._is_downloading:
             return
-        
+
         # Verificar que los componentes de UI existen
         if not all([self._download_btn, self._cancel_btn, self._progress_bar, self._progress_text]):
             logger.error("Componentes de UI no inicializados")
             return
-        
+
         self._is_downloading = True
-        
+
         # Actualizar UI en hilo principal (este método se llama desde click: hilo principal OK)
         self._download_btn.disabled = True  # type: ignore
         self._download_btn.text = "Descargando..."  # type: ignore
@@ -667,38 +659,38 @@ class UpdateDialog:
                     self.page.update()
             except Exception:
                 pass
-        
+
         def on_progress(downloaded: int, total: int):
             """Callback de progreso de descarga (viene del worker: reenvía al hilo principal)."""
             self._run_on_ui(_apply_progress, downloaded, total)
-        
+
         def worker():
             try:
                 # Descargar (aviso en hilo principal vía callback)
                 self._run_on_ui(_set_text, "Descargando actualización...")
-                
+
                 downloaded_file = self.update_service.download_update(release, on_progress)
-                
+
                 # Descarga completada (hilo principal)
                 self._run_on_ui(_on_complete_ui)
-                
+
                 # Lanzar updater (I/O, puede ir en worker)
                 logger.info("Lanzando actualizador...")
                 self.update_service.launch_updater(downloaded_file)
-                
+
                 # Notificar que se va a cerrar la app (hilo principal)
                 self._run_on_ui(_on_closing_ui)
-                
+
                 if self.on_update_complete:
                     try:
                         self._run_on_ui(self.on_update_complete)
                     except Exception:
                         pass
-                
+
                 # Cerrar la aplicación después de un breve delay
                 time.sleep(1)
                 self._run_on_ui(self.page.window.close)
-                
+
             except UpdateDownloadError as e:
                 logger.error(f"Error descargando actualización: {e}")
                 self._run_on_ui(self._show_download_error, str(e))
@@ -707,9 +699,9 @@ class UpdateDialog:
                 self._run_on_ui(self._show_download_error, f"Error inesperado: {str(e)}")
             finally:
                 self._is_downloading = False
-        
+
         threading.Thread(target=worker, daemon=True).start()
-    
+
     def _show_download_error(self, message: str):
         """Muestra error durante la descarga (llamar desde hilo principal)."""
         if self._progress_bar:
@@ -727,7 +719,7 @@ class UpdateDialog:
         if self._remind_btn is not None:
             self._remind_btn.disabled = False
         self.page.update()
-    
+
     def _close_dialog(self):
         """Cierra el diálogo actual (solo el propio; no toca otros overlays)."""
         if self._dialog:
@@ -744,12 +736,12 @@ class UpdateDialog:
 class UpdateChecker:
     """
     Verificador de actualizaciones que se integra en el menú de la aplicación.
-    
+
     Proporciona un método simple para agregar la funcionalidad de
     actualización a cualquier vista. Respeta intervalo + skip/remind
     persistidos en %APPDATA%/Glosaap/update_state.json.
     """
-    
+
     def __init__(
         self,
         page: ft.Page,
@@ -767,8 +759,8 @@ class UpdateChecker:
         if interval <= 0:
             interval = 24
         self.check_interval_hours = interval
-        self._update_dialog: Optional[UpdateDialog] = None
-    
+        self._update_dialog: UpdateDialog | None = None
+
     def create_menu_item(self) -> ft.PopupMenuItem:
         """Crea un item de menú para verificar actualizaciones"""
         return ft.PopupMenuItem(
@@ -778,7 +770,7 @@ class UpdateChecker:
             ], spacing=8),
             on_click=lambda e: self.check_updates()
         )
-    
+
     def create_button(self, compact: bool = False) -> ft.Control:
         """Crea un botón para verificar actualizaciones"""
         if compact:
@@ -797,7 +789,7 @@ class UpdateChecker:
                 tooltip="Buscar actualizaciones",
                 on_click=lambda e: self.check_updates()
             )
-    
+
     def check_updates(self):
         """Abre el diálogo de verificación de actualizaciones (manual: ignora intervalo/skip/remind)."""
         self._update_dialog = UpdateDialog(
@@ -807,7 +799,7 @@ class UpdateChecker:
             auto_check=False
         )
         self._update_dialog.check_and_show()
-    
+
     def check_updates_silent(self):
         """Verifica actualizaciones silenciosamente (muestra solo si hay actualización).
 
@@ -821,7 +813,7 @@ class UpdateChecker:
             auto_check=True
         )
 
-    def is_due(self, now: Optional[float] = None) -> bool:
+    def is_due(self, now: float | None = None) -> bool:
         """True si toca verificar: pasó el intervalo y no hay remind activo."""
         try:
             ts = now if now is not None else time.time()

@@ -3,32 +3,33 @@ Vista de Homologador Manual
 Permite homologar archivos Excel seleccionando EPS y columna
 Con soporte de temas claro/oscuro
 """
-import flet as ft
-import pandas as pd
 import os
 import threading
 from datetime import datetime
-from typing import Optional, List, Tuple
+
+import flet as ft
+import pandas as pd
+
 
 class HomologadorManualView:
     """Vista para homologar archivos Excel manualmente"""
-    
+
     # Rutas de archivos de homologación por EPS
     HOMOLOGACION_PATHS = {
         "MUTUALSER": r"\\MINERVA\Cartera\GLOSAAP\HOMOLOGADOR\mutualser_homologacion.xlsx",
         "COOSALUD": r"\\MINERVA\Cartera\GLOSAAP\HOMOLOGADOR\coosalud_homologacion.xlsx"
     }
-    
+
     # Ruta de salida
     OUTPUT_PATH = r"\\MINERVA\Cartera\GLOSAAP\RESULTADO DE HOMOLAGADOR MANUAL"
-    
+
     # Assets directory
     ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "assets"))
-    
+
     def __init__(self, page: ft.Page, on_back=None):
         self.page = page
         self.on_back = on_back
-        
+
         # Estado
         self.selected_eps = None
         self.archivo_path = None
@@ -37,7 +38,7 @@ class HomologadorManualView:
         self.columna_seleccionada = None
         self.df_homologacion = None
         self._todos_cod_serv_fact = None
-        
+
         # Componentes UI
         self.eps_dropdown = None
         self.archivo_text = None
@@ -46,12 +47,12 @@ class HomologadorManualView:
         self.status_text = None
         self.progress_bar = None
         self.preview_table = None
-        
+
         self.container = self._build()
-    
+
     def _build(self):
         """Construye la interfaz"""
-        
+
         # Dropdown de EPS
         self.eps_dropdown = ft.Dropdown(
             label="Seleccionar EPS",
@@ -64,7 +65,7 @@ class HomologadorManualView:
             border_color=ft.Colors.PRIMARY,
             focused_border_color=ft.Colors.PRIMARY
         )
-        
+
         # Selector de archivo
         self.archivo_text = ft.Text(
             "Ningún archivo seleccionado",
@@ -73,10 +74,10 @@ class HomologadorManualView:
             width=250,
             overflow=ft.TextOverflow.ELLIPSIS
         )
-        
+
         self.file_picker = ft.FilePicker(on_result=self._on_file_selected)
         self.page.overlay.append(self.file_picker)
-        
+
         btn_seleccionar = ft.ElevatedButton(
             "📂 Seleccionar Archivo",
             on_click=lambda e: self.file_picker.pick_files(
@@ -87,7 +88,7 @@ class HomologadorManualView:
             color=ft.Colors.SURFACE,
             height=40
         )
-        
+
         # Dropdown de columnas
         self.columna_dropdown = ft.Dropdown(
             label="Columna a homologar",
@@ -98,7 +99,7 @@ class HomologadorManualView:
             border_color=ft.Colors.PRIMARY,
             focused_border_color=ft.Colors.PRIMARY
         )
-        
+
         # Botón homologar
         self.btn_homologar = ft.ElevatedButton(
             "🔄 Homologar",
@@ -109,7 +110,7 @@ class HomologadorManualView:
             height=45,
             width=200
         )
-        
+
         # Status
         self.status_text = ft.Text(
             "",
@@ -117,13 +118,13 @@ class HomologadorManualView:
             color=ft.Colors.ON_SURFACE_VARIANT,
             text_align=ft.TextAlign.CENTER
         )
-        
+
         self.progress_bar = ft.ProgressBar(
             width=400,
             visible=False,
             color=ft.Colors.PRIMARY
         )
-        
+
         # Preview table
         self.preview_table = ft.DataTable(
             columns=[
@@ -136,7 +137,7 @@ class HomologadorManualView:
             visible=False,
             column_spacing=50
         )
-        
+
         # Logo EPS (se actualiza al seleccionar)
         self.eps_logo = ft.Image(
             src=os.path.join(self.ASSETS_DIR, "img", "eps", "mutualser.png"),
@@ -145,7 +146,7 @@ class HomologadorManualView:
             fit=ft.ImageFit.CONTAIN,
             visible=False
         )
-        
+
         return ft.Container(
             content=ft.Column([
                 # Header
@@ -175,7 +176,7 @@ class HomologadorManualView:
                     bgcolor=ft.Colors.SURFACE,
                     border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.OUTLINE))
                 ),
-                
+
                 # Contenido principal
                 ft.Container(
                     content=ft.Column([
@@ -200,7 +201,7 @@ class HomologadorManualView:
                             border_radius=10,
                             border=ft.border.all(1, ft.Colors.OUTLINE)
                         ),
-                        
+
                         # Paso 2: Seleccionar archivo
                         ft.Container(
                             content=ft.Column([
@@ -226,7 +227,7 @@ class HomologadorManualView:
                             border_radius=10,
                             border=ft.border.all(1, ft.Colors.OUTLINE)
                         ),
-                        
+
                         # Paso 3: Seleccionar columna
                         ft.Container(
                             content=ft.Column([
@@ -248,21 +249,21 @@ class HomologadorManualView:
                             border_radius=10,
                             border=ft.border.all(1, ft.Colors.OUTLINE)
                         ),
-                        
+
                         # Botón y status
                         ft.Container(height=10),
                         ft.Row([self.btn_homologar], alignment=ft.MainAxisAlignment.CENTER),
                         ft.Container(height=10),
                         self.progress_bar,
                         self.status_text,
-                        
+
                         # Preview
                         ft.Container(height=10),
                         ft.Container(
                             content=self.preview_table,
                             alignment=ft.alignment.center
                         )
-                        
+
                     ], spacing=15, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                     padding=25,
                     expand=True,
@@ -273,11 +274,11 @@ class HomologadorManualView:
             expand=True,
             visible=False
         )
-    
+
     def _on_eps_change(self, e):
         """Cuando se selecciona una EPS"""
         self.selected_eps = e.control.value
-        
+
         # Mostrar logo
         if self.selected_eps == "MUTUALSER":
             self.eps_logo.src = os.path.join(self.ASSETS_DIR, "img", "eps", "mutualser.png")
@@ -285,17 +286,17 @@ class HomologadorManualView:
         elif self.selected_eps == "COOSALUD":
             self.eps_logo.src = os.path.join(self.ASSETS_DIR, "img", "eps", "coosalud.png")
             self.eps_logo.visible = True
-        
+
         # Cargar archivo de homologación
         self._cargar_homologacion()
         self._update_button_state()
         self.page.update()
-    
+
     def _cargar_homologacion(self):
         """Carga el archivo de homologación de la EPS seleccionada"""
         if not self.selected_eps:
             return
-        
+
         path = self.HOMOLOGACION_PATHS.get(self.selected_eps)
         if not path or not os.path.exists(path):
             self.status_text.value = f"❌ Archivo de homologación no encontrado: {path}"  # type: ignore
@@ -303,11 +304,11 @@ class HomologadorManualView:
             self.df_homologacion = None
             self.page.update()
             return
-        
+
         try:
             self.df_homologacion = pd.read_excel(path)
             self.df_homologacion.columns = self.df_homologacion.columns.str.strip()
-            
+
             # Pre-calcular COD_SERV_FACT solo para MUTUALSER
             if self.selected_eps == "MUTUALSER" and 'COD_SERV_FACT' in self.df_homologacion.columns:
                 self._todos_cod_serv_fact = set(
@@ -319,29 +320,29 @@ class HomologadorManualView:
             else:
                 # COOSALUD no usa COD_SERV_FACT (por ahora)
                 self._todos_cod_serv_fact = None
-            
+
             self.status_text.value = f"✅ Homologación {self.selected_eps} cargada: {len(self.df_homologacion)} registros"  # type: ignore
             self.status_text.color = ft.Colors.GREEN  # type: ignore
-            
+
         except Exception as ex:
             self.status_text.value = f"❌ Error cargando homologación: {ex}"  # type: ignore
             self.status_text.color = ft.Colors.RED  # type: ignore
             self.df_homologacion = None
-    
+
     def _on_file_selected(self, e):
         """Cuando se selecciona un archivo"""
         if not e.files or len(e.files) == 0:
             return
-        
+
         self.archivo_path = e.files[0].path
         self.archivo_text.value = os.path.basename(self.archivo_path)  # type: ignore
         self.archivo_text.color = ft.Colors.ON_SURFACE  # type: ignore
-        
+
         # Cargar archivo y obtener columnas
         try:
             self.df_archivo = pd.read_excel(self.archivo_path)
             self.columnas_disponibles = list(self.df_archivo.columns)
-            
+
             # Actualizar dropdown de columnas
             self.columna_dropdown.options = [  # type: ignore
                 ft.dropdown.Option(col, col) for col in self.columnas_disponibles
@@ -349,24 +350,24 @@ class HomologadorManualView:
             self.columna_dropdown.disabled = False  # type: ignore
             self.columna_dropdown.value = None  # type: ignore
             self.columna_seleccionada = None
-            
+
             self.status_text.value = f"📄 Archivo cargado: {len(self.df_archivo)} filas, {len(self.columnas_disponibles)} columnas"  # type: ignore
             self.status_text.color = ft.Colors.ON_SURFACE_VARIANT  # type: ignore
-            
+
         except Exception as ex:
             self.status_text.value = f"❌ Error leyendo archivo: {ex}"  # type: ignore
             self.status_text.color = ft.Colors.RED  # type: ignore
             self.columna_dropdown.disabled = True  # type: ignore
-        
+
         self._update_button_state()
         self.page.update()
-    
+
     def _on_columna_change(self, e):
         """Cuando se selecciona una columna"""
         self.columna_seleccionada = e.control.value
         self._update_button_state()
         self.page.update()
-    
+
     def _update_button_state(self):
         """Actualiza el estado del botón de homologar"""
         self.btn_homologar.disabled = not (  # type: ignore
@@ -376,49 +377,49 @@ class HomologadorManualView:
             self.columna_seleccionada and
             self.df_homologacion is not None
         )
-    
+
     def _buscar_codigo_homologado(self, codigo):
         """Busca código homologado usando las reglas de la EPS"""
         if self.df_homologacion is None or pd.isna(codigo):
             return ''
-        
+
         try:
             codigo_str = str(codigo).strip()
             if not codigo_str or codigo_str == 'nan':
                 return ''
-            
+
             col_erp = 'Código Servicio de la ERP'
             col_producto = 'Código producto en DGH'
-            
+
             # Verificar columnas
             if col_erp not in self.df_homologacion.columns or col_producto not in self.df_homologacion.columns:
                 return ''
-            
+
             codigo_numerico = ''.join(filter(str.isdigit, codigo_str))
-            
+
             # Buscar en Código Servicio de la ERP
             mask = self.df_homologacion[col_erp].astype(str).str.strip() == codigo_str
             resultado = self.df_homologacion[mask]
-            
+
             if resultado.empty and codigo_numerico:
                 mask = self.df_homologacion[col_erp].astype(str).str.replace(r'\D', '', regex=True) == codigo_numerico
                 resultado = self.df_homologacion[mask]
-            
+
             if not resultado.empty:
                 codigo_producto = resultado.iloc[0][col_producto]
-                
+
                 if pd.notna(codigo_producto):
                     cod_str = str(codigo_producto).strip()
-                    
+
                     if cod_str and cod_str != '0' and cod_str != 'nan':
                         # COOSALUD: Homologación directa sin verificar COD_SERV_FACT
                         if self.selected_eps == "COOSALUD":
                             return cod_str
-                        
+
                         # MUTUALSER: Verificar si existe en COD_SERV_FACT
                         if self._todos_cod_serv_fact and cod_str in self._todos_cod_serv_fact:
                             return cod_str
-                        
+
                         # Búsqueda flexible para MUTUALSER
                         if self._todos_cod_serv_fact:
                             cod_numerico = ''.join(filter(str.isdigit, cod_str))
@@ -426,13 +427,13 @@ class HomologadorManualView:
                                 for cod in self._todos_cod_serv_fact:
                                     if ''.join(filter(str.isdigit, cod)) == cod_numerico:
                                         return cod
-            
+
             return ''
-            
+
         except Exception as e:
             print(f"⚠️ Error homologando {codigo}: {e}")
             return ''
-    
+
     def _on_homologar(self, e):
         """Ejecuta la homologación"""
         def worker():
@@ -442,19 +443,19 @@ class HomologadorManualView:
                 self.status_text.value = "🔄 Homologando..."  # type: ignore
                 self.status_text.color = ft.Colors.ON_SURFACE_VARIANT  # type: ignore
                 self.page.update()
-                
+
                 # Hacer copia del dataframe
                 df_resultado = self.df_archivo.copy()  # type: ignore
-                
+
                 # Homologar cada valor de la columna seleccionada
                 total = len(df_resultado)
                 homologados = 0
                 no_homologados = 0
                 preview_data = []
-                
+
                 for idx, valor in enumerate(df_resultado[self.columna_seleccionada]):
                     codigo_homologado = self._buscar_codigo_homologado(valor)
-                    
+
                     if codigo_homologado:
                         df_resultado.at[idx, self.columna_seleccionada] = codigo_homologado  # type: ignore
                         homologados += 1
@@ -464,22 +465,22 @@ class HomologadorManualView:
                         no_homologados += 1
                         if len(preview_data) < 5 and str(valor).strip():
                             preview_data.append((str(valor), "❌ No encontrado"))
-                    
+
                     # Actualizar progreso cada 100 registros
                     if idx % 100 == 0:
                         self.progress_bar.value = idx / total  # type: ignore
                         self.page.update()
-                
+
                 # Guardar archivo
                 os.makedirs(self.OUTPUT_PATH, exist_ok=True)
-                
+
                 nombre_original = os.path.splitext(os.path.basename(self.archivo_path or "resultado"))[0]  # type: ignore
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                 nombre_salida = f"{nombre_original}_homologado_{self.selected_eps}_{timestamp}.xlsx"
                 ruta_salida = os.path.join(self.OUTPUT_PATH, nombre_salida)
-                
+
                 df_resultado.to_excel(ruta_salida, index=False)
-                
+
                 # Mostrar preview
                 self.preview_table.rows = [  # type: ignore
                     ft.DataRow(cells=[
@@ -488,32 +489,32 @@ class HomologadorManualView:
                     ]) for orig, hom in preview_data
                 ]
                 self.preview_table.visible = True  # type: ignore
-                
+
                 # Status final
                 self.progress_bar.visible = False  # type: ignore
                 self.status_text.value = f"✅ ¡Homologación completada!\n📊 {homologados} homologados | {no_homologados} sin homologar\n📁 Guardado en: {nombre_salida}"  # type: ignore
                 self.status_text.color = ft.Colors.GREEN  # type: ignore
                 self.btn_homologar.disabled = False  # type: ignore
                 self.page.update()
-                
+
                 # Abrir carpeta de destino
                 import subprocess
                 subprocess.Popen(f'explorer "{self.OUTPUT_PATH}"')
-                
+
             except Exception as ex:
                 self.progress_bar.visible = False  # type: ignore
                 self.status_text.value = f"❌ Error: {ex}"  # type: ignore
                 self.status_text.color = ft.Colors.RED  # type: ignore
                 self.btn_homologar.disabled = False  # type: ignore
                 self.page.update()
-        
+
         threading.Thread(target=worker, daemon=True).start()
-    
+
     def show(self):
         """Muestra la vista"""
         self.container.visible = True
         self.page.update()
-    
+
     def hide(self):
         """Oculta la vista"""
         self.container.visible = False

@@ -247,5 +247,5 @@ def read_json_locked(path: str):
     """Lee JSON bajo FileLock. Lanza FileNotFoundError / JSONDecodeError."""
     lock = get_lock(path)
     with lock:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)

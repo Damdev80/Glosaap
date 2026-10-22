@@ -1,18 +1,19 @@
 """
 Vista del Dashboard principal con soporte de temas
 """
-import flet as ft
 import os
-from app.ui.styles import FONT_SIZES, SPACING, ThemeManager, get_colors, update_colors
+
+import flet as ft
+
 from app.config.settings import APP_VERSION
 from app.ui.components.alert_dialog import AlertDialog
-from app.ui.components.settings_dialog import show_settings_dialog
 from app.ui.components.loading_overlay import LoadingOverlay, ToastNotification
+from app.ui.components.settings_dialog import show_settings_dialog
 
 
 class DashboardView:
     """Vista del dashboard con las 3 cards principales"""
-    
+
     def __init__(self, page: ft.Page, assets_dir: str, on_card_click=None, on_tools_click=None, on_logout=None, on_web_download=None):
         self.page = page
         self.assets_dir = assets_dir
@@ -20,13 +21,13 @@ class DashboardView:
         self.on_tools_click = on_tools_click
         self.on_logout = on_logout
         self.on_web_download = on_web_download
-        
+
         # Componentes de loading
         self.loading_overlay = LoadingOverlay(page)
         self.toast = ToastNotification(page)
-        
+
         self.container = self._build()
-        
+
     def _create_dashboard_card(self, icon, title, subtitle, action_key, image_path=None, featured=False, in_development=False):
         """Crea una card del dashboard usando Card de Flet (respeta temas)"""
 
@@ -114,7 +115,7 @@ class DashboardView:
             width=card_width,
             height=card_height,
         )
-    
+
     def _build(self):
         """Construye la vista del dashboard"""
         # Crear las 3 cards
@@ -178,7 +179,7 @@ class DashboardView:
                 padding=10
             )
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO)
-        
+
         # Botones flotantes
         tools_btn = ft.Container(
             content=ft.ElevatedButton(
@@ -196,7 +197,7 @@ class DashboardView:
             right=20,
             top=15,
         )
-        
+
         web_btn = ft.Container(
             content=ft.ElevatedButton(
                 content=ft.Row([
@@ -208,7 +209,7 @@ class DashboardView:
             right=20,
             top=70,
         )
-        
+
         version_btn = ft.Container(
             content=ft.TextButton(
                 content=ft.Row([
@@ -221,7 +222,7 @@ class DashboardView:
             left=10,
             bottom=10,
         )
-        
+
         settings_btn = ft.Container(
             content=ft.IconButton(
                 icon=ft.Icons.SETTINGS,
@@ -232,7 +233,7 @@ class DashboardView:
             right=15,
             bottom=10,
         )
-        
+
         self.container = ft.Container(
             content=ft.Stack([
                 ft.Container(
@@ -249,19 +250,19 @@ class DashboardView:
             expand=True,
             visible=False
         )
-        
+
         return self.container
-    
+
     def show_loading(self, message="Cargando..."):
         """Muestra el overlay de carga"""
         if self.loading_overlay:
             self.loading_overlay.show(message)
-    
+
     def hide_loading(self):
         """Oculta el overlay de carga"""
         if self.loading_overlay:
             self.loading_overlay.hide()
-    
+
     def show_toast(self, message, toast_type="success"):
         """Muestra una notificación toast"""
         if self.toast:
@@ -273,7 +274,7 @@ class DashboardView:
                 self.toast.warning(message)
             else:
                 self.toast.info(message)
-    
+
     def _confirm_logout(self, e):
         """Antepone confirmación antes de cerrar sesión y limpiar datos."""
         def do_logout(ev):
@@ -295,7 +296,7 @@ class DashboardView:
         """Abre el diálogo de verificación de actualizaciones"""
         try:
             self.show_loading("Verificando actualizaciones...")
-            
+
             if hasattr(self.page, 'data') and self.page.data:
                 check_fn = self.page.data.get('check_updates')
                 if check_fn:
@@ -304,31 +305,31 @@ class DashboardView:
                     self.show_toast("Función de actualización no disponible", "warning")
             else:
                 self.show_toast("No se pudo verificar actualizaciones", "error")
-                
+
         except Exception as ex:
             self.show_toast(f"Error: {str(ex)}", "error")
         finally:
             self.hide_loading()
-    
+
     def _open_settings(self, e):
         """Abre el panel de configuración (reutiliza el diálogo canónico)."""
         show_settings_dialog(self.page)
-    
+
     def rebuild(self):
         """Reconstruye el dashboard con el tema actual"""
         was_visible = self.container.visible if self.container else False
-        
+
         # Reconstruir manteniendo visibilidad
         self.container = self._build()
         self.container.visible = was_visible
         self.page.update()
-    
+
     def show(self):
         """Muestra el dashboard"""
         if self.container:
             self.container.visible = True
             self.page.update()
-    
+
     def hide(self):
         """Oculta el dashboard"""
         if self.container:

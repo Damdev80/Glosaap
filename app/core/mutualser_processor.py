@@ -3,12 +3,13 @@ Procesador específico para MUTUALSER
 Maneja la extracción, homologación y generación de archivos de objeciones
 """
 import os
-import pandas as pd
 from datetime import datetime
-from typing import Optional, List, Dict, Union, Any, Tuple
+from typing import Any
 
+import pandas as pd
+
+from app.config.settings import HOMOLOGADOR_FILES, logger
 from app.service.processors.base_processor import BaseProcessor
-from app.config.settings import HOMOLOGADOR_FILES, NETWORK_PATHS, logger
 
 
 class MutualserProcessor(BaseProcessor):
@@ -28,18 +29,18 @@ class MutualserProcessor(BaseProcessor):
     # Fuente única de rutas (settings); el valor sigue siendo ruta de red.
     HOMOLOGACION_PATH = HOMOLOGADOR_FILES["mutualser"]
 
-    def __init__(self, output_dir: str = 'outputs', homologacion_path: Optional[str] = None):
+    def __init__(self, output_dir: str = 'outputs', homologacion_path: str | None = None):
         resolved = homologacion_path or self.HOMOLOGACION_PATH
         super().__init__(homologador_path=resolved)
         self.output_dir = output_dir
         # Alias legacy (es) + base (or)
         self.homologacion_path = resolved
         self.homologador_path = resolved
-        self.df_consolidado: Optional[pd.DataFrame] = None
-        self.df_homologacion: Optional[pd.DataFrame] = None
+        self.df_consolidado: pd.DataFrame | None = None
+        self.df_homologacion: pd.DataFrame | None = None
         self.homologador_df = None
         self.archivos_procesados: list = []
-        self._todos_cod_serv_fact: Optional[set] = None
+        self._todos_cod_serv_fact: set | None = None
 
         # Crear directorio si no existe (funciona con rutas de red)
         try:
@@ -216,8 +217,8 @@ class MutualserProcessor(BaseProcessor):
     # ==================== CONTRATO BASE ====================
 
     def identify_files(
-        self, file_paths: List[str]
-    ) -> Union[Dict[str, Any], List[Dict[str, str]]]:
+        self, file_paths: list[str]
+    ) -> dict[str, Any] | list[dict[str, str]]:
         """Identifica TODOS los archivos Excel/CSV válidos de Mutualser."""
         validos = [
             f for f in file_paths
@@ -227,7 +228,7 @@ class MutualserProcessor(BaseProcessor):
         return {"archivos": validos}
 
     def validate_files(
-        self, identified_files: Union[Dict[str, Any], List[Dict[str, str]]]
+        self, identified_files: dict[str, Any] | list[dict[str, str]]
     ) -> bool:
         """Valida que existan archivos por procesar."""
         if isinstance(identified_files, list):
@@ -263,11 +264,11 @@ class MutualserProcessor(BaseProcessor):
         return True
 
     def extract_data(
-        self, identified_files: Union[Dict[str, Any], List[Dict[str, str]]]
-    ) -> Dict[str, pd.DataFrame]:
+        self, identified_files: dict[str, Any] | list[dict[str, str]]
+    ) -> dict[str, pd.DataFrame]:
         """Extrae y consolida datos de todos los archivos identificados."""
         if isinstance(identified_files, list):
-            archivos: List[str] = []
+            archivos: list[str] = []
             for item in identified_files:
                 if isinstance(item, dict):
                     archivos.extend([v for v in item.values() if isinstance(v, str)])
@@ -295,7 +296,7 @@ class MutualserProcessor(BaseProcessor):
         self.df_consolidado = consolidado
         return {"consolidado": consolidado, "detalle": consolidado}
 
-    def homologate(self, data: Dict[str, pd.DataFrame]) -> pd.DataFrame:
+    def homologate(self, data: dict[str, pd.DataFrame]) -> pd.DataFrame:
         """Homologa el consolidado y retorna DataFrame (contrato Base)."""
         df = data.get("consolidado", data.get("detalle"))
         if df is None or df.empty:
@@ -325,8 +326,8 @@ class MutualserProcessor(BaseProcessor):
             )
 
             # Buscar fila de encabezados
-            header_row_idx: Optional[int] = None
-            fecha_documento: Optional[str] = None
+            header_row_idx: int | None = None
+            fecha_documento: str | None = None
 
             for idx, row in df_raw.iterrows():
                 idx_int = int(idx) if isinstance(idx, (int, float)) else idx  # type: ignore

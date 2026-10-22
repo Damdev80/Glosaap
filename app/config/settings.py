@@ -4,8 +4,8 @@ Configuración centralizada de la aplicación Glosaap
 Este archivo contiene todas las constantes, rutas y configuraciones
 que se utilizan a lo largo de la aplicación.
 """
-import os
 import logging
+import os
 from pathlib import Path
 
 # ==================== INFORMACIÓN DE LA APLICACIÓN ====================
@@ -93,9 +93,9 @@ ALLOWED_EXTENSIONS = {
 
 # Todas las extensiones permitidas para descarga
 ALL_ALLOWED_EXTENSIONS = (
-    ALLOWED_EXTENSIONS["excel"] + 
-    ALLOWED_EXTENSIONS["word"] + 
-    ALLOWED_EXTENSIONS["pdf"] + 
+    ALLOWED_EXTENSIONS["excel"] +
+    ALLOWED_EXTENSIONS["word"] +
+    ALLOWED_EXTENSIONS["pdf"] +
     ALLOWED_EXTENSIONS["csv"]
 )
 
@@ -174,7 +174,7 @@ def ensure_dir(path: str) -> bool:
 def setup_logging():
     """Configura el sistema de logging"""
     ensure_dir(str(TEMP_DIR))
-    
+
     logging.basicConfig(
         level=LOG_CONFIG["level"],
         format=LOG_CONFIG["format"],
@@ -184,7 +184,7 @@ def setup_logging():
             logging.FileHandler(LOG_CONFIG["file"], encoding='utf-8')  # Archivo
         ]
     )
-    
+
     return logging.getLogger("glosaap")
 
 

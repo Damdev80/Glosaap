@@ -3,12 +3,12 @@ Clase base para scrapers de portales web de EPS
 """
 import os
 from abc import ABC, abstractmethod
-from typing import Optional, Callable
+from collections.abc import Callable
 
 
 class BaseScraper(ABC):
     """Clase base para automatización de portales web"""
-    
+
     def __init__(self, download_dir: str = None, progress_callback: Callable = None):
         """
         Args:
@@ -20,17 +20,17 @@ class BaseScraper(ABC):
         )
         self.progress_callback = progress_callback or print
         os.makedirs(self.download_dir, exist_ok=True)
-    
+
     def log(self, message: str):
         """Envía mensaje al callback de progreso"""
         if self.progress_callback:
             self.progress_callback(message)
-    
+
     @abstractmethod
     def login_and_download(self, **kwargs) -> dict:
         """
         Ejecuta login y descarga de archivos
-        
+
         Returns:
             dict con {"success": bool, "files": int, "message": str}
         """

@@ -7,6 +7,16 @@ from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
 
+# La consola Windows usa cp1252 y los prints con emojis revientan
+# (UnicodeEncodeError). Fuerza UTF-8 con reemplazo seguro.
+try:
+    if sys.stdout is not None:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if sys.stderr is not None:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 # RIESGO CONOCIDO (supply-chain, documentado aquí porque docs/** está fuera
 # del alcance de este script): el updater hoy solo descarga por HTTPS y no
 # verifica firma. Como mitigación (contrato update-system Fase 1, lado
