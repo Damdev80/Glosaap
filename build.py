@@ -407,3 +407,7 @@ if __name__ == "__main__":
     # y fuera de modo no-interactivo.
     if not args.non_interactive and sys.stdin.isatty():
         input("\nPresiona Enter para salir...")
+
+    # Fail-closed en CI: salir != 0 si el build falló (antes el workflow
+    # marcaba el paso como exitoso aunque no hubiera ZIP).
+    sys.exit(0 if success else 1)

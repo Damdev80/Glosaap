@@ -1,6 +1,8 @@
 # ==================== DEPENDENCIAS PRINCIPALES ====================
-# UI Framework
-flet>=0.27.0,<0.28.0
+# UI Framework (fijado: flet exige flet-desktop de la MISMA versión;
+# un rango permitió mezclar 0.27.x distintos y el exe quedaba cojo)
+flet==0.27.6
+flet-desktop==0.27.6
 
 # Manejo de Excel
 pandas>=2.0.0
