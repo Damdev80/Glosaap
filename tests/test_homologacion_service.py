@@ -299,11 +299,15 @@ class TestHomologacionServiceFileOperations:
     
     def setup_method(self):
         """Setup para cada test"""
+        # Caché class-level: se limpia para que cada test sea hermético
+        # (sin depender del orden de ejecución ni de la red \\MINERVA).
+        HomologacionService._file_cache.clear()
         self.service = HomologacionService()
     
+    @patch.object(HomologacionService, '_get_file_hash', return_value='fakehash')
     @patch('app.core.homologacion_service.os.path.exists')
     @patch('app.core.homologacion_service.pd.read_excel')
-    def test_cargar_archivo_exitoso(self, mock_read_excel, mock_exists):
+    def test_cargar_archivo_exitoso(self, mock_read_excel, mock_exists, mock_hash):
         """Test carga exitosa de archivo"""
         mock_exists.return_value = True
         mock_df = pd.DataFrame({'A': [1, 2], 'B': [3, 4]})
