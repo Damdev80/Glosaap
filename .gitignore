@@ -22,6 +22,9 @@ pip-wheel-metadata/
 venv/
 ENV/
 .venv/
+.venv*/
+htmlcov/
+junit.xml
 
 # ============================
 #   FLET
