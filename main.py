@@ -27,5 +27,38 @@ from app.config.settings import PLAYWRIGHT_BROWSERS_PATH
 from app.ui.app import main
 import flet as ft
 
+
+def _preflight_flet_desktop() -> None:
+    """Verifica el viewer Flet antes de arrancar (solo exe congelado).
+
+    Si flet_desktop no está empaquetado, flet intentaría instalarlo con
+    `sys.executable -m pip install`, que en el exe RE-EJECUTA Glosaap.exe
+    en bucle infinito. Mejor morir limpio con un mensaje visible.
+    """
+    if not getattr(sys, "frozen", False):
+        return
+    try:
+        import flet.version as _fv
+        import flet_desktop.version as _fdv
+
+        assert not _fdv.version or _fdv.version == _fv.version
+    except Exception as e:
+        msg = f"Falta el visor Flet empaquetado (flet_desktop): {e}"
+        try:
+            from app.config.settings import logger
+
+            logger.error(msg)
+        except Exception:
+            pass
+        try:
+            import ctypes
+
+            ctypes.windll.user32.MessageBoxW(0, msg, "Glosaap - Error", 0x10)
+        except Exception:
+            pass
+        sys.exit(1)
+
+
 if __name__ == "__main__":
+    _preflight_flet_desktop()
     ft.app(target=main)

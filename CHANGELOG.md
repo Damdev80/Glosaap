@@ -6,6 +6,16 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.11.20] - 2026-10-22
+
+### 🐛 Correcciones
+- Exe portable: empaquetar `flet_desktop` (`--collect-all`); sin esto flet
+  intentaba `sys.executable -m pip install` y el exe se re-ejecutaba en
+  bucle infinito (decenas de procesos `Glosaap.exe`, uno por segundo).
+- Preflight en `main.py`: si falta el visor Flet en el exe, salida limpia
+  con mensaje en vez del bucle de re-ejecución.
+
+
 ## [0.11.19] - 2026-10-22
 
 ### ✨ Nuevas Características

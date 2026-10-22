@@ -169,6 +169,12 @@ def build_main_executable():
         # Incluir directorios necesarios
         "--add-data", "app;app",
         "--add-data", "assets;assets",
+
+        # Flet busca el viewer en el paquete flet_desktop (import dinámico
+        # que PyInstaller no detecta). Sin esto, flet intenta instalarlo
+        # con `sys.executable -m pip install`, que en el exe congelado
+        # RE-EJECUTA Glosaap.exe en bucle infinito (fork bomb).
+        "--collect-all", "flet_desktop",
         
         # Archivo principal
         "main.py"
