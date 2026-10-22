@@ -103,12 +103,32 @@ def check_requirements():
     """Verifica que PyInstaller esté disponible"""
     try:
         import PyInstaller
-        print("✅ PyInstaller encontrado")
-        return True
+        print(f"✅ PyInstaller encontrado ({PyInstaller.__version__})")
     except ImportError:
         print("❌ PyInstaller no encontrado")
         print("Instala con: pip install pyinstaller")
         return False
+
+    # Precondición del empaquetado: el viewer Flet debe estar instalado en
+    # el entorno de build, o `--collect-all flet_desktop` no recolecta nada
+    # (silencioso) y el exe muere en el preflight. Falla rápido y claro.
+    try:
+        import flet.version as _fv
+        import flet_desktop.version as _fdv
+
+        print(f"✅ flet {_fv.version} + flet_desktop {_fdv.version}")
+        if _fdv.version and _fdv.version != _fv.version:
+            print(
+                f"❌ Versiones flet/flet_desktop no coinciden "
+                f"({_fv.version} vs {_fdv.version}): el exe caería al "
+                f"fallback de pip. Fija ambas a la misma versión."
+            )
+            return False
+    except ImportError as e:
+        print(f"❌ flet_desktop no instalado en el entorno de build: {e}")
+        print("   Instala con: pip install -r requirements.txt")
+        return False
+    return True
 
 def clean_directories():
     """Limpia directorios de builds anteriores"""

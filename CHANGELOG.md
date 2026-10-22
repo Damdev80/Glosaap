@@ -6,6 +6,16 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.11.21] - 2026-10-22
+
+### 🐛 Correcciones
+- Build reproducible: PyInstaller fijado a `6.22.3` en CI y releases (la
+  versión sin fijar del runner no empaquetaba `flet_desktop` y el exe moría
+  en el preflight con "No module named 'flet_desktop'").
+- `build.py` falla rápido si `flet_desktop` falta o difiere de versión en
+  el entorno de build, en vez de producir un exe cojo.
+
+
 ## [0.11.20] - 2026-10-22
 
 ### 🐛 Correcciones

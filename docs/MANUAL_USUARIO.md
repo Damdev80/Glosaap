@@ -68,7 +68,7 @@ Una vez iniciado sesión, verás la pantalla principal con 3 opciones:
 
 ```
 ╔═══════════════════════════════════════════════════════════╗
-║              GLOSAAP - VERSIÓN 0.11.20                   ║
+║              GLOSAAP - VERSIÓN 0.11.21                   ║
 ╠═══════════════════════════════════════════════════════════╣
 ║                                                           ║
 ║  ┌─────────────────────────────────────────────────────┐ ║
@@ -425,7 +425,7 @@ Haz click en "👤 USUARIO" en el dashboard para ver tu información:
 ║                                                            ║
 ║  Correo:         usuario@empresa.com.co                  ║
 ║  Sesión:         Iniciada ✅                             ║
-║  Versión App:    0.11.20                                 ║
+║  Versión App:    0.11.21                                 ║
 ║                                                            ║
 ║  [ ← ATRÁS ]                                              ║
 ║                                                            ║
@@ -657,7 +657,7 @@ Si tienes problemas que no están resueltos en este manual:
 ---
 
 **Última actualización:** Enero 2025  
-**Versión de Glosaap:** 0.11.20+  
+**Versión de Glosaap:** 0.11.21+  
 **Sistema Operativo:** Windows 10/11
 
 ---

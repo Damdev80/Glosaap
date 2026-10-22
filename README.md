@@ -311,7 +311,7 @@ Click en el número de versión en la esquina inferior izquierda del dashboard.
 ### `app/config/settings.py`
 ```python
 # Versión de la aplicación
-APP_VERSION = "0.11.20"
+APP_VERSION = "0.11.21"
 
 # Rutas de red
 NETWORK_PATHS = {
