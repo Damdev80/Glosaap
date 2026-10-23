@@ -6,6 +6,18 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.11.22] - 2026-10-23
+
+### ✨ Nuevas Características
+- Homologación Sanitas en dos vías: INSUMOS por cascada CUM/IUM RDA/
+  CODIGO PRODUCTO (`sanitas_homologador.xlsx`); resto por homologador
+  normal (`sanitas_homologador_2.xlsx`, prestador→homólogo).
+- Código de objeción Sanitas de 6 caracteres (GENERAL 1-6 → FA/TA/SO/AU/
+  CO/CL, ESPECIFICO/APLICACIÓN a 2 dígitos, APLICACIÓN vacía → "01").
+- Observación Sanitas vacía → "MVC EN <procedimiento>".
+- Homologación Sanitas por columna CODIGO PROCEDIMIENTO PRESTADOR.
+
+
 ## [0.11.21] - 2026-10-22
 
 ### 🐛 Correcciones
