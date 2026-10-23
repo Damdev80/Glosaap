@@ -106,8 +106,10 @@ INSUMOS_CUM_CANDIDATES = ["CUM"]
 INSUMOS_IUM_CANDIDATES = ["IUM RDA", "IUMRDA", "IUM_RDA", "IUM", "RDA"]
 INSUMOS_PRODUCTO_CANDIDATES = ["CODIGO PRODUCTO", "CÓDIGO PRODUCTO", "COD PRODUCTO"]
 
-# Homologador normal (settings.HOMOLOGADOR_FILES["sanitas"], layout estilo
-# mutualser) para filas NO insumos.
+# Homologador normal (settings.HOMOLOGADOR_FILES["sanitas"]:
+# sanitas_homologador_2.xlsx con columnas "CODIGO PROCEDIMIENTO PRESTADOR"
+# / "CODIGO HOMOLOGO") para filas NO insumos. Se acepta layout estilo
+# mutualser (ERP/DGH) como fallback.
 HOMOLOGADOR_ERP_COL = "Código Servicio de la ERP"
 HOMOLOGADOR_DGH_COL = "Código producto en DGH"
 HOMOLOGADOR_COD_FACT_COL = "COD_SERV_FACT"
@@ -382,11 +384,20 @@ class SanitasProcessor(BaseProcessor):
             return {}
 
         erp_col = self._find_homolog_column(
-            keywords=["codigo", "servicio", "erp"], exact_match=HOMOLOGADOR_ERP_COL
+            keywords=["codigo", "procedimiento", "prestador"],
+            exact_match="CODIGO PROCEDIMIENTO PRESTADOR",
         )
         dgh_col = self._find_homolog_column(
-            keywords=["codigo", "dgh"], exact_match=HOMOLOGADOR_DGH_COL
+            keywords=["codigo", "homologo"], exact_match="CODIGO HOMOLOGO"
         )
+        if erp_col is None or dgh_col is None:
+            # Fallback: layout estilo mutualser (ERP/DGH).
+            erp_col = self._find_homolog_column(
+                keywords=["codigo", "servicio", "erp"], exact_match=HOMOLOGADOR_ERP_COL
+            )
+            dgh_col = self._find_homolog_column(
+                keywords=["codigo", "dgh"], exact_match=HOMOLOGADOR_DGH_COL
+            )
         if erp_col is None or dgh_col is None:
             self.warnings.append(
                 "Homologador Sanitas sin columnas ERP/DGH esperadas; se continúa sin homologar"

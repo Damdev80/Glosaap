@@ -191,9 +191,8 @@ class TestHomologate:
     def test_homologacion_solo_insumos(self, tmp_path):
         hom = pd.DataFrame(
             {
-                "Código Servicio de la ERP": ["SERV001"],
-                "Código producto en DGH": ["HOM001"],
-                "COD_SERV_FACT": ["HOM001"],
+                "CODIGO PROCEDIMIENTO PRESTADOR": ["SERV001"],
+                "CODIGO HOMOLOGO": ["HOM001"],
             }
         )
         hom_path = str(tmp_path / "hom.xlsx")
@@ -211,16 +210,31 @@ class TestHomologate:
             ],
         )
         result = proc.homologate(proc.extract_data([path]))
-        # Vía normal (archivo B): matchea ERP aunque no sea insumo.
+        # Vía normal (archivo B): matchea prestador aunque no sea insumo.
         assert result.loc[0, "SLNSERPRO"] == "HOM001"
         assert result.loc[1, "SLNSERPRO"] == "SERV999"
 
-    def test_insumos_no_usa_homologador_normal(self, tmp_path):
+    def test_homologador_layout_mutualser_fallback(self, tmp_path):
         hom = pd.DataFrame(
             {
                 "Código Servicio de la ERP": ["SERV001"],
                 "Código producto en DGH": ["HOM001"],
                 "COD_SERV_FACT": ["HOM001"],
+            }
+        )
+        hom_path = str(tmp_path / "hom.xlsx")
+        hom.to_excel(hom_path, index=False)
+        proc = SanitasProcessor(homologador_path=hom_path)
+        assert proc.load_homologador() is True
+        path = _xlsx(tmp_path / "s.xlsx", [_fila_base()])
+        result = proc.homologate(proc.extract_data([path]))
+        assert result.loc[0, "SLNSERPRO"] == "HOM001"
+
+    def test_insumos_no_usa_homologador_normal(self, tmp_path):
+        hom = pd.DataFrame(
+            {
+                "CODIGO PROCEDIMIENTO PRESTADOR": ["SERV001"],
+                "CODIGO HOMOLOGO": ["HOM001"],
             }
         )
         hom_path = str(tmp_path / "hom.xlsx")
