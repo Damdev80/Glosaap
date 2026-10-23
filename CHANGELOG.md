@@ -6,6 +6,16 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.11.23] - 2026-10-23
+
+### 🐛 Correcciones
+- Sanitas: columna prestador se resuelve por contenido (PROCEDIMIENTO +
+  PRESTADOR, tolerante a tildes/orden) en vez de literal exacto; ya no cae
+  en `CODIGO PROCEDIMIENTO` solo.
+- Sanitas: columnas numéricas con vacíos (floats 7.0/1.0 de Excel) paddeden
+  a "07"/"01", no "70"/"10".
+
+
 ## [0.11.22] - 2026-10-23
 
 ### ✨ Nuevas Características
