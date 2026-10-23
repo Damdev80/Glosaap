@@ -9,8 +9,10 @@ Cada fila representa una glosa con:
   cero a la izquierda; "01" si vacía). GENERAL numérico 1-6 se mapea a
   FA/TA/SO/AU/CO/CL. Ej: 2 + 6 + (vacía) -> "TA0601".
 - Observación = columna OBSERVACIONES; si vacía -> "MVC EN <procedimiento>".
-- Homologación por columna CODIGO PROCEDIMIENTO PRESTADOR (solo INSUMOS
-  homologan vía dict; el resto conserva el código original).
+- Homologación de CODIGO PROCEDIMIENTO PRESTADOR en dos vías: filas INSUMOS
+  por cascada en sanitas_homologador.xlsx (CUM/IUM RDA/CODIGO PRODUCTO);
+  resto por homologador normal sanitas_homologador_2.xlsx (ERP→DGH).
+  Sin match se conserva el original.
 - Fecha de objeción = fecha de recepción del correo (email_date).
 
 El resultado homologado se guarda en SANITAS_GLOSAS_<ts>.xlsx y las
@@ -95,11 +97,17 @@ OBSERVACIONES_CANDIDATES = [
     "JUSTIFICACIÓN",
 ]
 
-# TODO (confirmar con el usuario): homologador "sanitas_homologador.xlsx"
-# (settings.HOMOLOGADOR_FILES["sanitas"]) con layout estilo mutualser
-# (columnas "Código Servicio de la ERP" / "Código producto en DGH" /
-# "COD_SERV_FACT"). Solo filas INSUMOS homologan vía dict; el resto
-# conserva el código original.
+# Homologador de insumos "sanitas_homologador.xlsx"
+# (settings.HOMOLOGADOR_FILES["sanitas_insumos"]) con columnas literales
+# "CUM" / "IUM RDA" / "CODIGO PRODUCTO". Solo filas INSUMOS homologan por
+# cascada CUM -> CODIGO PRODUCTO, IUM RDA -> CODIGO PRODUCTO, o el propio
+# CODIGO PRODUCTO si la clave aparece ahí.
+INSUMOS_CUM_CANDIDATES = ["CUM"]
+INSUMOS_IUM_CANDIDATES = ["IUM RDA", "IUMRDA", "IUM_RDA", "IUM", "RDA"]
+INSUMOS_PRODUCTO_CANDIDATES = ["CODIGO PRODUCTO", "CÓDIGO PRODUCTO", "COD PRODUCTO"]
+
+# Homologador normal (settings.HOMOLOGADOR_FILES["sanitas"], layout estilo
+# mutualser) para filas NO insumos.
 HOMOLOGADOR_ERP_COL = "Código Servicio de la ERP"
 HOMOLOGADOR_DGH_COL = "Código producto en DGH"
 HOMOLOGADOR_COD_FACT_COL = "COD_SERV_FACT"
@@ -130,10 +138,16 @@ GENUSUARIO4_FIJO = 1103858268
 class SanitasProcessor(BaseProcessor):
     """Procesador de archivos de glosas de Sanitas EPS."""
 
-    def __init__(self, homologador_path: str | None = None):
+    def __init__(self, homologador_path: str | None = None, homologador_insumos_path: str | None = None):
         super().__init__(homologador_path or "")
         self.sanitas_df: pd.DataFrame | None = None
         self._last_objeciones_df: pd.DataFrame | None = None
+        self.homologador_insumos_path = homologador_insumos_path or ""
+        self.insumos_df: pd.DataFrame | None = None
+        # Dicts de la vía insumos (claves flexibles -> CODIGO PRODUCTO).
+        self._cum_dict: dict[str, str] = {}
+        self._ium_dict: dict[str, str] = {}
+        self._producto_dict: dict[str, str] = {}
 
     # ==================== HOMOLOGADOR ====================
 
@@ -157,6 +171,74 @@ class SanitasProcessor(BaseProcessor):
         except Exception as e:
             self.errors.append(f"Error al cargar homologador: {str(e)}")
             logger.error("Error cargando homologador Sanitas: %s", e)
+            return False
+
+    def load_homologador_insumos(self) -> bool:
+        """Carga sanitas_homologador.xlsx (CUM / IUM RDA / CODIGO PRODUCTO).
+
+        Precomputa los 3 dicts de la cascada INSUMOS con claves flexibles.
+        Sin el archivo se retorna False (el llamador decide si es fatal).
+        """
+        if not self.homologador_insumos_path:
+            self.errors.append("No se especificó ruta de homologador de insumos")
+            return False
+        if not os.path.exists(self.homologador_insumos_path):
+            self.errors.append(
+                "Archivo de homologador de insumos no encontrado: "
+                f"{self.homologador_insumos_path}"
+            )
+            logger.error(
+                "Homologador insumos Sanitas no encontrado: %s",
+                self.homologador_insumos_path,
+            )
+            return False
+        try:
+            df = pd.read_excel(self.homologador_insumos_path)
+            df.columns = [str(c).strip() for c in df.columns]
+            norm = {str(c).strip().upper(): c for c in df.columns}
+
+            def _col(cands: list[str], logical: str) -> str | None:
+                for cand in cands:
+                    if cand.upper() in norm:
+                        return norm[cand.upper()]
+                self.errors.append(
+                    f"Homologador insumos sin columna {logical} "
+                    f"(candidatas: {', '.join(cands)})"
+                )
+                return None
+
+            col_cum = _col(INSUMOS_CUM_CANDIDATES, "CUM")
+            col_ium = _col(INSUMOS_IUM_CANDIDATES, "IUM RDA")
+            col_prod = _col(INSUMOS_PRODUCTO_CANDIDATES, "CODIGO PRODUCTO")
+            if col_cum is None or col_ium is None or col_prod is None:
+                return False
+
+            cum: dict[str, str] = {}
+            ium: dict[str, str] = {}
+            prod: dict[str, str] = {}
+            for _, row in df.iterrows():
+                producto = "" if pd.isna(row[col_prod]) else str(row[col_prod]).strip()
+                if producto:
+                    prod.setdefault(self._clave_lookup(producto), producto)
+                for col, dest in ((col_cum, cum), (col_ium, ium)):
+                    clave = self._clave_lookup(row[col])
+                    if clave and producto:
+                        dest.setdefault(clave, producto)
+
+            self.insumos_df = df
+            self._cum_dict = cum
+            self._ium_dict = ium
+            self._producto_dict = prod
+            logger.info(
+                "Homologador insumos Sanitas cargado: %s CUM, %s IUM, %s productos",
+                len(cum),
+                len(ium),
+                len(prod),
+            )
+            return True
+        except Exception as e:
+            self.errors.append(f"Error al cargar homologador de insumos: {str(e)}")
+            logger.error("Error cargando homologador insumos Sanitas: %s", e)
             return False
 
     # ==================== TEMPLATE METHOD ====================
@@ -348,6 +430,19 @@ class SanitasProcessor(BaseProcessor):
         return "".join(ch for ch in str(valor) if ch.isdigit())
 
     @staticmethod
+    def _clave_lookup(valor: Any) -> str:
+        """Clave flexible para la cascada de insumos.
+
+        Strip + upper + sin espacios/puntos/guiones, para que formatos
+        como "1 234", "1.234" o "1-234" matcheen igual.
+        """
+        if pd.isna(valor):
+            return ""
+        return "".join(
+            ch for ch in str(valor).strip().upper() if ch not in (" ", ".", "-")
+        )
+
+    @staticmethod
     def _normalizar_procedimiento(valor: Any) -> str:
         if pd.isna(valor):
             return ""
@@ -360,9 +455,10 @@ class SanitasProcessor(BaseProcessor):
 
         Calcula por fila: CRNCXC, CRNCONOBJ (6 caracteres: GENERAL mapeado
         + ESPECIFICO 2 dígitos + APLICACIÓN 2 dígitos), CRDOBSERV (con
-        fallback "MVC EN <procedimiento>" si vacía), SLNSERPRO (homologado
-        solo para INSUMOS vía CODIGO PROCEDIMIENTO PRESTADOR, resto conserva
-        original) y CROVALOBJ.
+        fallback "MVC EN <procedimiento>" si vacía), SLNSERPRO (INSUMOS por
+        cascada CUM/IUM/CODIGO PRODUCTO del archivo de insumos; resto por
+        homologador normal; si nada matchea conserva el original) y
+        CROVALOBJ.
         """
         df: pd.DataFrame | None = None
         if isinstance(data, dict):
@@ -440,24 +536,33 @@ class SanitasProcessor(BaseProcessor):
 
         work["CRDOBSERV"] = work.apply(_observacion, axis=1)
 
-        # SLNSERPRO: solo INSUMOS homologa vía dict; resto conserva original.
+        # SLNSERPRO: INSUMOS por cascada (CUM -> producto, IUM RDA ->
+        # producto, producto directo); resto por homologador normal; si nada
+        # matchea se conserva el original.
         sln: list[str] = []
         homologados = 0
         for _, row in work.iterrows():
             nombre_norm = self._normalizar_procedimiento(row[col_nombre])
             original = self._normalize_code(row[col_cod_serv]) if col_cod_serv else ""
-            if (
-                nombre_norm == INSUMOS_PROCEDIMIENTO_LABEL
-                and original
-                and original in homolog_dict
-            ):
-                sln.append(homolog_dict[original])
+            nuevo = ""
+            if nombre_norm == INSUMOS_PROCEDIMIENTO_LABEL and original:
+                clave = self._clave_lookup(original)
+                if clave in self._cum_dict:
+                    nuevo = self._cum_dict[clave]
+                elif clave in self._ium_dict:
+                    nuevo = self._ium_dict[clave]
+                elif clave in self._producto_dict:
+                    nuevo = self._producto_dict[clave]
+            elif original and original in homolog_dict:
+                nuevo = homolog_dict[original]
+            if nuevo:
+                sln.append(nuevo)
                 homologados += 1
             else:
                 sln.append(original)
         work["SLNSERPRO"] = sln
         logger.info(
-            "Sanitas homologación: %s filas, %s homologadas (solo insumos)",
+            "Sanitas homologación: %s filas, %s homologadas",
             len(work),
             homologados,
         )
@@ -648,6 +753,19 @@ class SanitasProcessor(BaseProcessor):
         else:
             self.warnings.append("Sin archivo de homologación; se continúa sin homologar")
             logger.warning("Sanitas sin archivo de homologación")
+
+        # Homologador de insumos (CUM/IUM): si falta, se avisa y las filas
+        # INSUMOS conservan el original (no es fatal).
+        if self.homologador_insumos_path:
+            logger.info("Sanitas cargando homologador de insumos")
+            n_err = len(self.errors)
+            if not self.load_homologador_insumos():
+                self.warnings.extend(self.errors[n_err:])
+                del self.errors[n_err:]
+                logger.warning("Sanitas sin homologador de insumos")
+        else:
+            self.warnings.append("Sin homologador de insumos; INSUMOS conserva original")
+            logger.warning("Sanitas sin homologador de insumos")
 
         xlsx = self.identify_files(file_paths or [])
         if not xlsx:

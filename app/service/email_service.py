@@ -54,17 +54,30 @@ class EmailService:
             "outputs/sanitas",
         )
         self.sanitas_output_dir = sanitas_output
-        sanitas_homologador = HOMOLOGADOR_FILES.get("sanitas", "")
+        sanitas_homologador = self._resolve_homologador("sanitas", "Sanitas")
+        sanitas_insumos = self._resolve_homologador("sanitas_insumos", "Sanitas insumos")
+        self.sanitas_processor = SanitasProcessor(
+            homologador_path=sanitas_homologador,
+            homologador_insumos_path=sanitas_insumos,
+        )
+        logger.info("SANITAS guardara en: %s", sanitas_output)
+
+    def _resolve_homologador(self, key: str, label: str) -> str:
+        """Resuelve ruta de homologador con fallback a "" si no existe.
+
+        Fuente única: app/config/settings.py (HOMOLOGADOR_FILES).
+        """
+        path = HOMOLOGADOR_FILES.get(key, "")
         # Si el homologador de red no existe (entorno local/tests), iniciar sin
         # homologador para permitir procesamiento sin homologacion.
-        if sanitas_homologador and not os.path.exists(sanitas_homologador):
+        if path and not os.path.exists(path):
             logger.warning(
-                "Homologador Sanitas no encontrado (%s); se continua sin homologacion",
-                sanitas_homologador,
+                "Homologador %s no encontrado (%s); se continua sin homologacion",
+                label,
+                path,
             )
-            sanitas_homologador = ""
-        self.sanitas_processor = SanitasProcessor(homologador_path=sanitas_homologador)
-        logger.info("SANITAS guardara en: %s", sanitas_output)
+            path = ""
+        return path
 
     def _get_output_path(self, network_path, fallback_path):
         """
@@ -661,15 +674,11 @@ class EmailService:
 
         # Asegurar procesador disponible (compatibilidad con instancias antiguas)
         if not hasattr(self, 'sanitas_processor') or self.sanitas_processor is None:
-            sanitas_homologador = HOMOLOGADOR_FILES.get("sanitas", "")
-            if sanitas_homologador and not os.path.exists(sanitas_homologador):
-                logger.warning(
-                    "Homologador Sanitas no encontrado (%s); se continua sin homologacion",
-                    sanitas_homologador,
-                )
-                sanitas_homologador = ""
+            sanitas_homologador = self._resolve_homologador("sanitas", "Sanitas")
+            sanitas_insumos = self._resolve_homologador("sanitas_insumos", "Sanitas insumos")
             self.sanitas_processor = SanitasProcessor(
-                homologador_path=sanitas_homologador
+                homologador_path=sanitas_homologador,
+                homologador_insumos_path=sanitas_insumos,
             )
         if not hasattr(self, 'sanitas_output_dir') or not self.sanitas_output_dir:
             self.sanitas_output_dir = self._get_output_path(

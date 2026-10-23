@@ -203,13 +203,37 @@ class TestHomologate:
         path = _xlsx(
             tmp_path / "s.xlsx",
             [
-                _fila_base(**{"NOMBRE PROCEDIMIENTO": "insumos y medicamentos intrahospitalarios"}),
                 _fila_base(**{"NOMBRE PROCEDIMIENTO": "CONSULTA MEDICA"}),
+                _fila_base(**{
+                    "NOMBRE PROCEDIMIENTO": "OTRO SERVICIO",
+                    "CODIGO PROCEDIMIENTO PRESTADOR": "SERV999",
+                }),
             ],
         )
         result = proc.homologate(proc.extract_data([path]))
+        # Vía normal (archivo B): matchea ERP aunque no sea insumo.
         assert result.loc[0, "SLNSERPRO"] == "HOM001"
-        assert result.loc[1, "SLNSERPRO"] == "SERV001"
+        assert result.loc[1, "SLNSERPRO"] == "SERV999"
+
+    def test_insumos_no_usa_homologador_normal(self, tmp_path):
+        hom = pd.DataFrame(
+            {
+                "Código Servicio de la ERP": ["SERV001"],
+                "Código producto en DGH": ["HOM001"],
+                "COD_SERV_FACT": ["HOM001"],
+            }
+        )
+        hom_path = str(tmp_path / "hom.xlsx")
+        hom.to_excel(hom_path, index=False)
+        proc = SanitasProcessor(homologador_path=hom_path)
+        assert proc.load_homologador() is True
+        path = _xlsx(
+            tmp_path / "s.xlsx",
+            [_fila_base(**{"NOMBRE PROCEDIMIENTO": "insumos y medicamentos intrahospitalarios"})],
+        )
+        result = proc.homologate(proc.extract_data([path]))
+        # INSUMOS solo va por cascada (archivo A ausente): conserva original.
+        assert result.loc[0, "SLNSERPRO"] == "SERV001"
 
     def test_columna_prestador_canonica(self, tmp_path, processor):
         path = _xlsx(
@@ -235,6 +259,101 @@ class TestHomologate:
         leido = pd.read_excel(out)
         assert "_FACTURA" not in leido.columns
         assert "fecha_correo" not in leido.columns
+
+
+def _homologador_insumos(path, filas=None):
+    df = pd.DataFrame(
+        filas
+        if filas is not None
+        else {
+            "CUM": ["19965432", "OTROCUM"],
+            "IUM RDA": ["IUM001", "IUM002"],
+            "CODIGO PRODUCTO": ["PROD100", "PROD200"],
+        }
+    )
+    df.to_excel(path, index=False)
+    return str(path)
+
+
+@pytest.fixture
+def insumos_path(tmp_path):
+    return _homologador_insumos(tmp_path / "insumos.xlsx")
+
+
+@pytest.fixture
+def proc_insumos(insumos_path):
+    proc = SanitasProcessor(homologador_path="", homologador_insumos_path=insumos_path)
+    assert proc.load_homologador_insumos() is True
+    return proc
+
+
+class TestHomologacionInsumos:
+    INSUMOS = "INSUMOS Y MEDICAMENTOS INTRAHOSPITALARIOS"
+
+    def _fila_insumo(self, codigo, **kwargs):
+        fila = _fila_base(**kwargs)
+        fila["NOMBRE PROCEDIMIENTO"] = self.INSUMOS
+        fila["CODIGO PROCEDIMIENTO PRESTADOR"] = codigo
+        return fila
+
+    def _homologar(self, proc, tmp_path, filas, nombre="i.xlsx"):
+        path = _xlsx(tmp_path / nombre, filas)
+        return proc.homologate(proc.extract_data([path]))
+
+    def test_cum_trae_producto(self, tmp_path, proc_insumos):
+        result = self._homologar(proc_insumos, tmp_path, [self._fila_insumo("19965432")])
+        assert result.loc[0, "SLNSERPRO"] == "PROD100"
+
+    def test_ium_trae_producto(self, tmp_path, proc_insumos):
+        result = self._homologar(proc_insumos, tmp_path, [self._fila_insumo("IUM002")])
+        assert result.loc[0, "SLNSERPRO"] == "PROD200"
+
+    def test_prioridad_cum_sobre_ium(self, tmp_path):
+        path = _homologador_insumos(
+            tmp_path / "pri.xlsx",
+            {
+                "CUM": ["CLAVE1", "OTRO"],
+                "IUM RDA": ["OTROIUM", "CLAVE1"],
+                "CODIGO PRODUCTO": ["PROD_CUM", "PROD_IUM"],
+            },
+        )
+        proc = SanitasProcessor(homologador_path="", homologador_insumos_path=path)
+        assert proc.load_homologador_insumos() is True
+        result = self._homologar(proc, tmp_path, [self._fila_insumo("CLAVE1")])
+        assert result.loc[0, "SLNSERPRO"] == "PROD_CUM"
+
+    def test_producto_directo(self, tmp_path, proc_insumos):
+        result = self._homologar(proc_insumos, tmp_path, [self._fila_insumo("PROD200")])
+        assert result.loc[0, "SLNSERPRO"] == "PROD200"
+
+    def test_no_encontrado_conserva_original(self, tmp_path, proc_insumos):
+        result = self._homologar(proc_insumos, tmp_path, [self._fila_insumo("NOEXISTE")])
+        assert result.loc[0, "SLNSERPRO"] == "NOEXISTE"
+
+    def test_clave_flexible_separadores(self, tmp_path, proc_insumos):
+        result = self._homologar(
+            proc_insumos, tmp_path, [self._fila_insumo("199-654.32")]
+        )
+        assert result.loc[0, "SLNSERPRO"] == "PROD100"
+
+    def test_sin_archivo_insumos_conserva(self, tmp_path):
+        proc = SanitasProcessor(homologador_path="", homologador_insumos_path="")
+        result = self._homologar(proc, tmp_path, [self._fila_insumo("19965432")])
+        assert result.loc[0, "SLNSERPRO"] == "19965432"
+
+    def test_no_insumos_no_usa_cascada(self, tmp_path, proc_insumos):
+        fila = _fila_base(**{"CODIGO PROCEDIMIENTO PRESTADOR": "19965432"})
+        result = self._homologar(proc_insumos, tmp_path, [fila])
+        # No es insumo: aunque la clave está en CUM, no aplica cascada y
+        # sin archivo B conserva el original.
+        assert result.loc[0, "SLNSERPRO"] == "19965432"
+
+    def test_columnas_faltantes_error_explicito(self, tmp_path):
+        bad = str(tmp_path / "bad.xlsx")
+        pd.DataFrame({"OTRA": [1]}).to_excel(bad, index=False)
+        proc = SanitasProcessor(homologador_path="", homologador_insumos_path=bad)
+        assert proc.load_homologador_insumos() is False
+        assert any("CUM" in e or "IUM" in e or "PRODUCTO" in e for e in proc.errors)
 
 
 class TestObjeciones:
@@ -308,7 +427,11 @@ class TestWiring:
         assert "sanitas_output" in settings.NETWORK_PATHS
         assert settings.NETWORK_PATHS["sanitas_output"].endswith("SANITAS")
         assert "sanitas" in settings.HOMOLOGADOR_FILES
-        assert settings.HOMOLOGADOR_FILES["sanitas"].endswith("sanitas_homologador.xlsx")
+        assert settings.HOMOLOGADOR_FILES["sanitas"].endswith("sanitas_homologador_2.xlsx")
+        assert "sanitas_insumos" in settings.HOMOLOGADOR_FILES
+        assert settings.HOMOLOGADOR_FILES["sanitas_insumos"].endswith(
+            "sanitas_homologador.xlsx"
+        )
         assert settings.get_output_dir("Sanitas") == settings.NETWORK_PATHS["sanitas_output"] \
             if settings.is_network_available() else isinstance(settings.get_output_dir("Sanitas"), str)
 

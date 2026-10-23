@@ -61,7 +61,10 @@ NETWORK_PATHS = {
 HOMOLOGADOR_FILES = {
     "mutualser": os.path.join(NETWORK_PATHS["homologador"], "mutualser_homologacion.xlsx"),
     "coosalud": os.path.join(NETWORK_PATHS["homologador"], "coosalud_homologacion.xlsx"),
-    "sanitas": os.path.join(NETWORK_PATHS["homologador"], "sanitas_homologador.xlsx"),
+    # Sanitas usa DOS homologadores: el normal (vía 2, layout ERP→DGH
+    # estilo Mutualser) y el de insumos (CUM / IUM RDA / CODIGO PRODUCTO).
+    "sanitas": os.path.join(NETWORK_PATHS["homologador"], "sanitas_homologador_2.xlsx"),
+    "sanitas_insumos": os.path.join(NETWORK_PATHS["homologador"], "sanitas_homologador.xlsx"),
 }
 
 # ==================== CONFIGURACIÓN IMAP ====================
