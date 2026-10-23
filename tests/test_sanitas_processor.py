@@ -2,8 +2,12 @@
 
 Cubre el SPEC confirmado:
 - CRNCXC FC0000+numero vía _formatear_crncxc.
-- CRNCONOBJ = concatenación sin separador de los 3 códigos.
-- OBSERVACIONES con fallback MVC solo si es tarifa (TARIFAS_GENERAL_CODES).
+- CRNCONOBJ de 6 caracteres: GENERAL numérico 1-6 mapeado a FA/TA/SO/AU/CO/CL
+  (letras se conservan) + ESPECIFICO 2 dígitos (cero a la izquierda) +
+  APLICACIÓN 2 dígitos (cero a la izquierda; "01" si vacía).
+  Ej: GENERAL=2, ESPECIFICO=6, APLICACIÓN vacía -> "TA0601".
+- OBSERVACIONES vacía -> "MVC EN <NOMBRE PROCEDIMIENTO>".
+- Homologación por CODIGO PROCEDIMIENTO PRESTADOR (solo insumos).
 - CROOBSERV "REG, GLOSA SEGÚN RAD N. <fecha>" DD/MM/AAAA.
 - CRNCLAOBJ siempre vacía; CROFECOBJ = fecha del correo.
 - Solo .xlsx (PDF ignorado); un xlsx por correo.
@@ -19,11 +23,7 @@ from app.config import settings
 from app.config.eps_config import get_eps_by_name
 from app.service.email_service import EmailService
 from app.service.processors import SanitasProcessor
-from app.service.processors.sanitas_processor import (
-    INSUMOS_PROCEDIMIENTO_LABEL,
-    OBJECIONES_COLUMNS,
-    TARIFAS_GENERAL_CODES,
-)
+from app.service.processors.sanitas_processor import OBJECIONES_COLUMNS
 
 EMAIL_DATE = "2026-03-10 08:00:00"
 
@@ -33,7 +33,7 @@ def _fila_base(**kwargs):
         "NUMERO DE FACTURA": "12345",
         "VALOR GLOSADO": 1500.50,
         "NOMBRE PROCEDIMIENTO": "CONSULTA MEDICA",
-        "CODIGO SERVICIO": "SERV001",
+        "CODIGO PROCEDIMIENTO PRESTADOR": "SERV001",
         "CODIGO CONCEPTO GENERAL": "4",
         "CODIGO CONCEPTO ESPECIFICO": "30",
         "CODIGO CONCEPTO APLICACIÓN": "2",
@@ -92,9 +92,10 @@ class TestHomologate:
         result = processor.homologate(processor.extract_data([xlsx_simple]))
         assert result.loc[0, "CRNCXC"] == "FC000012345"
 
-    def test_codigo_concatenado_sin_separador(self, processor, xlsx_simple):
+    def test_codigo_seis_caracteres(self, processor, xlsx_simple):
         result = processor.homologate(processor.extract_data([xlsx_simple]))
-        assert result.loc[0, "CRNCONOBJ"] == "4302"
+        # GENERAL "4" -> AU, ESPECIFICO "30", APLICACIÓN "2" -> "02".
+        assert result.loc[0, "CRNCONOBJ"] == "AU3002"
 
     def test_codigo_con_vacios(self, tmp_path, processor):
         path = _xlsx(
@@ -102,34 +103,78 @@ class TestHomologate:
             [_fila_base(**{"CODIGO CONCEPTO ESPECIFICO": "", "CODIGO CONCEPTO APLICACIÓN": None})],
         )
         result = processor.homologate(processor.extract_data([path]))
-        assert result.loc[0, "CRNCONOBJ"] == "4"
+        # AU + "00" + "01".
+        assert result.loc[0, "CRNCONOBJ"] == "AU0001"
+
+    def test_mapeo_general_numerico(self, tmp_path, processor):
+        filas = [
+            _fila_base(**{
+                "CODIGO CONCEPTO GENERAL": str(n),
+                "CODIGO CONCEPTO ESPECIFICO": 6,
+                "CODIGO CONCEPTO APLICACIÓN": None,
+            })
+            for n in (1, 2, 3, 4, 5, 6)
+        ]
+        path = _xlsx(tmp_path / "nums.xlsx", filas)
+        result = processor.homologate(processor.extract_data([path]))
+        assert result["CRNCONOBJ"].tolist() == [
+            "FA0601",
+            "TA0601",
+            "SO0601",
+            "AU0601",
+            "CO0601",
+            "CL0601",
+        ]
+        assert all(len(c) == 6 for c in result["CRNCONOBJ"])
+
+    def test_ejemplo_usuario_ta0601(self, tmp_path, processor):
+        path = _xlsx(
+            tmp_path / "e.xlsx",
+            [_fila_base(**{
+                "CODIGO CONCEPTO GENERAL": 2,
+                "CODIGO CONCEPTO ESPECIFICO": 6,
+                "CODIGO CONCEPTO APLICACIÓN": "",
+            })],
+        )
+        result = processor.homologate(processor.extract_data([path]))
+        assert result.loc[0, "CRNCONOBJ"] == "TA0601"
+
+    def test_general_letras_se_conservan(self, tmp_path, processor):
+        path = _xlsx(
+            tmp_path / "l.xlsx",
+            [_fila_base(**{
+                "CODIGO CONCEPTO GENERAL": "au",
+                "CODIGO CONCEPTO ESPECIFICO": "01",
+                "CODIGO CONCEPTO APLICACIÓN": "",
+            })],
+        )
+        result = processor.homologate(processor.extract_data([path]))
+        assert result.loc[0, "CRNCONOBJ"] == "AU0101"
 
     def test_observacion_conserva_valor(self, processor, xlsx_simple):
         result = processor.homologate(processor.extract_data([xlsx_simple]))
         assert result.loc[0, "CRDOBSERV"] == "Soporte incompleto"
 
-    def test_mvc_no_dispara_con_set_vacio(self, tmp_path, processor):
-        assert TARIFAS_GENERAL_CODES == ()
+    def test_observacion_vacia_mvc_en_procedimiento(self, tmp_path, processor):
         path = _xlsx(tmp_path / "m.xlsx", [_fila_base(OBSERVACIONES="")])
         result = processor.homologate(processor.extract_data([path]))
-        assert result.loc[0, "CRDOBSERV"] == ""
+        assert result.loc[0, "CRDOBSERV"] == "MVC EN CONSULTA MEDICA"
 
-    def test_mvc_solo_si_es_tarifa(self, tmp_path, processor, monkeypatch):
-        import app.service.processors.sanitas_processor as mod
-
-        monkeypatch.setattr(mod, "TARIFAS_GENERAL_CODES", ("4",))
+    def test_observacion_vacia_sin_distincion_general(self, tmp_path, processor):
         path = _xlsx(
             tmp_path / "m.xlsx",
             [
                 _fila_base(OBSERVACIONES=""),
                 _fila_base(OBSERVACIONES="", **{"CODIGO CONCEPTO GENERAL": "5"}),
+                _fila_base(OBSERVACIONES="  "),
                 _fila_base(OBSERVACIONES="Ya observado"),
             ],
         )
         result = processor.homologate(processor.extract_data([path]))
-        assert result.loc[0, "CRDOBSERV"] == "MVC"
-        assert result.loc[1, "CRDOBSERV"] == ""
-        assert result.loc[2, "CRDOBSERV"] == "Ya observado"
+        assert result.loc[0, "CRDOBSERV"] == "MVC EN CONSULTA MEDICA"
+        assert result.loc[1, "CRDOBSERV"] == "MVC EN CONSULTA MEDICA"
+        assert result.loc[2, "CRDOBSERV"] == "MVC EN CONSULTA MEDICA"
+        assert result.loc[3, "CRDOBSERV"] == "Ya observado"
 
     def test_falta_columna_error_explicito(self, tmp_path, processor):
         df = pd.DataFrame([{"OTRA": 1, "VALOR": 2}])
@@ -166,8 +211,20 @@ class TestHomologate:
         assert result.loc[0, "SLNSERPRO"] == "HOM001"
         assert result.loc[1, "SLNSERPRO"] == "SERV001"
 
-    def test_sin_homologador_conserva_original(self, processor, xlsx_simple):
-        result = processor.homologate(processor.extract_data([xlsx_simple]))
+    def test_columna_prestador_canonica(self, tmp_path, processor):
+        path = _xlsx(
+            tmp_path / "c.xlsx",
+            [_fila_base(**{"CODIGO PROCEDIMIENTO PRESTADOR": "PREST123"})],
+        )
+        result = processor.homologate(processor.extract_data([path]))
+        assert result.loc[0, "SLNSERPRO"] == "PREST123"
+
+    def test_alias_legado_codigo_servicio(self, tmp_path, processor):
+        fila = _fila_base()
+        del fila["CODIGO PROCEDIMIENTO PRESTADOR"]
+        fila["CODIGO SERVICIO"] = "SERV001"
+        path = _xlsx(tmp_path / "a.xlsx", [fila])
+        result = processor.homologate(processor.extract_data([path]))
         assert result.loc[0, "SLNSERPRO"] == "SERV001"
 
     def test_export_sin_columnas_internas(self, tmp_path, processor, xlsx_simple):
@@ -220,8 +277,8 @@ class TestObjeciones:
         detalle = self._detalle(processor, path)
         obj = processor._build_objeciones_df(detalle, EMAIL_DATE)
         assert len(obj) == 1
-        # "01" numérico de Excel se normaliza a "1" vía _normalize_code.
-        assert obj.loc[0, "CRNCONOBJ"] == "AU1"
+        # GENERAL letras se conservan; ESPECIFICO "01"; APLICACIÓN vacía -> "01".
+        assert obj.loc[0, "CRNCONOBJ"] == "AU0101"
         assert obj.loc[0, "CRDOBSERV"] == "Obs AU // Obs TA"
 
 
@@ -232,7 +289,7 @@ class TestProcessGlosas:
             [xlsx_simple], output_dir=str(tmp_path), email_date=EMAIL_DATE
         )
         assert result is not None
-        assert set(("detalle", "glosa", "objeciones")) <= set(result.keys())
+        assert {"detalle", "glosa", "objeciones"} <= set(result.keys())
         assert isinstance(result["detalle"], pd.DataFrame)
         archivos = os.listdir(str(tmp_path))
         assert any(a.startswith("SANITAS_GLOSAS_") and a.endswith(".xlsx") for a in archivos)

@@ -4,11 +4,13 @@ Procesador específico para archivos de Sanitas EPS.
 Sanitas envía UN archivo .xlsx por correo (el PDF adjunto se ignora).
 Cada fila representa una glosa con:
 - N° Factura en columna NUMERO DE FACTURA -> CRNCXC (FC0000+numero).
-- Código de objeción = concatenación SIN separador de
-  CODIGO CONCEPTO GENERAL + CODIGO CONCEPTO ESPECIFICO +
-  CODIGO CONCEPTO APLICACIÓN (normalizados, vacíos como "").
-- Observación = columna OBSERVACIONES; si vacía y es concepto de
-  tarifas se usa "MVC".
+- Código de objeción (CRNCONOBJ, 6 caracteres) = GENERAL mapeado (2 letras)
+  + ESPECIFICO (2 dígitos, cero a la izquierda) + APLICACIÓN (2 dígitos,
+  cero a la izquierda; "01" si vacía). GENERAL numérico 1-6 se mapea a
+  FA/TA/SO/AU/CO/CL. Ej: 2 + 6 + (vacía) -> "TA0601".
+- Observación = columna OBSERVACIONES; si vacía -> "MVC EN <procedimiento>".
+- Homologación por columna CODIGO PROCEDIMIENTO PRESTADOR (solo INSUMOS
+  homologan vía dict; el resto conserva el código original).
 - Fecha de objeción = fecha de recepción del correo (email_date).
 
 El resultado homologado se guarda en SANITAS_GLOSAS_<ts>.xlsx y las
@@ -25,12 +27,17 @@ from app.config.settings import logger
 
 from .base_processor import BaseProcessor
 
-# TODO (confirmar con el usuario): concepto de tarifas.
-# TARIFAS_GENERAL_CODES es el set de valores de CODIGO CONCEPTO GENERAL
-# (normalizados con _normalize_code) que se consideran "tarifas".
-# La observación "MVC" solo aplica si la fila matchea este set.
-# Con la tupla vacía, MVC nunca se dispara hasta confirmar los códigos.
-TARIFAS_GENERAL_CODES = ()
+# Mapeo de CODIGO CONCEPTO GENERAL numérico -> letras (regla confirmada).
+# Si GENERAL ya trae letras se conserva (upper). Si es un número fuera de
+# 1-6 se conserva el valor original sin mapear.
+CONCEPTO_GENERAL_NUMERICO = {
+    "1": "FA",
+    "2": "TA",
+    "3": "SO",
+    "4": "AU",
+    "5": "CO",
+    "6": "CL",
+}
 
 # TODO (confirmar con el usuario): etiqueta exacta de insumos.
 # Solo las filas donde NOMBRE PROCEDIMIENTO normalizado (strip, upper,
@@ -45,11 +52,12 @@ INSUMOS_PROCEDIMIENTO_LABEL = "INSUMOS Y MEDICAMENTOS INTRAHOSPITALARIOS"
 FACTURA_CANDIDATES = ["NUMERO DE FACTURA", "NUMERO FACTURA", "N° FACTURA", "FACTURA"]
 VALOR_CANDIDATES = ["VALOR GLOSADO GLOSA", "VALOR GLOSADO", "VALOR", "VLR GLOSADO", "VALOR OBJETADO"]
 SERVICIO_NOMBRE_CANDIDATES = ["NOMBRE PROCEDIMIENTO", "PROCEDIMIENTO", "SERVICIO"]
-# TODO (confirmar): columna del código de servicio en el xlsx de Sanitas.
-# Supuesto: existe una columna de código (no solo el nombre del
-# procedimiento); se busca tolerante y si no existe se usa "" conservando
-# el original (vacío) sin fallar.
+# Columna del código de servicio a homologar en el xlsx de Sanitas
+# (confirmada): CODIGO PROCEDIMIENTO PRESTADOR. Se mantienen alias
+# anteriores como fallback tolerante.
 SERVICIO_CODIGO_CANDIDATES = [
+    "CODIGO PROCEDIMIENTO PRESTADOR",
+    "CÓDIGO PROCEDIMIENTO PRESTADOR",
     "CODIGO SERVICIO",
     "CÓDIGO SERVICIO",
     "CODIGO PROCEDIMIENTO",
@@ -333,6 +341,13 @@ class SanitasProcessor(BaseProcessor):
         return homolog_dict
 
     @staticmethod
+    def _solo_digitos(valor: Any) -> str:
+        """Extrae solo los dígitos de un valor ("" si no hay)."""
+        if pd.isna(valor):
+            return ""
+        return "".join(ch for ch in str(valor) if ch.isdigit())
+
+    @staticmethod
     def _normalizar_procedimiento(valor: Any) -> str:
         if pd.isna(valor):
             return ""
@@ -343,9 +358,11 @@ class SanitasProcessor(BaseProcessor):
     def homologate(self, data: dict[str, pd.DataFrame]) -> pd.DataFrame:
         """Homologa filas de Sanitas y retorna DataFrame (contrato Base).
 
-        Calcula por fila: CRNCXC, CRNCONOBJ (concatenación sin separador),
-        CRDOBSERV (con fallback MVC si es tarifa), SLNSERPRO (homologado
-        solo para INSUMOS, resto conserva original) y CROVALOBJ.
+        Calcula por fila: CRNCXC, CRNCONOBJ (6 caracteres: GENERAL mapeado
+        + ESPECIFICO 2 dígitos + APLICACIÓN 2 dígitos), CRDOBSERV (con
+        fallback "MVC EN <procedimiento>" si vacía), SLNSERPRO (homologado
+        solo para INSUMOS vía CODIGO PROCEDIMIENTO PRESTADOR, resto conserva
+        original) y CROVALOBJ.
         """
         df: pd.DataFrame | None = None
         if isinstance(data, dict):
@@ -391,7 +408,6 @@ class SanitasProcessor(BaseProcessor):
         assert col_gen and col_esp and col_apl and col_obs
 
         homolog_dict = self._build_homologation_dict()
-        tarifas = {str(c).strip().upper() for c in TARIFAS_GENERAL_CODES}
 
         # CRNCXC con helper compartido (FC0000+numero).
         work["CRNCXC"] = work[col_factura].apply(self._formatear_crncxc)
@@ -399,23 +415,28 @@ class SanitasProcessor(BaseProcessor):
         if "fecha_correo" not in work.columns:
             work["fecha_correo"] = ""
 
-        # CRNCONOBJ: concatenación SIN separador (vacíos como "").
+        # CRNCONOBJ de 6 caracteres: GENERAL (2 letras, numérico 1-6
+        # mapeado) + ESPECIFICO (2 dígitos, cero a la izquierda) +
+        # APLICACIÓN (2 dígitos, cero a la izquierda; "01" si vacía).
+        # Ej: GENERAL=2, ESPECIFICO=6, APLICACIÓN vacía -> "TA0601".
         def _codigo(row: pd.Series) -> str:
-            return (
-                self._normalize_code(row[col_gen])
-                + self._normalize_code(row[col_esp])
-                + self._normalize_code(row[col_apl])
-            )
+            gen = self._normalize_code(row[col_gen])
+            gen = CONCEPTO_GENERAL_NUMERICO.get(gen, gen)
+            esp = self._solo_digitos(row[col_esp]) or "00"
+            apl = self._solo_digitos(row[col_apl]) or "01"
+            return f"{gen}{esp.zfill(2)}{apl.zfill(2)}"
 
         work["CRNCONOBJ"] = work.apply(_codigo, axis=1)
 
-        # CRDOBSERV: OBSERVACIONES; si vacía y es tarifa -> "MVC".
+        # CRDOBSERV: OBSERVACIONES; si vacía -> "MVC EN <procedimiento>".
         def _observacion(row: pd.Series) -> str:
             raw = row[col_obs]
             obs = "" if pd.isna(raw) else str(raw).strip()
-            if not obs and self._normalize_code(row[col_gen]) in tarifas:
-                return "MVC"
-            return obs
+            if obs:
+                return obs
+            nombre_raw = row[col_nombre]
+            nombre = "" if pd.isna(nombre_raw) else str(nombre_raw).strip()
+            return f"MVC EN {nombre}".strip()
 
         work["CRDOBSERV"] = work.apply(_observacion, axis=1)
 
