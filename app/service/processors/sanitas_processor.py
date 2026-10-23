@@ -20,6 +20,7 @@ objeciones en Objeciones_SANITAS_<ts>.xlsx con el mismo set de columnas
 que Mutualser/Coosalud + CRNCLAOBJ (siempre vacía).
 """
 import os
+import unicodedata
 from datetime import datetime
 from typing import Any
 
@@ -54,9 +55,12 @@ INSUMOS_PROCEDIMIENTO_LABEL = "INSUMOS Y MEDICAMENTOS INTRAHOSPITALARIOS"
 FACTURA_CANDIDATES = ["NUMERO DE FACTURA", "NUMERO FACTURA", "N° FACTURA", "FACTURA"]
 VALOR_CANDIDATES = ["VALOR GLOSADO GLOSA", "VALOR GLOSADO", "VALOR", "VLR GLOSADO", "VALOR OBJETADO"]
 SERVICIO_NOMBRE_CANDIDATES = ["NOMBRE PROCEDIMIENTO", "PROCEDIMIENTO", "SERVICIO"]
-# Columna del código de servicio a homologar en el xlsx de Sanitas
-# (confirmada): CODIGO PROCEDIMIENTO PRESTADOR. Se mantienen alias
-# anteriores como fallback tolerante.
+# Columna del código de servicio a homologar en el xlsx DESCARGADO.
+# Se resuelve por contenido (ver _resolve_columna_prestador): cualquier
+# columna que mencione PROCEDIMIENTO y PRESTADOR gana, tolerante a
+# tildes, DE/DEL y orden ("CODIGO DE PROCEDIMIENTO PRESTADOR", etc.).
+# La lista queda como fallback para alias viejos y, en último caso,
+# CODIGO PROCEDIMIENTO solo.
 SERVICIO_CODIGO_CANDIDATES = [
     "CODIGO PROCEDIMIENTO PRESTADOR",
     "CÓDIGO PROCEDIMIENTO PRESTADOR",
@@ -358,6 +362,31 @@ class SanitasProcessor(BaseProcessor):
                 return norm[key]
         return None
 
+    @staticmethod
+    def _plano(texto: Any) -> str:
+        """Normaliza para comparar encabezados: upper, sin tildes,
+        espacios colapsados."""
+        if pd.isna(texto):
+            return ""
+        sin_tildes = "".join(
+            c for c in unicodedata.normalize("NFD", str(texto)) if unicodedata.category(c) != "Mn"
+        )
+        return " ".join(sin_tildes.strip().upper().split())
+
+    def _resolve_columna_prestador(self, df: pd.DataFrame) -> str | None:
+        """Columna del código a homologar en el xlsx descargado.
+
+        Prioridad: (1) cualquier columna que mencione PROCEDIMIENTO y
+        PRESTADOR (tolerante a tildes, DE/DEL y orden); (2) alias conocidos;
+        (3) CODIGO PROCEDIMIENTO solo como último recurso. Sin match
+        retorna None (SLNSERPRO queda vacío, sin crash).
+        """
+        for col in df.columns:
+            plano = self._plano(col)
+            if "PROCEDIMIENTO" in plano and "PRESTADOR" in plano:
+                return col
+        return self._resolve_column_optional(df, SERVICIO_CODIGO_CANDIDATES)
+
     def _find_homolog_column(
         self, keywords: list[str], exact_match: str | None = None
     ) -> str | None:
@@ -435,9 +464,15 @@ class SanitasProcessor(BaseProcessor):
 
     @staticmethod
     def _solo_digitos(valor: Any) -> str:
-        """Extrae solo los dígitos de un valor ("" si no hay)."""
+        """Extrae solo los dígitos de un valor ("" si no hay).
+
+        Los floats enteros de Excel (7.0 por NaN en la columna) se
+        convierten a int primero: 7.0 -> "7" (no "70").
+        """
         if pd.isna(valor):
             return ""
+        if isinstance(valor, float) and valor.is_integer():
+            valor = int(valor)
         return "".join(ch for ch in str(valor) if ch.isdigit())
 
     @staticmethod
@@ -503,7 +538,7 @@ class SanitasProcessor(BaseProcessor):
             work, COD_APLICACION_CANDIDATES, "CODIGO CONCEPTO APLICACIÓN"
         )
         col_obs = self._resolve_column(work, OBSERVACIONES_CANDIDATES, "OBSERVACIONES")
-        col_cod_serv = self._resolve_column_optional(work, SERVICIO_CODIGO_CANDIDATES)
+        col_cod_serv = self._resolve_columna_prestador(work)
 
         if any(
             c is None

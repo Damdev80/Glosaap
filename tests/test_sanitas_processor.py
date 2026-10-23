@@ -139,6 +139,27 @@ class TestHomologate:
         result = processor.homologate(processor.extract_data([path]))
         assert result.loc[0, "CRNCONOBJ"] == "TA0601"
 
+    def test_float_excel_con_nan_no_rompe_padding(self, tmp_path, processor):
+        # Columna numérica con NaN -> pandas la lee como float (7.0, 1.0);
+        # debe dar "07"/"01", no "70"/"10".
+        df = pd.DataFrame([
+            _fila_base(**{
+                "CODIGO CONCEPTO GENERAL": 2.0,
+                "CODIGO CONCEPTO ESPECIFICO": 7.0,
+                "CODIGO CONCEPTO APLICACIÓN": 1.0,
+            }),
+            _fila_base(**{
+                "CODIGO CONCEPTO GENERAL": 2,
+                "CODIGO CONCEPTO ESPECIFICO": None,
+                "CODIGO CONCEPTO APLICACIÓN": None,
+            }),
+        ])
+        path = str(tmp_path / "f.xlsx")
+        df.to_excel(path, index=False)
+        result = processor.homologate(processor.extract_data([path]))
+        assert result.loc[0, "CRNCONOBJ"] == "TA0701"
+        assert len(result.loc[0, "CRNCONOBJ"]) == 6
+
     def test_general_letras_se_conservan(self, tmp_path, processor):
         path = _xlsx(
             tmp_path / "l.xlsx",
@@ -264,6 +285,56 @@ class TestHomologate:
         path = _xlsx(tmp_path / "a.xlsx", [fila])
         result = processor.homologate(processor.extract_data([path]))
         assert result.loc[0, "SLNSERPRO"] == "SERV001"
+
+
+class TestColumnaPrestador:
+    """El prestador se resuelve por contenido, no por literal exacto."""
+
+    def _filas_con_columnas(self, col_prestador, valor="SERV001", extra=None):
+        fila = _fila_base()
+        del fila["CODIGO PROCEDIMIENTO PRESTADOR"]
+        fila[col_prestador] = valor
+        if extra:
+            fila.update(extra)
+        return [fila]
+
+    def _homologar(self, processor, tmp_path, filas, nombre="p.xlsx"):
+        path = _xlsx(tmp_path / nombre, filas)
+        return processor.homologate(processor.extract_data([path]))
+
+    def test_de_preferido_sobre_procedimiento_solo(self, tmp_path, processor):
+        filas = self._filas_con_columnas(
+            "CODIGO DE PROCEDIMIENTO PRESTADOR",
+            valor="CORRECTO",
+            extra={"CODIGO PROCEDIMIENTO": "EQUIVOCADO"},
+        )
+        result = self._homologar(processor, tmp_path, filas)
+        assert result.loc[0, "SLNSERPRO"] == "CORRECTO"
+
+    def test_tolerante_tildes_y_orden(self, tmp_path, processor):
+        filas = self._filas_con_columnas("CÓDIGO DE PROCEDIMIENTO DEL PRESTADOR")
+        result = self._homologar(processor, tmp_path, filas)
+        assert result.loc[0, "SLNSERPRO"] == "SERV001"
+
+    def test_literal_prestador_gana(self, tmp_path, processor):
+        filas = self._filas_con_columnas(
+            "CODIGO PROCEDIMIENTO PRESTADOR",
+            valor="CORRECTO",
+            extra={"CODIGO PROCEDIMIENTO": "EQUIVOCADO"},
+        )
+        result = self._homologar(processor, tmp_path, filas)
+        assert result.loc[0, "SLNSERPRO"] == "CORRECTO"
+
+    def test_solo_procedimiento_ultimo_recurso(self, tmp_path, processor):
+        filas = self._filas_con_columnas("CODIGO PROCEDIMIENTO")
+        result = self._homologar(processor, tmp_path, filas)
+        assert result.loc[0, "SLNSERPRO"] == "SERV001"
+
+    def test_sin_columna_no_revienta(self, tmp_path, processor):
+        fila = _fila_base()
+        del fila["CODIGO PROCEDIMIENTO PRESTADOR"]
+        result = self._homologar(processor, tmp_path, [fila])
+        assert result.loc[0, "SLNSERPRO"] == ""
 
     def test_export_sin_columnas_internas(self, tmp_path, processor, xlsx_simple):
         detalle = processor.homologate(processor.extract_data([xlsx_simple]))
