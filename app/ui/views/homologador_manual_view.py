@@ -10,14 +10,17 @@ from datetime import datetime
 import flet as ft
 import pandas as pd
 
+from app.config.settings import get_homologador_path, get_homologador_paths
+from app.service.processors.sanitas_processor import SanitasProcessor
+
 
 class HomologadorManualView:
     """Vista para homologar archivos Excel manualmente"""
 
-    # Rutas de archivos de homologación por EPS
+    # Rutas de archivos de homologación por EPS (fuente única: settings.py)
     HOMOLOGACION_PATHS = {
-        "MUTUALSER": r"\\MINERVA\Cartera\GLOSAAP\HOMOLOGADOR\mutualser_homologacion.xlsx",
-        "COOSALUD": r"\\MINERVA\Cartera\GLOSAAP\HOMOLOGADOR\coosalud_homologacion.xlsx"
+        "MUTUALSER": get_homologador_path("mutualser"),
+        "COOSALUD": get_homologador_path("coosalud"),
     }
 
     # Ruta de salida
@@ -39,6 +42,11 @@ class HomologadorManualView:
         self.df_homologacion = None
         self._todos_cod_serv_fact = None
 
+        # Estado específico de SANITAS (dos homologadores)
+        self._sanitas_processor = None
+        self.sanitas_modo = None  # "Auto" | "Normal" | "Insumos"
+        self.columna_procedimiento = None
+
         # Componentes UI
         self.eps_dropdown = None
         self.archivo_text = None
@@ -47,6 +55,9 @@ class HomologadorManualView:
         self.status_text = None
         self.progress_bar = None
         self.preview_table = None
+        self.sanitas_modo_dropdown = None
+        self.sanitas_proc_col_dropdown = None
+        self.sanitas_opciones_container = None
 
         self.container = self._build()
 
@@ -60,6 +71,7 @@ class HomologadorManualView:
             options=[
                 ft.dropdown.Option("MUTUALSER", "MUTUALSER"),
                 ft.dropdown.Option("COOSALUD", "COOSALUD"),
+                ft.dropdown.Option("SANITAS", "SANITAS"),
             ],
             on_change=self._on_eps_change,
             border_color=ft.Colors.PRIMARY,
@@ -144,6 +156,61 @@ class HomologadorManualView:
             width=120,
             height=60,
             fit=ft.ImageFit.CONTAIN,
+            visible=False
+        )
+
+        # Opciones específicas de SANITAS (modo de homologación)
+        self.sanitas_modo_dropdown = ft.Dropdown(
+            label="Modo de homologación Sanitas",
+            width=300,
+            options=[
+                ft.dropdown.Option("Auto", "Auto (como el procesador)"),
+                ft.dropdown.Option("Normal", "Normal (ERP → DGH)"),
+                ft.dropdown.Option("Insumos", "Solo insumos (CUM / IUM)"),
+            ],
+            on_change=self._on_sanitas_modo_change,
+            border_color=ft.Colors.PRIMARY,
+            focused_border_color=ft.Colors.PRIMARY
+        )
+
+        self.sanitas_proc_col_dropdown = ft.Dropdown(
+            label="Columna procedimiento (detecta INSUMOS)",
+            width=300,
+            options=[],
+            on_change=self._on_sanitas_col_procedimiento_change,
+            disabled=True,
+            border_color=ft.Colors.PRIMARY,
+            focused_border_color=ft.Colors.PRIMARY
+        )
+
+        self.sanitas_opciones_container = ft.Container(
+            content=ft.Column([
+                ft.Row([
+                    ft.Container(
+                        content=ft.Text("S", color=ft.Colors.SURFACE, size=14, weight=ft.FontWeight.BOLD),
+                        width=28, height=28,
+                        border_radius=14,
+                        bgcolor=ft.Colors.PRIMARY,
+                        alignment=ft.alignment.center
+                    ),
+                    ft.Text("Configuración Sanitas", size=15, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE)
+                ], spacing=10),
+                ft.Container(height=10),
+                self.sanitas_modo_dropdown,
+                ft.Container(height=10),
+                self.sanitas_proc_col_dropdown,
+                ft.Container(height=6),
+                ft.Text(
+                    "Auto: usa la columna de procedimiento para separar las filas INSUMOS "
+                    "(cascada CUM/IUM → producto) del resto (ERP → DGH).",
+                    size=11,
+                    color=ft.Colors.ON_SURFACE_VARIANT
+                ),
+            ]),
+            padding=20,
+            bgcolor=ft.Colors.SURFACE,
+            border_radius=10,
+            border=ft.border.all(1, ft.Colors.OUTLINE),
             visible=False
         )
 
@@ -250,6 +317,9 @@ class HomologadorManualView:
                             border=ft.border.all(1, ft.Colors.OUTLINE)
                         ),
 
+                        # Opciones Sanitas (solo visibles para SANITAS)
+                        self.sanitas_opciones_container,
+
                         # Botón y status
                         ft.Container(height=10),
                         ft.Row([self.btn_homologar], alignment=ft.MainAxisAlignment.CENTER),
@@ -286,11 +356,85 @@ class HomologadorManualView:
         elif self.selected_eps == "COOSALUD":
             self.eps_logo.src = os.path.join(self.ASSETS_DIR, "img", "eps", "coosalud.png")
             self.eps_logo.visible = True
+        elif self.selected_eps == "SANITAS":
+            self.eps_logo.src = os.path.join(self.ASSETS_DIR, "img", "eps", "sanitas.png")
+            self.eps_logo.visible = True
 
-        # Cargar archivo de homologación
-        self._cargar_homologacion()
+        # Opciones Sanitas visibles solo para SANITAS
+        if self.sanitas_opciones_container is not None:
+            self.sanitas_opciones_container.visible = self.selected_eps == "SANITAS"
+
+        # Cargar archivo(s) de homologación
+        if self.selected_eps == "SANITAS":
+            self._cargar_homologacion_sanitas()
+        else:
+            self._cargar_homologacion()
         self._update_button_state()
         self.page.update()
+
+    def _on_sanitas_modo_change(self, e):
+        """Cuando cambia el modo de homologación de Sanitas"""
+        self.sanitas_modo = e.control.value
+        # La columna de procedimiento solo se usa en modo Auto
+        self.sanitas_proc_col_dropdown.disabled = self.sanitas_modo != "Auto"
+        self._update_button_state()
+        self.page.update()
+
+    def _on_sanitas_col_procedimiento_change(self, e):
+        """Cuando se selecciona la columna de procedimiento (modo Auto)"""
+        self.columna_procedimiento = e.control.value
+        self._update_button_state()
+        self.page.update()
+
+    def _cargar_homologacion_sanitas(self):
+        """Carga los dos homologadores de Sanitas reutilizando SanitasProcessor."""
+        try:
+            paths = get_homologador_paths("sanitas")
+        except Exception as ex:
+            self.status_text.value = f"❌ Error obteniendo rutas de homologación: {ex}"  # type: ignore
+            self.status_text.color = ft.Colors.RED  # type: ignore
+            self._sanitas_processor = None
+            self.df_homologacion = None
+            self.page.update()
+            return
+
+        self._sanitas_processor = SanitasProcessor(
+            homologador_path=paths[0] if len(paths) > 0 else "",
+            homologador_insumos_path=paths[1] if len(paths) > 1 else "",
+        )
+        errores = []
+        avisos = []
+
+        normal_path = paths[0] if len(paths) > 0 else ""
+        if not normal_path or not os.path.exists(normal_path):
+            errores.append(f"Homologador normal no encontrado: {normal_path}")
+        elif not self._sanitas_processor.load_homologador():
+            errores.extend(self._sanitas_processor.errors)
+
+        insumos_path = paths[1] if len(paths) > 1 else ""
+        if insumos_path and os.path.exists(insumos_path):
+            if not self._sanitas_processor.load_homologador_insumos():
+                avisos.extend(self._sanitas_processor.errors)
+        else:
+            avisos.append("Homologador de insumos no encontrado: las filas INSUMOS conservan el original")
+
+        self.df_homologacion = self._sanitas_processor.homologador_df
+
+        if errores:
+            self.status_text.value = "❌ " + " | ".join(errores)  # type: ignore
+            self.status_text.color = ft.Colors.RED  # type: ignore
+        else:
+            total_normal = len(self.df_homologacion) if self.df_homologacion is not None else 0
+            total_insumos = (
+                len(self._sanitas_processor.insumos_df)
+                if self._sanitas_processor.insumos_df is not None
+                else 0
+            )
+            msg = f"✅ Homologación SANITAS cargada: {total_normal} normal, {total_insumos} insumos"
+            if avisos:
+                msg += " | " + " | ".join(avisos)
+            self.status_text.value = msg  # type: ignore
+            self.status_text.color = ft.Colors.GREEN  # type: ignore
 
     def _cargar_homologacion(self):
         """Carga el archivo de homologación de la EPS seleccionada"""
@@ -351,6 +495,14 @@ class HomologadorManualView:
             self.columna_dropdown.value = None  # type: ignore
             self.columna_seleccionada = None
 
+            # Para SANITAS: las mismas columnas sirven como procedimiento (modo Auto)
+            self.sanitas_proc_col_dropdown.options = [  # type: ignore
+                ft.dropdown.Option(col, col) for col in self.columnas_disponibles
+            ]
+            self.sanitas_proc_col_dropdown.value = None  # type: ignore
+            self.sanitas_proc_col_dropdown.disabled = self.sanitas_modo != "Auto"  # type: ignore
+            self.columna_procedimiento = None
+
             self.status_text.value = f"📄 Archivo cargado: {len(self.df_archivo)} filas, {len(self.columnas_disponibles)} columnas"  # type: ignore
             self.status_text.color = ft.Colors.ON_SURFACE_VARIANT  # type: ignore
 
@@ -370,6 +522,26 @@ class HomologadorManualView:
 
     def _update_button_state(self):
         """Actualiza el estado del botón de homologar"""
+        if self.selected_eps == "SANITAS":
+            base_ok = bool(
+                self.archivo_path
+                and self.df_archivo is not None
+                and self.columna_seleccionada
+            )
+            proc = self._sanitas_processor
+            tiene_normal = self.df_homologacion is not None
+            tiene_insumos = proc is not None and proc.insumos_df is not None
+
+            if self.sanitas_modo == "Insumos":
+                modo_ok = tiene_insumos
+            elif self.sanitas_modo == "Auto":
+                modo_ok = tiene_normal and tiene_insumos and bool(self.columna_procedimiento)
+            else:  # Normal (o aún sin elegir)
+                modo_ok = tiene_normal
+
+            self.btn_homologar.disabled = not (base_ok and modo_ok)  # type: ignore
+            return
+
         self.btn_homologar.disabled = not (  # type: ignore
             self.selected_eps and
             self.archivo_path and
@@ -434,6 +606,21 @@ class HomologadorManualView:
             print(f"⚠️ Error homologando {codigo}: {e}")
             return ''
 
+    def _es_insumo_para_fila(self, df, idx):
+        """Determina si la fila Sanitas se homologa por la vía de insumos.
+
+        - Modo "Insumos": todas las filas por cascada CUM/IUM.
+        - Modo "Auto": según la columna de procedimiento (etiqueta INSUMOS).
+        - Modo "Normal" (o sin columna): nunca por insumos.
+        """
+        if self.selected_eps != "SANITAS":
+            return False
+        if self.sanitas_modo == "Insumos":
+            return True
+        if self.sanitas_modo == "Auto" and self.columna_procedimiento:
+            return SanitasProcessor.es_insumo(df.at[idx, self.columna_procedimiento])
+        return False
+
     def _on_homologar(self, e):
         """Ejecuta la homologación"""
         def worker():
@@ -454,7 +641,13 @@ class HomologadorManualView:
                 preview_data = []
 
                 for idx, valor in enumerate(df_resultado[self.columna_seleccionada]):
-                    codigo_homologado = self._buscar_codigo_homologado(valor)
+                    if self.selected_eps == "SANITAS":
+                        es_insumo = self._es_insumo_para_fila(df_resultado, idx)
+                        codigo_homologado = self._sanitas_processor.homologar_codigo_servicio(  # type: ignore
+                            valor, es_insumo
+                        )
+                    else:
+                        codigo_homologado = self._buscar_codigo_homologado(valor)
 
                     if codigo_homologado:
                         df_resultado.at[idx, self.columna_seleccionada] = codigo_homologado  # type: ignore

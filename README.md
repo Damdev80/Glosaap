@@ -348,10 +348,15 @@ EPS_CONFIG = [
 ### 🔄 Homologador Manual
 **Ubicación:** Herramientas → Homologador Manual
 
-1. Seleccionar EPS
+1. Seleccionar EPS (MUTUALSER, COOSALUD, SANITAS)
 2. Cargar archivo Excel
 3. Seleccionar columna a homologar
 4. Procesar → genera archivo homologado
+
+**Modos para SANITAS** (usa dos homologadores: normal ERP→DGH e insumos CUM/IUM):
+- **Auto**: detecta las filas INSUMOS por la columna de procedimiento y homologa cada fila por su vía (igual que el procesador automático).
+- **Normal**: homologa todas las filas por el homologador normal (ERP → DGH).
+- **Insumos**: homologa todas las filas por cascada CUM / IUM RDA / CODIGO PRODUCTO.
 
 **Ruta de salida:** `\\MINERVA\Cartera\GLOSAAP\RESULTADO DE HOMOLAGADOR MANUAL`
 

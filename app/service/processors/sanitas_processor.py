@@ -154,6 +154,8 @@ class SanitasProcessor(BaseProcessor):
         self._cum_dict: dict[str, str] = {}
         self._ium_dict: dict[str, str] = {}
         self._producto_dict: dict[str, str] = {}
+        # Cache del dict normal (ERP -> DGH) para homologación manual.
+        self._dict_normal_cache: dict[str, str] | None = None
 
     # ==================== HOMOLOGADOR ====================
 
@@ -494,6 +496,43 @@ class SanitasProcessor(BaseProcessor):
             return ""
         return " ".join(str(valor).strip().upper().split())
 
+    @staticmethod
+    def es_insumo(nombre_procedimiento: Any) -> bool:
+        """True si la fila corresponde a INSUMOS (etiqueta normalizada)."""
+        return (
+            SanitasProcessor._normalizar_procedimiento(nombre_procedimiento)
+            == INSUMOS_PROCEDIMIENTO_LABEL
+        )
+
+    def homologar_codigo_servicio(self, codigo: Any, es_insumo: bool = False) -> str:
+        """Homologa un código de servicio individual (una fila a la vez).
+
+        Reutilizado por el homologador manual:
+
+        - es_insumo=True: cascada CUM -> CODIGO PRODUCTO, IUM RDA ->
+          CODIGO PRODUCTO, CODIGO PRODUCTO directo (claves flexibles).
+        - es_insumo=False: dict normal ERP -> DGH (con filtro
+          COD_SERV_FACT si la columna existe en el homologador).
+
+        Retorna el código homologado o "" si no hay match.
+        """
+        original = self._normalize_code(codigo)
+        if not original:
+            return ""
+        if es_insumo:
+            clave = self._clave_lookup(original)
+            return (
+                self._cum_dict.get(clave)
+                or self._ium_dict.get(clave)
+                or self._producto_dict.get(clave)
+                or ""
+            )
+        homolog_dict = self._dict_normal_cache
+        if homolog_dict is None:
+            homolog_dict = self._build_homologation_dict()
+            self._dict_normal_cache = homolog_dict
+        return homolog_dict.get(original, "")
+
     # ==================== HOMOLOGATE ====================
 
     def homologate(self, data: dict[str, pd.DataFrame]) -> pd.DataFrame:
@@ -549,8 +588,6 @@ class SanitasProcessor(BaseProcessor):
         assert col_factura and col_valor and col_nombre
         assert col_gen and col_esp and col_apl and col_obs
 
-        homolog_dict = self._build_homologation_dict()
-
         # CRNCXC con helper compartido (FC0000+numero).
         work["CRNCXC"] = work[col_factura].apply(self._formatear_crncxc)
         work["_FACTURA"] = work[col_factura]
@@ -588,19 +625,11 @@ class SanitasProcessor(BaseProcessor):
         sln: list[str] = []
         homologados = 0
         for _, row in work.iterrows():
-            nombre_norm = self._normalizar_procedimiento(row[col_nombre])
+            es_insumo = self.es_insumo(row[col_nombre])
             original = self._normalize_code(row[col_cod_serv]) if col_cod_serv else ""
-            nuevo = ""
-            if nombre_norm == INSUMOS_PROCEDIMIENTO_LABEL and original:
-                clave = self._clave_lookup(original)
-                if clave in self._cum_dict:
-                    nuevo = self._cum_dict[clave]
-                elif clave in self._ium_dict:
-                    nuevo = self._ium_dict[clave]
-                elif clave in self._producto_dict:
-                    nuevo = self._producto_dict[clave]
-            elif original and original in homolog_dict:
-                nuevo = homolog_dict[original]
+            nuevo = self.homologar_codigo_servicio(
+                row[col_cod_serv] if col_cod_serv else None, es_insumo
+            )
             if nuevo:
                 sln.append(nuevo)
                 homologados += 1

@@ -163,6 +163,17 @@ def get_homologador_path(eps_name: str) -> str:
     eps_key = eps_name.lower().strip()
     return HOMOLOGADOR_FILES.get(eps_key, HOMOLOGADOR_FILES["mutualser"])
 
+def get_homologador_paths(eps_name: str) -> list[str]:
+    """Lista de rutas de homologador de una EPS (Sanitas usa dos).
+
+    - "sanitas" -> [normal (ERP->DGH), insumos (CUM/IUM/CODIGO PRODUCTO)].
+    - Cualquier otra EPS -> lista con un solo archivo.
+    """
+    eps_key = eps_name.lower().strip()
+    if eps_key == "sanitas":
+        return [HOMOLOGADOR_FILES["sanitas"], HOMOLOGADOR_FILES["sanitas_insumos"]]
+    return [HOMOLOGADOR_FILES.get(eps_key, HOMOLOGADOR_FILES["mutualser"])]
+
 def ensure_dir(path: str) -> bool:
     """Crea un directorio si no existe"""
     try:
