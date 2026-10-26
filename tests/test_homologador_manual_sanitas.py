@@ -1,18 +1,19 @@
 """
-Tests del homologador manual para Sanitas (dos vías de homologación).
+Tests del homologador manual para Sanitas (homologador normal ERP -> DGH).
 
-Cubre:
-- get_homologador_paths() devuelve los dos archivos para Sanitas.
+La vista del homologador manual trata a SANITAS igual que las demás EPS:
+una sola tabla de homologación aplicada a la columna seleccionada.
+
+También se cubre la API reutilizable de SanitasProcessor:
 - Vía normal (ERP -> DGH) con floats enteros de Excel.
-- Vía insumos (cascada CUM / IUM RDA / CODIGO PRODUCTO) con claves flexibles.
-- Detección de filas INSUMOS según modo (Auto / Normal / Insumos).
+- Vía insumos (cascada CUM / IUM RDA / CODIGO PRODUCTO) con claves
+  flexibles (usada por el procesador automático, no por el manual).
 """
 from types import SimpleNamespace
 
 import pandas as pd
 import pytest
 
-from app.config.settings import get_homologador_paths
 from app.service.processors.sanitas_processor import SanitasProcessor
 from app.ui.views.homologador_manual_view import HomologadorManualView
 
@@ -41,116 +42,84 @@ def sanitas_homologadores(tmp_path):
 
 @pytest.fixture
 def vista(sanitas_homologadores):
-    """Vista del homologador manual con los dos homologadores cargados."""
+    """Vista del homologador manual con el homologador normal cargado."""
     page = SimpleNamespace(overlay=[])
     view = HomologadorManualView(page=page)
     view.selected_eps = "SANITAS"
-    view.sanitas_modo = "Normal"
     view._sanitas_processor = SanitasProcessor(
-        homologador_path=sanitas_homologadores["normal"],
-        homologador_insumos_path=sanitas_homologadores["insumos"],
+        homologador_path=sanitas_homologadores["normal"]
     )
     assert view._sanitas_processor.load_homologador()
-    assert view._sanitas_processor.load_homologador_insumos()
     view.df_homologacion = view._sanitas_processor.homologador_df
     return view
 
 
-# ==================== RUTAS ====================
-
-def test_get_homologador_paths_sanitas_dos_archivos():
-    paths = get_homologador_paths("sanitas")
-    assert len(paths) == 2
-    assert paths[0].endswith("sanitas_homologador_2.xlsx")
-    assert paths[1].endswith("sanitas_homologador.xlsx")
-
-
-def test_get_homologador_paths_otras_eps_un_archivo():
-    paths = get_homologador_paths("coosalud")
-    assert len(paths) == 1
-    assert "coosalud_homologacion" in paths[0]
-
-
-# ==================== VÍA NORMAL (ERP -> DGH) ====================
+# ==================== VÍA NORMAL (ERP -> DGH) — usa el manual ====================
 
 def test_homologacion_normal_match(vista):
     proc = vista._sanitas_processor
-    assert proc.homologar_codigo_servicio("890201", es_insumo=False) == "CUPS001"
+    assert proc.homologar_codigo_servicio("890201") == "CUPS001"
 
 
 def test_homologacion_normal_sin_match_vacia(vista):
     proc = vista._sanitas_processor
-    assert proc.homologar_codigo_servicio("999999", es_insumo=False) == ""
+    assert proc.homologar_codigo_servicio("999999") == ""
 
 
 def test_homologacion_normal_float_entero_de_excel(vista):
     proc = vista._sanitas_processor
-    assert proc.homologar_codigo_servicio(7.0, es_insumo=False) == "CUPS007"
+    assert proc.homologar_codigo_servicio(7.0) == "CUPS007"
 
 
-# ==================== VÍA INSUMOS (CUM / IUM / PRODUCTO) ====================
+# ==================== VÍA INSUMOS (usa el procesador automático) ====================
 
-def test_insumos_por_cum(vista):
-    proc = vista._sanitas_processor
+def test_insumos_por_cum(sanitas_homologadores):
+    proc = SanitasProcessor(
+        homologador_path=sanitas_homologadores["normal"],
+        homologador_insumos_path=sanitas_homologadores["insumos"],
+    )
+    assert proc.load_homologador_insumos()
     assert proc.homologar_codigo_servicio("CUM123", es_insumo=True) == "PROD-A"
 
 
-def test_insumos_por_ium(vista):
-    proc = vista._sanitas_processor
+def test_insumos_por_ium(sanitas_homologadores):
+    proc = SanitasProcessor(
+        homologador_path=sanitas_homologadores["normal"],
+        homologador_insumos_path=sanitas_homologadores["insumos"],
+    )
+    assert proc.load_homologador_insumos()
     assert proc.homologar_codigo_servicio("IUM111", es_insumo=True) == "PROD-A"
 
 
-def test_insumos_por_producto_directo(vista):
-    proc = vista._sanitas_processor
+def test_insumos_por_producto_directo(sanitas_homologadores):
+    proc = SanitasProcessor(
+        homologador_path=sanitas_homologadores["normal"],
+        homologador_insumos_path=sanitas_homologadores["insumos"],
+    )
+    assert proc.load_homologador_insumos()
     assert proc.homologar_codigo_servicio("PROD-B", es_insumo=True) == "PROD-B"
 
 
-def test_insumos_clave_flexible_sin_guiones(vista):
-    proc = vista._sanitas_processor
+def test_insumos_clave_flexible_sin_guiones(sanitas_homologadores):
+    proc = SanitasProcessor(
+        homologador_path=sanitas_homologadores["normal"],
+        homologador_insumos_path=sanitas_homologadores["insumos"],
+    )
+    assert proc.load_homologador_insumos()
     assert proc.homologar_codigo_servicio("cum-123", es_insumo=True) == "PROD-A"
 
 
-def test_insumos_sin_match_vacia(vista):
-    proc = vista._sanitas_processor
+def test_insumos_sin_match_vacia(sanitas_homologadores):
+    proc = SanitasProcessor(
+        homologador_path=sanitas_homologadores["normal"],
+        homologador_insumos_path=sanitas_homologadores["insumos"],
+    )
+    assert proc.load_homologador_insumos()
     assert proc.homologar_codigo_servicio("ZZZ", es_insumo=True) == ""
 
-
-# ==================== DETECCIÓN DE INSUMOS ====================
 
 def test_es_insumo_etiqueta_normalizada():
     assert SanitasProcessor.es_insumo("  INSUMOS Y MEDICAMENTOS INTRAHOSPITALARIOS ") is True
     assert SanitasProcessor.es_insumo("insumos y medicamentos intrahospitalarios") is True
     assert SanitasProcessor.es_insumo("CONSULTA EXTERNA") is False
     assert SanitasProcessor.es_insumo(None) is False
-
-
-def test_es_insumo_para_fila_segun_modo(vista):
-    df = pd.DataFrame(
-        {
-            "PROC": [
-                "INSUMOS Y MEDICAMENTOS INTRAHOSPITALARIOS",
-                "CONSULTA EXTERNA",
-            ]
-        }
-    )
-    vista.columna_procedimiento = "PROC"
-
-    vista.sanitas_modo = "Auto"
-    assert vista._es_insumo_para_fila(df, 0) is True
-    assert vista._es_insumo_para_fila(df, 1) is False
-
-    vista.sanitas_modo = "Insumos"
-    assert vista._es_insumo_para_fila(df, 0) is True
-    assert vista._es_insumo_para_fila(df, 1) is True
-
-    vista.sanitas_modo = "Normal"
-    assert vista._es_insumo_para_fila(df, 0) is False
-    assert vista._es_insumo_para_fila(df, 1) is False
-
-
-def test_es_insumo_para_fila_otra_eps_siempre_false(vista):
-    vista.selected_eps = "MUTUALSER"
-    df = pd.DataFrame({"PROC": ["INSUMOS Y MEDICAMENTOS INTRAHOSPITALARIOS"]})
-    vista.columna_procedimiento = "PROC"
-    vista.sanitas_modo = "Insumos"
-    assert vista._es_insumo_para_fila(df, 0) is False

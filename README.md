@@ -353,10 +353,8 @@ EPS_CONFIG = [
 3. Seleccionar columna a homologar
 4. Procesar → genera archivo homologado
 
-**Modos para SANITAS** (usa dos homologadores: normal ERP→DGH e insumos CUM/IUM):
-- **Auto**: detecta las filas INSUMOS por la columna de procedimiento y homologa cada fila por su vía (igual que el procesador automático).
-- **Normal**: homologa todas las filas por el homologador normal (ERP → DGH).
-- **Insumos**: homologa todas las filas por cascada CUM / IUM RDA / CODIGO PRODUCTO.
+Cada EPS usa su propia tabla de homologación (para SANITAS se usa el
+homologador normal `sanitas_homologador_2.xlsx`, ERP → DGH).
 
 **Ruta de salida:** `\\MINERVA\Cartera\GLOSAAP\RESULTADO DE HOMOLAGADOR MANUAL`
 

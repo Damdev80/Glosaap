@@ -9,11 +9,9 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 ## [0.11.24] - 2026-10-24
 
 ### ✨ Nuevas Características
-- Homologador Manual con soporte para SANITAS: modos Auto (detecta filas
-  INSUMOS por columna de procedimiento), Normal (ERP → DGH) e Insumos
-  (cascada CUM / IUM RDA / CODIGO PRODUCTO), reutilizando `SanitasProcessor`.
-- `settings.get_homologador_paths()` como fuente única de rutas de
-  homologador por EPS (Sanitas usa dos archivos).
+- Homologador Manual con soporte para SANITAS: mismo flujo que las demás
+  EPS (seleccionar EPS → cargar archivo → elegir columna → homologar),
+  usando el homologador normal ERP → DGH (`sanitas_homologador_2.xlsx`).
 
 ### 🔧 Mejoras Técnicas
 - `SanitasProcessor.homologar_codigo_servicio()` y `es_insumo()` extraídos
