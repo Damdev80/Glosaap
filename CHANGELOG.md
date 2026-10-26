@@ -6,6 +6,19 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.11.25] - 2026-10-26
+
+### 🐛 Correcciones
+- Homologador Manual: se elimina la tarjeta "Configuración Sanitas"
+  (modos y columna de procedimiento). SANITAS vuelve al flujo estándar
+  igual que las demás EPS (seleccionar EPS → cargar archivo → elegir
+  columna → homologar) usando solo el homologador normal ERP → DGH.
+
+### 🔧 Mejoras Técnicas
+- Se elimina `settings.get_homologador_paths()` (código muerto tras
+  simplificar el homologador manual de Sanitas).
+
+
 ## [0.11.24] - 2026-10-24
 
 ### ✨ Nuevas Características
