@@ -4,12 +4,17 @@ Permite agregar, editar, eliminar y consultar códigos de homologación
 con sistema de caché optimizado para mejorar rendimiento
 """
 import hashlib
+import logging
 import os
 import shutil
 from datetime import datetime
 from typing import Any
 
 import pandas as pd
+
+from app.config.settings import NETWORK_PATHS
+
+logger = logging.getLogger(__name__)
 
 
 class HomologacionService:
@@ -18,8 +23,9 @@ class HomologacionService:
     con sistema de caché optimizado para mejorar rendimiento de búsquedas
     """
 
-    # Ruta base del directorio de homologación en red
-    HOMOLOGACION_DIR = r"\\MINERVA\Cartera\GLOSAAP\HOMOLOGADOR"
+    # Ruta base del directorio de homologación.
+    # Fuente única: app/config/settings.py (NETWORK_PATHS["homologador"]).
+    HOMOLOGACION_DIR = NETWORK_PATHS["homologador"]
 
     # Archivos de homologación por EPS
     EPS_FILES = {
@@ -104,7 +110,7 @@ class HomologacionService:
         """Limpia todos los cachés (útil para testing o reinicios)"""
         cls._file_cache.clear()
         cls._search_cache.clear()
-        print("🗑️ Cache de homologación limpiado")
+        logger.info("Cache de homologación limpiado")
 
     @classmethod
     def get_eps_disponibles(cls):
@@ -136,7 +142,7 @@ class HomologacionService:
                             "count": count
                         })
         except Exception as e:
-            print(f"Error listando EPS: {e}")
+            logger.warning(f"Error listando EPS: {e}")
 
         return eps_list
 
@@ -175,12 +181,12 @@ class HomologacionService:
                 self.df = self._file_cache[cache_key]['df'].copy()
                 self._file_hash = self._file_cache[cache_key]['file_hash']
                 eps_name = self.eps.upper() if self.eps else "DESCONOCIDA"
-                print(f"⚡ Homologación {eps_name} cargada desde caché: {len(self.df)} registros") # type: ignore
+                logger.info(f"Homologación {eps_name} cargada desde caché: {len(self.df)} registros") # type: ignore
                 return True
 
             # Cargar desde archivo si no hay caché válido
             if os.path.exists(self.homologacion_path):
-                print(f"📁 Cargando homologación {self.eps} desde archivo...")
+                logger.info(f"Cargando homologación {self.eps} desde archivo...")
                 self.df = pd.read_excel(self.homologacion_path)
 
                 # Limpiar columnas
@@ -196,24 +202,24 @@ class HomologacionService:
                 self._file_hash = self._file_cache[cache_key]['file_hash']
 
                 eps_name = self.eps.upper() if self.eps else "DESCONOCIDA"
-                print(f"✅ Homologación {eps_name} cargada: {len(self.df)} registros (guardado en caché)")
+                logger.info(f"Homologación {eps_name} cargada: {len(self.df)} registros (guardado en caché)")
             else:
                 # Crear DataFrame vacío con las columnas de esta EPS
                 self.df = pd.DataFrame(columns=self.columnas_actuales)
-                print(f"⚠️ Archivo de homologación {self.eps or 'desconocida'} no encontrado, creando nuevo")
+                logger.warning(f"Archivo de homologación {self.eps or 'desconocida'} no encontrado, creando nuevo")
 
             return True
 
 
         except Exception as e:
-            print(f"❌ Error cargando homologación: {e}")
+            logger.error(f"Error cargando homologación: {e}")
             self.df = pd.DataFrame(columns=self.columnas_actuales)
             return False
 
     def _guardar(self):
         """Guarda los cambios en el archivo e invalida caché"""
         if not self.homologacion_path:
-            print("❌ No hay EPS seleccionada")
+            logger.warning("No hay EPS seleccionada")
             return False
 
         try:
@@ -224,11 +230,11 @@ class HomologacionService:
                 backup_filename = f"{self.eps}_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
                 backup_path = os.path.join(backup_dir, backup_filename)
                 shutil.copy2(self.homologacion_path, backup_path)
-                print(f"📋 Backup creado: {backup_filename}")
+                logger.info(f"Backup creado: {backup_filename}")
 
             # Guardar archivo
             if self.df is None:
-                print("❌ No hay datos para guardar")
+                logger.warning("No hay datos para guardar")
                 return False
 
             self.df.to_excel(self.homologacion_path, index=False)
@@ -239,11 +245,11 @@ class HomologacionService:
             self._file_hash = self._file_cache[cache_key]['file_hash']
 
             eps_name = self.eps.upper() if self.eps else "DESCONOCIDA"
-            print(f"✅ Archivo {eps_name} guardado (caché actualizado)")
+            logger.info(f"Archivo {eps_name} guardado (caché actualizado)")
             return True
 
         except Exception as e:
-            print(f"❌ Error guardando: {e}")
+            logger.error(f"Error guardando: {e}")
             return False
 
     # ==================== CRUD ====================
@@ -374,7 +380,7 @@ class HomologacionService:
         try:
             # Validar que no exista
             if self.buscar_por_codigo_erp(codigo_erp) is not None:
-                print(f"⚠️ El código {codigo_erp} ya existe")
+                logger.warning(f"El código {codigo_erp} ya existe")
                 return False
 
             # Crear registro según columnas de la EPS
@@ -397,12 +403,12 @@ class HomologacionService:
             self._clear_search_cache(f"{self.eps}_homologacion")
 
             if self._guardar():
-                print(f"✅ Código agregado: {codigo_erp} → {codigo_dgh}")
+                logger.info(f"Código agregado: {codigo_erp} → {codigo_dgh}")
                 return True
             return False
 
         except Exception as e:
-            print(f"❌ Error agregando código: {e}")
+            logger.error(f"Error agregando código: {e}")
             return False
 
     def actualizar(self, codigo_erp, codigo_dgh=None, cod_serv_fact=None):
@@ -419,14 +425,14 @@ class HomologacionService:
         """
         try:
             if self.df is None:
-                print("❌ No hay datos cargados")
+                logger.warning("No hay datos cargados")
                 return False
 
             codigo_str = str(codigo_erp).strip()
             mask = self.df['Código Servicio de la ERP'].astype(str).str.strip() == codigo_str
 
             if not mask.any():
-                print(f"⚠️ Código {codigo_erp} no encontrado")
+                logger.warning(f"Código {codigo_erp} no encontrado")
                 return False
 
             if codigo_dgh:
@@ -439,12 +445,12 @@ class HomologacionService:
             self._clear_search_cache(f"{self.eps}_homologacion")
 
             if self._guardar():
-                print(f"✅ Código actualizado: {codigo_erp}")
+                logger.info(f"Código actualizado: {codigo_erp}")
                 return True
             return False
 
         except Exception as e:
-            print(f"❌ Error actualizando código: {e}")
+            logger.error(f"Error actualizando código: {e}")
             return False
 
     def eliminar(self, codigo_erp):
@@ -459,14 +465,14 @@ class HomologacionService:
         """
         try:
             if self.df is None:
-                print("❌ No hay datos cargados")
+                logger.warning("No hay datos cargados")
                 return False
 
             codigo_str = str(codigo_erp).strip()
             mask = self.df['Código Servicio de la ERP'].astype(str).str.strip() == codigo_str
 
             if not mask.any():
-                print(f"⚠️ Código {codigo_erp} no encontrado")
+                logger.warning(f"Código {codigo_erp} no encontrado")
                 return False
 
             self.df = self.df[~mask].copy()
@@ -475,12 +481,12 @@ class HomologacionService:
             self._clear_search_cache(f"{self.eps}_homologacion")
 
             if self._guardar():
-                print(f"✅ Código eliminado: {codigo_erp}")
+                logger.info(f"Código eliminado: {codigo_erp}")
                 return True
             return False
 
         except Exception as e:
-            print(f"❌ Error eliminando código: {e}")
+            logger.error(f"Error eliminando código: {e}")
             return False
 
     def agregar_multiples(self, codigos):
@@ -517,7 +523,7 @@ class HomologacionService:
                 agregados += 1
 
         if agregados > 0 and self._guardar():
-            print(f"✅ {agregados} códigos agregados")
+            logger.info(f"{agregados} códigos agregados")
 
         return agregados
 
@@ -582,7 +588,7 @@ class HomologacionService:
             Ruta del archivo generado
         """
         if not codigos:
-            print("No hay códigos para exportar")
+            logger.warning("No hay códigos para exportar")
             return None
 
         if output_path is None:
@@ -601,7 +607,7 @@ class HomologacionService:
         df_export = pd.DataFrame(export_data)
 
         df_export.to_excel(output_path, index=False)
-        print(f"✅ Exportado: {output_path} ({len(codigos)} códigos pendientes)")
+        logger.info(f"Exportado: {output_path} ({len(codigos)} códigos pendientes)")
         return output_path
 
     def verificar_carga_masiva(self, df_carga):
@@ -735,7 +741,7 @@ class HomologacionService:
 
                 if self._guardar():
                     agregados = len(nuevos_registros)
-                    print(f"✅ {agregados} códigos agregados masivamente")
+                    logger.info(f"{agregados} códigos agregados masivamente")
                 else:
                     errores.append("Error al guardar el archivo")
 

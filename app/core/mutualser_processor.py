@@ -9,6 +9,7 @@ from typing import Any
 import pandas as pd
 
 from app.config.settings import HOMOLOGADOR_FILES, logger
+from app.core.homologacion_lookup import buscar_codigo_homologado, cargar_homologador_df
 from app.service.processors.base_processor import BaseProcessor
 
 
@@ -63,37 +64,18 @@ class MutualserProcessor(BaseProcessor):
 
     def _cargar_homologacion(self):
         """Carga el archivo de homologación (falla explícito, sin fallback)."""
-        try:
-            path = self.homologacion_path or self.homologador_path
-            if not path or not os.path.exists(path):
-                logger.error("Homologador Mutualser no encontrado: %s", path)
-                self.df_homologacion = None
-                self.homologador_df = None
-                self._todos_cod_serv_fact = None
-                return
-            df = pd.read_excel(path)
-            df.columns = df.columns.str.strip()
-            self.df_homologacion = df
-            self.homologador_df = df
-            self.homologacion_path = path
-            self.homologador_path = path
-            if 'COD_SERV_FACT' in df.columns:
-                codigos = set(
-                    df['COD_SERV_FACT'].dropna().astype(str).str.strip().tolist()
-                )
-                codigos.discard('0')
-                codigos.discard('')
-                self._todos_cod_serv_fact = codigos
-                logger.info("Códigos de homologación cargados: %s", len(codigos))
-            else:
-                logger.warning("Columna 'COD_SERV_FACT' no encontrada en homologación")
-                self._todos_cod_serv_fact = None
-            logger.info("Homologación cargada: %s registros", len(df))
-        except Exception as e:
-            logger.error("Error cargando homologación: %s", e)
+        path = self.homologacion_path or self.homologador_path
+        df, fact = cargar_homologador_df(path or "")
+        if df is None:
             self.df_homologacion = None
             self.homologador_df = None
             self._todos_cod_serv_fact = None
+            return
+        self.df_homologacion = df
+        self.homologador_df = df
+        self.homologacion_path = path
+        self.homologador_path = path
+        self._todos_cod_serv_fact = fact
 
     def load_homologador(self) -> bool:
         """Carga homologador con reporte explícito (contrato Base)."""
@@ -101,38 +83,23 @@ class MutualserProcessor(BaseProcessor):
         if not path:
             self.errors.append("No se especificó ruta de homologador")
             return False
-        if not os.path.exists(path):
+        df, fact = cargar_homologador_df(path)
+        if df is None:
             self.errors.append(f"Archivo de homologador no encontrado: {path}")
-            logger.error("Archivo de homologador no encontrado: %s", path)
             self.df_homologacion = None
             self.homologador_df = None
             return False
-        try:
-            df = pd.read_excel(path)
-            df.columns = df.columns.str.strip()
-            self.df_homologacion = df
-            self.homologador_df = df
-            self.homologacion_path = path
-            self.homologador_path = path
-            if 'COD_SERV_FACT' in df.columns:
-                codigos = set(
-                    df['COD_SERV_FACT'].dropna().astype(str).str.strip().tolist()
-                )
-                codigos.discard('0')
-                codigos.discard('')
-                self._todos_cod_serv_fact = codigos
-            logger.info("Homologador cargado: %s registros", len(df))
-            return True
-        except Exception as e:
-            self.errors.append(f"Error al cargar homologador: {str(e)}")
-            logger.error("Error al cargar homologador: %s", e)
-            self.df_homologacion = None
-            self.homologador_df = None
-            return False
+        self.df_homologacion = df
+        self.homologador_df = df
+        self.homologacion_path = path
+        self.homologador_path = path
+        self._todos_cod_serv_fact = fact
+        logger.info("Homologador cargado: %s registros", len(df))
+        return True
 
     def _buscar_codigo_homologado(self, codigo_tecnologia):
         """
-        Busca código homologado:
+        Busca código homologado (regla compartida en homologacion_lookup):
         1. Buscar en 'Código Servicio de la ERP'
         2. Tomar 'Código producto en DGH' de esa fila
         3. Verificar si existe en COD_SERV_FACT
@@ -141,48 +108,9 @@ class MutualserProcessor(BaseProcessor):
             return ''
 
         try:
-            codigo_str = self._normalize_code(codigo_tecnologia)
-            if not codigo_str or codigo_str == 'NAN':
-                return ''
-
-            col_erp = 'Código Servicio de la ERP'
-            col_producto = 'Código producto en DGH'
-
-            for col in [col_erp, col_producto, 'COD_SERV_FACT']:
-                if col not in self.df_homologacion.columns:
-                    return ''
-
-            codigo_numerico = ''.join(filter(str.isdigit, codigo_str))
-
-            mask = self.df_homologacion[col_erp].astype(str).str.strip().str.upper() == codigo_str
-            resultado = self.df_homologacion[mask]
-
-            if resultado.empty and codigo_numerico:
-                mask = (
-                    self.df_homologacion[col_erp].astype(str).str.replace(r'\D', '', regex=True)
-                    == codigo_numerico
-                )
-                resultado = self.df_homologacion[mask]
-
-            if not resultado.empty:
-                codigo_producto = resultado.iloc[0][col_producto]
-
-                if pd.notna(codigo_producto):
-                    cod_str = self._normalize_code(codigo_producto)
-
-                    if cod_str and cod_str != '0' and cod_str != 'NAN':
-                        if self._todos_cod_serv_fact and cod_str in self._todos_cod_serv_fact:
-                            return cod_str
-
-                        if self._todos_cod_serv_fact:
-                            cod_numerico = ''.join(filter(str.isdigit, cod_str))
-                            if cod_numerico:
-                                for cod in self._todos_cod_serv_fact:
-                                    if ''.join(filter(str.isdigit, cod)) == cod_numerico:
-                                        return cod
-
-            return ''
-
+            return buscar_codigo_homologado(
+                self.df_homologacion, self._todos_cod_serv_fact, codigo_tecnologia
+            )
         except Exception as e:
             logger.warning("Error homologando %s: %s", codigo_tecnologia, e)
             return ''

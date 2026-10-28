@@ -2,13 +2,11 @@
 
 Formato v1 (escritura unica): sin secretos en disco. Password en
 keyring (DPAPI en Windows) o token Fernet con clave en keyring.
-Compat lectura v0 (base64) por una version.
+Los formatos legacy (v0 base64) ya NO se leen: requieren re-login.
 """
-import base64
-import binascii
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.config.settings import logger
 from app.core.secure_store import (
@@ -37,8 +35,8 @@ def _is_expired(saved_at_iso: str) -> bool:
     try:
         saved = datetime.fromisoformat(saved_at_iso)
         if saved.tzinfo is None:
-            saved = saved.replace(tzinfo=timezone.utc)
-        now = datetime.now(timezone.utc)
+            saved = saved.replace(tzinfo=UTC)
+        now = datetime.now(UTC)
         return (now - saved).days > SESSION_EXPIRY_DAYS
     except Exception as exc:
         logger.warning("saved_at invalido (%s): %s", saved_at_iso, exc)
@@ -64,7 +62,7 @@ def save_session(email, password, server):
             "version": SESSION_VERSION,
             "email": email,
             "server": server,
-            "saved_at": datetime.now(timezone.utc).isoformat(),
+            "saved_at": datetime.now(UTC).isoformat(),
             "backend": backend,
         }
         if token is not None:
@@ -92,29 +90,11 @@ def _load_v1(data: dict):
     return {"email": email, "password": password, "server": server}
 
 
-def _load_legacy_v0(data: dict):
-    """Compat lectura formato viejo base64 (v0). Solo lectura."""
-    logger.warning(
-        "Sesion en formato legacy v0 (base64); migre guardando de nuevo. "
-        "Soporte de lectura se retirara en proxima version."
-    )
-    try:
-        raw = data.get("password", "")
-        if not raw:
-            return None
-        password = base64.b64decode(raw).decode()
-        return {
-            "email": data.get("email", ""),
-            "password": password,
-            "server": data.get("server", ""),
-        }
-    except (binascii.Error, UnicodeDecodeError, ValueError) as e:
-        logger.warning("Sesion legacy corrupta (base64 invalido): %s", e)
-        return None
-
-
 def load_session():
     """Carga la sesión guardada.
+
+    Solo formato v1. Archivos legacy o desconocidos se ignoran
+    (requieren re-login) y se avisa en el log.
 
     Returns:
         dict con {email, password, server} o None si no existe/expirada.
@@ -134,10 +114,9 @@ def load_session():
             return None
         if data.get("version") == SESSION_VERSION:
             return _load_v1(data)
-        # Legacy v0: sin "version", con password base64.
-        if "password" in data and "version" not in data:
-            return _load_legacy_v0(data)
-        logger.warning("Archivo de sesion con version desconocida")
+        logger.warning(
+            "Archivo de sesion legacy o desconocido: se ignora, re-inicie sesion"
+        )
         return None
     except Exception as e:
         logger.error("Error cargando sesión: %s", e)

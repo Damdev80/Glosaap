@@ -1,13 +1,13 @@
 """Gestor simple de credenciales (sin secretos en disco).
 
 Password en keyring (DPAPI en Windows) o token Fernet con clave en
-keyring. En fichero solo username + backend + extras.
-Compat lectura de formato viejo plano por una version.
+keyring. En fichero solo username + backend + extras. Los formatos
+legacy en plano ya NO se leen: requieren guardar de nuevo.
 """
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.config.settings import logger
 from app.core.secure_store import (
@@ -117,7 +117,7 @@ class CredentialManager:
             entry = {
                 "username": username,
                 "backend": backend,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
                 **extras,
             }
             if token is not None:
@@ -162,15 +162,14 @@ class CredentialManager:
             if not isinstance(entry, dict):
                 return None
 
-            # Compat lectura formato viejo plano (una version).
+            # Formato legacy en plano: ya no se lee (re-guardar requerido).
             if "password" in entry and "backend" not in entry:
                 logger.warning(
-                    "Credenciales de '%s' en formato legacy plano; "
-                    "se devolveran una vez. Vuelva a guardar para migrar. "
-                    "Soporte se retirara en proxima version.",
+                    "Credenciales de '%s' en formato legacy plano; se ignoran. "
+                    "Vuelva a guardar para migrar.",
                     service,
                 )
-                return dict(entry)
+                return None
 
             username = entry.get("username", "")
             backend = entry.get("backend", "keyring")

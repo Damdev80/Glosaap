@@ -170,8 +170,8 @@ class TestCredentialManagerLoad:
         assert result["nit"] == "123456"
         assert result["sede"] == "centro"
 
-    def test_load_legacy_plaintext_compat(self, tmp_path):
-        """Compat lectura formato viejo plano (una version, con warning)."""
+    def test_load_legacy_plaintext_rechazado(self, tmp_path):
+        """Formato legacy en plano ya NO se lee: retorna None."""
         manager = CredentialManager(config_dir=str(tmp_path))
         # Simular fichero legacy con password en claro.
         legacy = {
@@ -180,12 +180,7 @@ class TestCredentialManagerLoad:
         with open(manager.credentials_file, "w", encoding="utf-8") as f:
             json.dump(legacy, f)
 
-        result = manager.load_credentials("oldsvc")
-
-        assert result is not None
-        assert result["username"] == "olduser"
-        assert result["password"] == "plain123"
-        assert result["nit"] == "999"
+        assert manager.load_credentials("oldsvc") is None
 
 
 class TestCredentialManagerDelete:

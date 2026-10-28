@@ -124,8 +124,8 @@ class TestLoadSession:
         finally:
             session_manager.SESSION_FILE = original_session_file
 
-    def test_load_session_legacy_v0_compat(self, tmp_path):
-        """Compat lectura formato viejo base64 (v0) una version."""
+    def test_load_session_legacy_v0_rechazado(self, tmp_path):
+        """Formato legacy base64 (v0) ya NO se lee: retorna None."""
         session_file = tmp_path / ".session.json"
         original_session_file = session_manager.SESSION_FILE
         session_manager.SESSION_FILE = str(session_file)
@@ -138,12 +138,7 @@ class TestLoadSession:
             }
             session_file.write_text(json.dumps(legacy), encoding="utf-8")
 
-            result = session_manager.load_session()
-
-            assert result is not None
-            assert result["email"] == "legacy@test.com"
-            assert result["password"] == "legacypass"
-            assert result["server"] == "mail.legacy.com"
+            assert session_manager.load_session() is None
         finally:
             session_manager.SESSION_FILE = original_session_file
 
