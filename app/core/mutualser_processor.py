@@ -402,6 +402,9 @@ class MutualserProcessor(BaseProcessor):
             # Procesar AU/TA
             df_obj = self._procesar_au_ta(df_obj)
 
+            # Unificar por servicio cuando hay SO4801
+            df_obj = self._procesar_so4801(df_obj)
+
             # Exportar
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             output_path = os.path.join(self.output_dir, f"Objeciones_{timestamp}.xlsx")
@@ -451,6 +454,54 @@ class MutualserProcessor(BaseProcessor):
             df_obj = df_obj.drop(filas_eliminar).reset_index(drop=True)
             logger.info("%s filas TA procesadas", procesadas)
 
+        return df_obj
+
+    # Código de glosa prioritario: se conserva y absorbe los demás
+    # conceptos del mismo servicio.
+    CODIGO_SO_PRIORITARIO = "SO4801"
+
+    def _procesar_so4801(self, df_obj):
+        """Unifica glosas por servicio cuando hay código SO4801.
+
+        Dentro de cada grupo (CRNCXC, SLNSERPRO): si una fila trae SO4801,
+        se deja ese código y las observaciones de las filas con otros
+        conceptos se unifican en ella (separadas por //); las filas
+        unificadas se eliminan.
+        """
+        logger.info("Procesando SO4801")
+        if 'CRNCXC' not in df_obj.columns or 'SLNSERPRO' not in df_obj.columns:
+            return df_obj
+
+        filas_eliminar = []
+        procesadas = 0
+
+        for (_factura, _tec), grupo in df_obj.groupby(['CRNCXC', 'SLNSERPRO']):
+            if len(grupo) < 2:
+                continue
+
+            filas_so = [
+                i for i, r in grupo.iterrows()
+                if self._normalize_code(r.get('CRNCONOBJ', '')) == self.CODIGO_SO_PRIORITARIO
+            ]
+            if not filas_so:
+                continue
+            idx_so = filas_so[0]
+
+            for idx, _r in grupo.iterrows():
+                if idx == idx_so:
+                    continue
+                obs = str(df_obj.at[idx, 'CRDOBSERV']).strip() if 'CRDOBSERV' in df_obj.columns else ''
+                if obs and obs.lower() != 'nan':
+                    obs_so = str(df_obj.at[idx_so, 'CRDOBSERV']).strip() if 'CRDOBSERV' in df_obj.columns else ''
+                    if obs_so.lower() == 'nan':
+                        obs_so = ''
+                    df_obj.at[idx_so, 'CRDOBSERV'] = f"{obs_so} // {obs}" if obs_so else obs
+                filas_eliminar.append(idx)
+                procesadas += 1
+
+        if filas_eliminar:
+            df_obj = df_obj.drop(filas_eliminar).reset_index(drop=True)
+            logger.info("%s filas unificadas en SO4801", procesadas)
         return df_obj
 
     # ==================== UTILIDADES DE FORMATO ====================

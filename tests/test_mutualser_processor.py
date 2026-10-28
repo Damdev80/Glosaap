@@ -360,3 +360,99 @@ class TestMutualserExportarTmp:
         out = tmp_path / "out_exp_vacio"
         proc = MutualserProcessor(output_dir=str(out), homologacion_path=hom)
         assert proc.exportar_consolidado() is None
+
+
+def _df_objeciones(filas):
+    import pandas as pd
+
+    return pd.DataFrame(
+        filas,
+        columns=["CRNCXC", "SLNSERPRO", "CRNCONOBJ", "CRDOBSERV"],
+    )
+
+
+def _proc_tmp(tmp_path, nombre="out_so"):
+    hom = _write_homologador_mutualser_tmp(tmp_path / "hom.xlsx")
+    out = tmp_path / nombre
+    return MutualserProcessor(output_dir=str(out), homologacion_path=hom)
+
+
+class TestMutualserSO4801:
+    """SO4801 se conserva y absorbe otros conceptos del mismo servicio."""
+
+    def test_unifica_otros_conceptos(self, tmp_path):
+        proc = _proc_tmp(tmp_path)
+        df = _df_objeciones(
+            [
+                ("FC00001", "CUPS001", "SO4801", "Obs SO"),
+                ("FC00001", "CUPS001", "FA001", "Obs FA"),
+                ("FC00001", "CUPS001", "AU002", "Obs AU"),
+            ]
+        )
+        result = proc._procesar_so4801(df)
+        assert len(result) == 1
+        assert result.loc[0, "CRNCONOBJ"] == "SO4801"
+        assert result.loc[0, "CRDOBSERV"] == "Obs SO // Obs FA // Obs AU"
+
+    def test_solo_so4801_no_cambia(self, tmp_path):
+        proc = _proc_tmp(tmp_path)
+        df = _df_objeciones([("FC00001", "CUPS001", "SO4801", "Obs SO")])
+        result = proc._procesar_so4801(df)
+        assert len(result) == 1
+        assert result.loc[0, "CRDOBSERV"] == "Obs SO"
+
+    def test_sin_so4801_no_cambia(self, tmp_path):
+        proc = _proc_tmp(tmp_path)
+        df = _df_objeciones(
+            [
+                ("FC00001", "CUPS001", "FA001", "Obs FA"),
+                ("FC00001", "CUPS001", "AU002", "Obs AU"),
+            ]
+        )
+        result = proc._procesar_so4801(df)
+        assert len(result) == 2
+
+    def test_otro_servicio_no_mezcla(self, tmp_path):
+        proc = _proc_tmp(tmp_path)
+        df = _df_objeciones(
+            [
+                ("FC00001", "CUPS001", "SO4801", "Obs SO"),
+                ("FC00001", "CUPS002", "FA001", "Obs FA"),
+            ]
+        )
+        result = proc._procesar_so4801(df)
+        assert len(result) == 2
+
+    def test_match_insensible_mayusculas(self, tmp_path):
+        proc = _proc_tmp(tmp_path)
+        df = _df_objeciones(
+            [
+                ("FC00001", "CUPS001", "so4801", "Obs SO"),
+                ("FC00001", "CUPS001", "FA001", "Obs FA"),
+            ]
+        )
+        result = proc._procesar_so4801(df)
+        assert len(result) == 1
+        assert result.loc[0, "CRNCONOBJ"] == "so4801"
+
+    def test_end_to_end_objeciones(self, tmp_path):
+        proc = _proc_tmp(tmp_path, "out_so_e2e")
+        f1 = _write_mutualser_input_tmp(
+            tmp_path / "so.xlsx",
+            [
+                _fila_mutualser("F001", "G001", "890201", "Concepto SO", "SO4801", "Obs SO"),
+                _fila_mutualser("F001", "G002", "890201", "Concepto FA", "FA001", "Obs FA"),
+            ],
+        )
+        assert proc.procesar_multiples_archivos([f1]) is not None
+        resultado = proc.exportar_consolidado(nombre_archivo="cons_so.xlsx")
+        assert resultado is not None
+        _output_path, objeciones_path = resultado
+        assert objeciones_path is not None
+        import pandas as pd
+
+        obj = pd.read_excel(objeciones_path)
+        assert len(obj) == 1
+        assert obj.loc[0, "CRNCONOBJ"] == "SO4801"
+        assert "Obs SO" in str(obj.loc[0, "CRDOBSERV"])
+        assert "Obs FA" in str(obj.loc[0, "CRDOBSERV"])
