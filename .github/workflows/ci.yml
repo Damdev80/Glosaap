@@ -95,6 +95,7 @@ jobs:
       - name: Run type checking
         run: |
           pyright app/ --outputjson || true
+        # TODO: volver bloqueante cuando el baseline (114 errores) se limpie.
         continue-on-error: true
 
   build:
@@ -121,7 +122,6 @@ jobs:
       - name: Build executable
         run: |
           pyinstaller --noconfirm --onefile --windowed --icon=assets/icons/app_logo.ico --name=Glosaap --add-data="assets;assets" main.py
-        continue-on-error: true
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

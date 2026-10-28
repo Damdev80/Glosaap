@@ -1,7 +1,7 @@
 # Glosaap - Instrucciones para Agentes de IA
 
 ## Contexto del Proyecto
-**Glosaap** es una aplicación de escritorio para gestionar glosas médicas. Automatiza la descarga de correos IMAP, procesamiento de archivos Excel de EPS (Entidades Promotoras de Salud), homologación de códigos de servicios médicos, y generación de respuestas. Construida con **Python 3.10+** y **Flet** (framework UI tipo Flutter/Material Design).
+**Glosaap** es una aplicación de escritorio para gestionar glosas médicas. Automatiza la descarga de correos IMAP, procesamiento de archivos Excel de EPS (Entidades Promotoras de Salud), homologación de códigos de servicios médicos, y generación de respuestas. Construida con **Python 3.11+** y **Flet** (framework UI tipo Flutter/Material Design).
 
 ### Dominio de Negocio
 - **Glosas**: Objeciones de EPS a cobros médicos que requieren justificación documental
@@ -218,8 +218,14 @@ ruff format .             # Formatear código
 
 # Configuración en pyproject.toml:
 # - line-length = 120
-# - Python 3.10+ target
+# - Python 3.11+ target
 # - Ignora E501 (line too long), B008, E722
+```
+
+### Pre-commit (opcional, recomendado)
+```powershell
+pip install pre-commit
+pre-commit install  # ruff check --fix + ruff format antes de cada commit
 ```
 
 ### Build y Release

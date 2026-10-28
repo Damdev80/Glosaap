@@ -8,7 +8,7 @@ description: Correr tests y cobertura en el entorno real del proyecto
 Úsalo antes de correr o interpretar tests.
 
 ## Entorno real
-- Sistema y `.venv` en Python 3.15.0 (no soportado por CI 3.10-3.12). Riesgo: pandas 3.0.6, PyInstaller 6.22, Flet 0.27.6 viejo.
+- Sistema y `.venv` en Python 3.15.0 (no soportado; CI verificado en 3.11-3.12).
 - Flet pineado `>=0.27.0,<0.28.0`; falta `cryptography` en requirements aunque el código lo espera.
 
 ## Comandos

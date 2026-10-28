@@ -7,10 +7,12 @@ description: Migrar secretos de base64 y texto plano a almacenamiento seguro
 
 Úsalo antes de tocar `app/core/session_manager.py`, `app/service/credential_manager.py` o archivos de credenciales.
 
-## Problema actual
-- `session_manager.py`: password en base64 en `.session.json` (ofuscación, no cifrado).
-- `credential_manager.py`: password en texto plano en `credentials.json` (`%APPDATA%\Glosaap\config` en Win, `temp/config` resto).
-- Sin `chmod 600`, sin file locking, sin expiración; riesgo de commit accidental.
+## Estado actual (compat legacy retirada)
+- `session_manager.py` y `credential_manager.py` custodian en keyring/DPAPI.
+  Los formatos legacy (base64/plano) ya NO se leen: se ignoran y exigen
+  re-login / re-guardar. No reintroducir ramas de compat.
+- Sin `chmod 600`, sin file locking, sin expiración en versiones viejas;
+  riesgo de commit accidental si alguien revive esos formatos.
 
 ## Migración
 1. Usa `keyring` (DPAPI en Windows) como backend principal; fallback `cryptography.fernet` con clave en keyring, nunca en disco.

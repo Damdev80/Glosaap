@@ -6,7 +6,7 @@
 
 **Sistema integral para la gestión, procesamiento y respuesta de glosas médicas**
 
-[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Flet](https://img.shields.io/badge/Flet-0.27.6-green.svg)](https://flet.dev/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![GitHub Release](https://img.shields.io/github/v/release/Damdev80/Glosaap)](https://github.com/Damdev80/Glosaap/releases)
@@ -96,7 +96,7 @@
 ## 📋 Requisitos
 
 ### Software
-- **Python** 3.10 o superior
+- **Python** 3.11 o superior (CI verificado en 3.11 y 3.12)
 - **Windows** 10/11 (para rutas de red UNC)
 - Acceso a red corporativa (para rutas `\\MINERVA\...`)
 

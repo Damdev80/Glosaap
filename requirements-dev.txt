@@ -8,10 +8,9 @@ pytest-cov>=4.1.0
 pytest-mock>=3.12.0
 pytest-asyncio>=0.21.0
 
-# Herramientas de calidad de código
-black>=23.0.0           # Formateador de código
-flake8>=7.0.0           # Linter
-mypy>=1.8.0             # Type checker
+# Herramientas de calidad de código (alineadas con el proyecto)
+ruff>=0.8.0             # Linter + formatter (reemplaza black, flake8, isort)
+pyright>=1.1.0          # Type checker (config en pyproject.toml)
 
 # Build y empaquetado
 pyinstaller>=6.0.0

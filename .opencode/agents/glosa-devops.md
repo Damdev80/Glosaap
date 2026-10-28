@@ -40,4 +40,4 @@ Reglas:
 - Bugs conocidos: `build.py` borra `*.spec` trackeados y usa `input()` que bloquea CI; `ci.yml` apunta a `app/main.py` inexistente (es `main.py` raíz); `auto-release.yml` usa `actions/create-release@v1` archivado; `release.py` exige `.env` sin `.env.example` y falla sin sección `## [x.y.z]` en CHANGELOG.
 - No publiques sin: `APP_VERSION` en `settings.py` + entrada en `CHANGELOG.md` + tag git coincidente.
 - Prohibido subir ZIP sin checksum; el updater no verifica firma (solo HTTPS), documéntalo como riesgo.
-- Python del proyecto: CI 3.10-3.12; el entorno local está en 3.15 no soportado. Propone fijar 3.11.
+- Python del proyecto: 3.11+ (CI 3.11-3.12); el entorno local en 3.15 no está soportado.

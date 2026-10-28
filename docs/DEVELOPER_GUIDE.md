@@ -23,7 +23,7 @@ Esta guía está diseñada para que desarrolladores nuevos puedan entender rápi
 ## 🚀 Inicio Rápido
 
 ### Requisitos
-- Python 3.10+
+- Python 3.11+ (CI verificado en 3.11 y 3.12; 3.15 local no soportado)
 - Git
 - Acceso a red corporativa (para rutas `\\MINERVA\...`)
 
