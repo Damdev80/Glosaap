@@ -10,7 +10,7 @@ from datetime import datetime
 import flet as ft
 import pandas as pd
 
-from app.config.settings import get_homologador_path
+from app.config.settings import HOMOLOGADOR_FILES, get_homologador_path
 from app.service.processors.sanitas_processor import SanitasProcessor
 
 
@@ -483,6 +483,30 @@ class HomologadorManualView:
             print(f"⚠️ Error homologando {codigo}: {e}")
             return ''
 
+    def _generar_objeciones_sanitas(self, df_archivo):
+        """Genera el archivo de Objeciones de Sanitas (formato Dinámica).
+
+        Reutiliza SanitasProcessor: cómputo total (CRNCXC, CRNCONOBJ de 6,
+        SLNSERPRO por cascada/normal, CROVALOBJ, CRDOBSERV) + formato de
+        objeciones. Retorna la ruta generada o None si el archivo no tiene
+        estructura Sanitas (se conserva solo el homologado por columna).
+        """
+        proc = self._sanitas_processor
+        if proc is None or df_archivo is None or df_archivo.empty:
+            return None
+        # Insumos en manual: misma fuente que el automático, no fatal si falta.
+        if proc.insumos_df is None:
+            proc.homologador_insumos_path = HOMOLOGADOR_FILES.get("sanitas_insumos", "")
+            if proc.homologador_insumos_path:
+                try:
+                    proc.load_homologador_insumos()
+                except Exception:
+                    pass
+        detalle = proc.homologate({"sanitas": df_archivo.copy()})
+        if detalle is None or detalle.empty:
+            return None
+        return proc._generar_archivo_objeciones(detalle, self.OUTPUT_PATH)
+
     def _on_homologar(self, e):
         """Ejecuta la homologación"""
         def worker():
@@ -533,6 +557,12 @@ class HomologadorManualView:
 
                 df_resultado.to_excel(ruta_salida, index=False)
 
+                # SANITAS manual también genera el Objeciones (el que se
+                # carga a Dinámica) cuando el archivo tiene estructura Sanitas.
+                objeciones_path = None
+                if self.selected_eps == "SANITAS" and self.df_archivo is not None:
+                    objeciones_path = self._generar_objeciones_sanitas(self.df_archivo)
+
                 # Mostrar preview
                 self.preview_table.rows = [  # type: ignore
                     ft.DataRow(cells=[
@@ -544,7 +574,14 @@ class HomologadorManualView:
 
                 # Status final
                 self.progress_bar.visible = False  # type: ignore
-                self.status_text.value = f"✅ ¡Homologación completada!\n📊 {homologados} homologados | {no_homologados} sin homologar\n📁 Guardado en: {nombre_salida}"  # type: ignore
+                status = (
+                    f"✅ ¡Homologación completada!\n"
+                    f"📊 {homologados} homologados | {no_homologados} sin homologar\n"
+                    f"📁 Guardado en: {nombre_salida}"
+                )
+                if objeciones_path:
+                    status += f"\n📋 Objeciones: {os.path.basename(objeciones_path)}"
+                self.status_text.value = status  # type: ignore
                 self.status_text.color = ft.Colors.GREEN  # type: ignore
                 self.btn_homologar.disabled = False  # type: ignore
                 self.page.update()
