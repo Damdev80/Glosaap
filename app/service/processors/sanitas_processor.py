@@ -322,8 +322,9 @@ class SanitasProcessor(BaseProcessor):
         frames = []
         for path in paths:
             try:
-                df = pd.read_excel(path)
-                frames.append(df)
+                df = self._leer_xlsx_todas_hojas(path)
+                if df is not None and not df.empty:
+                    frames.append(df)
             except Exception as e:
                 self.errors.append(f"Error al leer {path}: {str(e)}")
                 continue
@@ -336,6 +337,29 @@ class SanitasProcessor(BaseProcessor):
         return {"sanitas": combined}
 
     # ==================== HELPERS ====================
+
+    @staticmethod
+    def _leer_xlsx_todas_hojas(path: str) -> pd.DataFrame | None:
+        """Lee un xlsx concatenando TODAS sus hojas (no solo la primera).
+
+        Sanitas puede traer varias hojas por archivo; pd.read_excel(path)
+        solo lee la primera y se pierden glosas. Con sheet_name=None se
+        leen todas y se concatenan (hojas vacías se omiten).
+        """
+        hojas = pd.read_excel(path, sheet_name=None)
+        if isinstance(hojas, dict):
+            frames = [
+                df for df in hojas.values()
+                if isinstance(df, pd.DataFrame) and not df.empty
+            ]
+            if not frames:
+                return None
+            if len(frames) == 1:
+                return frames[0]
+            return pd.concat(frames, ignore_index=True)
+        if isinstance(hojas, pd.DataFrame):
+            return hojas
+        return None
 
     def _resolve_column(
         self, df: pd.DataFrame, candidates: list[str], logical: str
@@ -855,7 +879,9 @@ class SanitasProcessor(BaseProcessor):
         archivos_error = 0
         for path in xlsx:
             try:
-                df = pd.read_excel(path)
+                df = self._leer_xlsx_todas_hojas(path)
+                if df is None or df.empty:
+                    continue
                 metadata = None
                 if attachment_service is not None:
                     try:

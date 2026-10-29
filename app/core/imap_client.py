@@ -436,8 +436,9 @@ class ImapClient:
             return []
 
         self.select_folder(folder)
-        msg_id_bytes = msg_id.encode() if isinstance(msg_id, str) else msg_id
-        typ, msg_data = self.conn.fetch(msg_id_bytes.decode() if isinstance(msg_id_bytes, bytes) else str(msg_id_bytes), "(RFC822)")
+        # Normalizar msg_id una sola vez (str) para fetch y para nombres únicos.
+        msg_id_str = msg_id.decode() if isinstance(msg_id, bytes) else str(msg_id)
+        typ, msg_data = self.conn.fetch(msg_id_str, "(RFC822)")
         if typ != "OK" or not msg_data or msg_data[0] is None:
             return []
         raw = msg_data[0][1]
@@ -487,6 +488,21 @@ class ImapClient:
 
                 safe_name = filename.replace(os.path.sep, "_")
                 path = os.path.join(out_dir, safe_name)
+
+                # Sanitas (y otras EPS) repiten el mismo nombre de adjunto en
+                # cada correo ("Informe Glosas.xlsx"). Sin unicidad, cada
+                # descarga sobrescribe la anterior y solo queda 1 archivo.
+                # Si el nombre ya existe, sufijar con el ID del mensaje.
+                if os.path.exists(path):
+                    stem, ext = os.path.splitext(safe_name)
+                    candidato = f"{stem}_{msg_id_str}{ext}"
+                    path = os.path.join(out_dir, candidato)
+                    contador = 1
+                    while os.path.exists(path):
+                        contador += 1
+                        candidato = f"{stem}_{msg_id_str}_{contador}{ext}"
+                        path = os.path.join(out_dir, candidato)
+                    safe_name = os.path.basename(path)
 
                 with open(path, "wb") as f:
                     f.write(payload)

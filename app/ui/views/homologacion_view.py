@@ -13,6 +13,10 @@ from app.ui.components.navigation_header import NavigationHeader
 class HomologacionView:
     """Vista para CRUD de códigos de homologación con selector de EPS"""
 
+    # Clave sintética para agrupar las 2 tablas de Sanitas
+    # (normal + insumos) bajo una sola tarjeta SANITAS.
+    SANITAS_GROUP_KEY = "__sanitas_group"
+
     def __init__(self, page: ft.Page, navigation_controller=None, on_back=None):
         self.page = page
         self.navigation_controller = navigation_controller
@@ -80,6 +84,8 @@ class HomologacionView:
 
     def _create_eps_card(self, eps_info):
         """Crea una tarjeta para seleccionar una EPS usando Card de Flet"""
+        if eps_info.get("key") == self.SANITAS_GROUP_KEY:
+            return self._create_sanitas_group_card(eps_info)
         def on_click(e):
             self._seleccionar_eps(eps_info["key"])
 
@@ -136,6 +142,79 @@ class HomologacionView:
             elevation=2,
         )
         return card
+
+    def _create_sanitas_group_card(self, group_info):
+        """Tarjeta única SANITAS que abre las 2 tablas (Normal + Insumos)."""
+        sub = group_info.get("sub_eps") or []
+
+        def on_click(e):
+            self._mostrar_opciones_sanitas(sub)
+
+        total = group_info.get("count", sum(s.get("count", 0) for s in sub))
+        return ft.Card(
+            content=ft.Container(
+                content=ft.Row([
+                    ft.Container(
+                        content=ft.Text(
+                            "S",
+                            size=24,
+                            weight=ft.FontWeight.BOLD,
+                            color=ft.Colors.WHITE
+                        ),
+                        width=50,
+                        height=50,
+                        border_radius=10,
+                        bgcolor=ft.Colors.TEAL,
+                        alignment=ft.alignment.center
+                    ),
+                    ft.Container(width=16),
+                    ft.Column([
+                        ft.Text(
+                            "Sanitas",
+                            size=16,
+                            weight=ft.FontWeight.W_600
+                        ),
+                        ft.Text(
+                            f"{total} códigos · 2 tablas: Normal + Insumos",
+                            size=12
+                        )
+                    ], spacing=2, alignment=ft.MainAxisAlignment.CENTER),
+                    ft.Container(expand=True),
+                    ft.Icon(ft.Icons.ARROW_FORWARD_IOS, size=16)
+                ]),
+                padding=20,
+                on_click=on_click,
+                ink=True,
+                width=400
+            ),
+            elevation=2,
+        )
+
+    def _mostrar_opciones_sanitas(self, sub_eps):
+        """Sub-selector: tras clicar SANITAS muestra sus 2 tablas."""
+        self.eps_cards_column.controls.clear()
+        self.eps_cards_column.controls.append(
+            ft.Row([
+                ft.TextButton(
+                    "← Volver",
+                    on_click=lambda e: self._cargar_eps_disponibles(),
+                ),
+                ft.Text(
+                    "Sanitas: elige tabla",
+                    size=14,
+                    weight=ft.FontWeight.W_600,
+                ),
+            ], alignment=ft.MainAxisAlignment.CENTER)
+        )
+        orden = {"sanitas": 0, "sanitas_insumos": 1}
+        for info in sorted(sub_eps, key=lambda x: orden.get(x.get("key", ""), 99)):
+            self.eps_cards_column.controls.append(
+                self._create_eps_card(info)
+            )
+        try:
+            self.page.update()
+        except Exception:
+            pass
 
     def _seleccionar_eps(self, eps_key):
         """Selecciona una EPS y muestra la vista de gestión"""
@@ -708,10 +787,27 @@ class HomologacionView:
                 )
             )
         else:
-            for eps_info in eps_list:
+            sanitas = [x for x in eps_list if x.get("key") in ("sanitas", "sanitas_insumos")]
+            resto = [x for x in eps_list if x.get("key") not in ("sanitas", "sanitas_insumos")]
+            for eps_info in resto:
                 self.eps_cards_column.controls.append(
                     self._create_eps_card(eps_info)
                 )
+            if sanitas:
+                if len(sanitas) > 1:
+                    grupo = {
+                        "key": self.SANITAS_GROUP_KEY,
+                        "name": "SANITAS",
+                        "count": sum(x.get("count", 0) for x in sanitas),
+                        "sub_eps": sanitas,
+                    }
+                    self.eps_cards_column.controls.append(
+                        self._create_sanitas_group_card(grupo)
+                    )
+                else:
+                    self.eps_cards_column.controls.append(
+                        self._create_eps_card(sanitas[0])
+                    )
 
         self.page.update()
 

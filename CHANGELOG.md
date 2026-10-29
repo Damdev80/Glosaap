@@ -6,6 +6,21 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.11.28] - 2026-10-29
+
+### ✨ Nuevas Características
+- Sanitas agrupado en UI: una tarjeta SANITAS abre las 2 tablas
+  (Normal + Insumos) en Gestión Homologación y Homologador Manual.
+- Homologador Manual Sanitas Insumos: cascada CUM/IUM/Producto con
+  `es_insumo=True` y archivo `_SANITAS_INSUMOS_`.
+
+### 🐛 Correcciones
+- Descargas Sanitas ya no se sobrescriben: adjuntos con mismo nombre
+  se guardan como `base_<msg_id>.xlsx` (antes quedaba 1 solo archivo).
+- Sanitas lee todas las hojas del xlsx (`sheet_name=None` + concat)
+  en `extract_data` y `process_glosas`, no solo la primera.
+
+
 ## [0.11.27] - 2026-10-29
 
 ### 🐛 Correcciones

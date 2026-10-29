@@ -42,11 +42,13 @@ class HomologadorManualView:
         self.df_homologacion = None
         self._todos_cod_serv_fact = None
 
-        # Estado específico de SANITAS (homologador normal, igual que las demás EPS)
+        # Estado específico de SANITAS (normal + insumos agrupados bajo SANITAS)
         self._sanitas_processor = None
+        self.sanitas_tipo = None  # "normal" | "insumos" | None
 
         # Componentes UI
         self.eps_dropdown = None
+        self.sanitas_tipo_dropdown = None
         self.archivo_text = None
         self.columna_dropdown = None
         self.btn_homologar = None
@@ -71,6 +73,21 @@ class HomologadorManualView:
             on_change=self._on_eps_change,
             border_color=ft.Colors.PRIMARY,
             focused_border_color=ft.Colors.PRIMARY
+        )
+
+        # Sub-selector SANITAS: aparece solo cuando EPS == SANITAS.
+        # Agrupa las 2 tablas (Normal + Insumos) bajo una sola tarjeta/dropdown.
+        self.sanitas_tipo_dropdown = ft.Dropdown(
+            label="Tabla Sanitas",
+            width=300,
+            options=[
+                ft.dropdown.Option("normal", "SANITAS NORMAL"),
+                ft.dropdown.Option("insumos", "SANITAS INSUMOS"),
+            ],
+            on_change=self._on_sanitas_tipo_change,
+            border_color=ft.Colors.PRIMARY,
+            focused_border_color=ft.Colors.PRIMARY,
+            visible=False,
         )
 
         # Selector de archivo
@@ -201,7 +218,8 @@ class HomologadorManualView:
                                     ft.Text("Seleccionar EPS", size=15, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE)
                                 ], spacing=10),
                                 ft.Container(height=10),
-                                self.eps_dropdown
+                                self.eps_dropdown,
+                                self.sanitas_tipo_dropdown
                             ]),
                             padding=20,
                             bgcolor=ft.Colors.SURFACE,
@@ -297,22 +315,97 @@ class HomologadorManualView:
             self.eps_logo.src = os.path.join(self.ASSETS_DIR, "img", "eps", "sanitas.png")
             self.eps_logo.visible = True
 
-        # Cargar archivo de homologación
+        # SANITAS agrupa 2 tablas: mostrar sub-selector y esperar elección.
         if self.selected_eps == "SANITAS":
-            self._cargar_homologacion_sanitas()
+            if self.sanitas_tipo_dropdown is not None:
+                self.sanitas_tipo_dropdown.visible = True
+                # Conservar selección previa si existe; si no, pedirla.
+                if self.sanitas_tipo not in ("normal", "insumos"):
+                    self.sanitas_tipo = None
+                    self.sanitas_tipo_dropdown.value = None
+                    self._sanitas_processor = None
+                    self.df_homologacion = None
+                    self.status_text.value = "👆 Elige tabla Sanitas: NORMAL o INSUMOS"  # type: ignore
+                    self.status_text.color = ft.Colors.ON_SURFACE_VARIANT  # type: ignore
+                    self._update_button_state()
+                    self.page.update()
+                    return
+            self._cargar_homologacion_sanitas(self.sanitas_tipo or "normal")
         else:
+            if self.sanitas_tipo_dropdown is not None:
+                self.sanitas_tipo_dropdown.visible = False
+                self.sanitas_tipo_dropdown.value = None
+            self.sanitas_tipo = None
             self._cargar_homologacion()
         self._update_button_state()
         self.page.update()
 
-    def _cargar_homologacion_sanitas(self):
-        """Carga el homologador normal de Sanitas reutilizando SanitasProcessor.
+    def _on_sanitas_tipo_change(self, e):
+        """Cuando se elige tabla Sanitas (NORMAL o INSUMOS)"""
+        self.sanitas_tipo = e.control.value
+        self._cargar_homologacion_sanitas(self.sanitas_tipo or "normal")
+        self._update_button_state()
+        self.page.update()
 
-        Igual que las demás EPS: una sola tabla ERP -> DGH aplicada a la
-        columna seleccionada, sin configuración extra.
+    def _cargar_homologacion_sanitas(self, tipo: str = "normal"):
+        """Carga el homologador de Sanitas según tabla elegida.
+
+        - normal: sanitas_homologador_2.xlsx (ERP -> DGH), aplicada a la
+          columna seleccionada.
+        - insumos: sanitas_homologador.xlsx (CUM / IUM RDA / CODIGO PRODUCTO),
+          aplicada con cascada flexible a la columna seleccionada.
         """
+        self.sanitas_tipo = tipo
         try:
             normal_path = get_homologador_path("sanitas")
+            insumos_path = HOMOLOGADOR_FILES.get("sanitas_insumos", "")
+        except Exception as ex:
+            self.status_text.value = f"❌ Error obteniendo ruta de homologación: {ex}"  # type: ignore
+            self.status_text.color = ft.Colors.RED  # type: ignore
+            self._sanitas_processor = None
+            self.df_homologacion = None
+            self.page.update()
+            return
+
+        if tipo == "insumos":
+            proc = SanitasProcessor(
+                homologador_path=normal_path,
+                homologador_insumos_path=insumos_path,
+            )
+            self._sanitas_processor = proc
+            if not insumos_path or not os.path.exists(insumos_path):
+                self.status_text.value = f"❌ Homologador Sanitas Insumos no encontrado: {insumos_path}"  # type: ignore
+                self.status_text.color = ft.Colors.RED  # type: ignore
+                self.df_homologacion = None
+                self.page.update()
+                return
+            if not proc.load_homologador_insumos():
+                self.status_text.value = "❌ " + " | ".join(proc.errors)  # type: ignore
+                self.status_text.color = ft.Colors.RED  # type: ignore
+                self.df_homologacion = None
+                self.page.update()
+                return
+            # Cargar también el normal si existe (para objeciones mixtas).
+            try:
+                if normal_path and os.path.exists(normal_path):
+                    proc.load_homologador()
+            except Exception:
+                pass
+            self.df_homologacion = proc.insumos_df
+            self.status_text.value = f"✅ Homologación SANITAS INSUMOS cargada: {len(self.df_homologacion)} registros"  # type: ignore
+            self.status_text.color = ft.Colors.GREEN  # type: ignore
+            return
+
+        # tipo == "normal" (comportamiento previo)
+        try:
+            _normal_path = normal_path
+        except Exception as ex:
+            self.status_text.value = f"❌ Error obteniendo ruta de homologación: {ex}"  # type: ignore
+            self.status_text.color = ft.Colors.RED  # type: ignore
+            self._sanitas_processor = None
+            self.df_homologacion = None
+            self.page.update()
+            return
         except Exception as ex:
             self.status_text.value = f"❌ Error obteniendo ruta de homologación: {ex}"  # type: ignore
             self.status_text.color = ft.Colors.RED  # type: ignore
@@ -419,8 +512,12 @@ class HomologadorManualView:
 
     def _update_button_state(self):
         """Actualiza el estado del botón de homologar"""
+        sanitas_ok = True
+        if self.selected_eps == "SANITAS":
+            sanitas_ok = self.sanitas_tipo in ("normal", "insumos")
         self.btn_homologar.disabled = not (  # type: ignore
             self.selected_eps and
+            sanitas_ok and
             self.archivo_path and
             self.df_archivo is not None and
             self.columna_seleccionada and
@@ -490,10 +587,21 @@ class HomologadorManualView:
         SLNSERPRO por cascada/normal, CROVALOBJ, CRDOBSERV) + formato de
         objeciones. Retorna la ruta generada o None si el archivo no tiene
         estructura Sanitas (se conserva solo el homologado por columna).
+        Carga ambos homologadores (normal + insumos) si faltan, sin importar
+        la tabla elegida en el manual, para que las filas mixtas homologuen.
         """
         proc = self._sanitas_processor
         if proc is None or df_archivo is None or df_archivo.empty:
             return None
+        # Asegurar ambos homologadores (el manual puede haber cargado solo uno).
+        if proc.homologador_df is None:
+            try:
+                normal_path = get_homologador_path("sanitas")
+                if normal_path and os.path.exists(normal_path):
+                    proc.homologador_path = normal_path
+                    proc.load_homologador()
+            except Exception:
+                pass
         # Insumos en manual: misma fuente que el automático, no fatal si falta.
         if proc.insumos_df is None:
             proc.homologador_insumos_path = HOMOLOGADOR_FILES.get("sanitas_insumos", "")
@@ -528,7 +636,8 @@ class HomologadorManualView:
 
                 for idx, valor in enumerate(df_resultado[self.columna_seleccionada]):
                     if self.selected_eps == "SANITAS":
-                        codigo_homologado = self._sanitas_processor.homologar_codigo_servicio(valor)  # type: ignore
+                        es_insumo = (self.sanitas_tipo == "insumos")
+                        codigo_homologado = self._sanitas_processor.homologar_codigo_servicio(valor, es_insumo=es_insumo)  # type: ignore
                     else:
                         codigo_homologado = self._buscar_codigo_homologado(valor)
 
@@ -552,7 +661,11 @@ class HomologadorManualView:
 
                 nombre_original = os.path.splitext(os.path.basename(self.archivo_path or "resultado"))[0]  # type: ignore
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                nombre_salida = f"{nombre_original}_homologado_{self.selected_eps}_{timestamp}.xlsx"
+                if self.selected_eps == "SANITAS":
+                    sufijo_eps = f"SANITAS_{(self.sanitas_tipo or 'normal').upper()}"
+                else:
+                    sufijo_eps = str(self.selected_eps)
+                nombre_salida = f"{nombre_original}_homologado_{sufijo_eps}_{timestamp}.xlsx"
                 ruta_salida = os.path.join(self.OUTPUT_PATH, nombre_salida)
 
                 df_resultado.to_excel(ruta_salida, index=False)
