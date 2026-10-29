@@ -6,6 +6,17 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.11.26] - 2026-10-29
+
+### ✨ Nuevas Características
+- Mutualser: unificación por servicio cuando hay código SO4801 (conserva
+  SO4801 y absorbe observaciones de otros conceptos con ` // `).
+
+### 🐛 Correcciones
+- CI: smoke build sin `--icon` inexistente (llevaba roto enmascarado por
+  `continue-on-error`).
+
+
 ## [0.11.25] - 2026-10-26
 
 ### 🐛 Correcciones
