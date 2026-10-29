@@ -556,3 +556,89 @@ class TestHomologacionTmpFileMonkeypatch:
         res = svc.buscar_por_codigo_erp_lote(['400', '999'])
         assert res['400'] is not None
         assert res['999'] is None
+
+
+class TestHomologacionSanitasTablas:
+    """CRUD de las dos tablas Sanitas (normal + insumos) sin red."""
+
+    def _svc(self, tmp_path, monkeypatch, eps, filas):
+        from app.core.homologacion_service import HomologacionService
+
+        monkeypatch.setattr(HomologacionService, "HOMOLOGACION_DIR", str(tmp_path))
+        HomologacionService._file_cache.clear()
+        HomologacionService._search_cache.clear()
+        cols = HomologacionService.EPS_COLUMNAS[eps]
+        nombre = HomologacionService.EPS_FILES[eps]
+        pd.DataFrame(
+            [{c: v for c, v in zip(cols, fila)} for fila in filas]
+        ).to_excel(str(tmp_path / nombre), index=False)
+        return HomologacionService(eps=eps)
+
+    def test_sanitas_roundtrip(self, tmp_path, monkeypatch):
+        svc = self._svc(tmp_path, monkeypatch, "sanitas", [("890201", "CUPS001")])
+        assert len(svc.listar()) == 1
+        assert svc.buscar_por_codigo_erp("890201") is not None
+        assert svc.buscar_por_codigo_erp("000000") is None
+        assert svc.agregar("890301", "CUPS002") is True
+        assert svc.agregar("890301", "CUPS002") is False  # duplicado
+        assert svc.actualizar("890301", "CUPS002B") is True
+        assert svc.buscar_por_codigo_erp("890301")["CODIGO HOMOLOGO"] == "CUPS002B"
+        assert svc.eliminar("890301") is True
+        assert svc.eliminar("890301") is False
+        stats = svc.get_estadisticas()
+        assert stats["total"] == 1
+        recargado = pd.read_excel(
+            str(tmp_path / HomologacionService.EPS_FILES["sanitas"])
+        )
+        assert "890201" in recargado["CODIGO PROCEDIMIENTO PRESTADOR"].astype(str).values
+
+    def test_sanitas_insumos_roundtrip_con_extra(self, tmp_path, monkeypatch):
+        svc = self._svc(
+            tmp_path, monkeypatch, "sanitas_insumos", [("C1", "I1", "P1")]
+        )
+        assert len(svc.listar()) == 1
+        assert svc.buscar_por_codigo_erp("C1") is not None
+        assert svc.agregar("C2", "P2", "I2") is True
+        recargado = pd.read_excel(
+            str(tmp_path / HomologacionService.EPS_FILES["sanitas_insumos"])
+        )
+        fila = recargado[recargado["CUM"].astype(str) == "C2"].iloc[0]
+        assert fila["IUM RDA"] == "I2"
+        assert fila["CODIGO PRODUCTO"] == "P2"
+        assert svc.actualizar("C2", "P2B", "I2B") is True
+        assert svc.buscar_por_codigo_erp("C2")["CODIGO PRODUCTO"] == "P2B"
+        assert svc.eliminar("C2") is True
+        assert len(svc.listar()) == 1
+
+    def test_sanitas_insumos_bulk_3_columnas(self, tmp_path, monkeypatch):
+        svc = self._svc(
+            tmp_path, monkeypatch, "sanitas_insumos", [("C1", "I1", "P1")]
+        )
+        df_carga = pd.DataFrame(
+            {
+                "CUM": ["C2", "C1", ""],
+                "IUM RDA": ["I2", "IX", "IY"],
+                "CODIGO PRODUCTO": ["P2", "PX", "PY"],
+            }
+        )
+        res = svc.verificar_carga_masiva(df_carga)
+        assert len(res["validos"]) == 1
+        assert res["validos"][0] == ("C2", "P2", "I2")
+        assert len(res["duplicados_archivo"]) == 1
+        assert len(res["errores"]) == 1
+        out = svc.agregar_masivo(res["validos"])
+        assert out["agregados"] == 1
+        fila = svc.buscar_por_codigo_erp("C2")
+        assert fila["IUM RDA"] == "I2"
+        assert fila["CODIGO PRODUCTO"] == "P2"
+
+    def test_sanitas_bulk_2_columnas(self, tmp_path, monkeypatch):
+        svc = self._svc(tmp_path, monkeypatch, "sanitas", [("890201", "CUPS001")])
+        df_carga = pd.DataFrame(
+            {"codigo": ["890301"], "homologo": ["CUPS002"]}
+        )
+        res = svc.verificar_carga_masiva(df_carga)
+        assert res["validos"] == [("890301", "CUPS002", "")]
+        out = svc.agregar_masivo(res["validos"])
+        assert out["agregados"] == 1
+        assert svc.buscar_por_codigo_erp("890301") is not None

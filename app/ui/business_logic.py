@@ -64,12 +64,32 @@ class MessageFilter:
 
     @staticmethod
     def normalize_subject(subject) -> str:
-        """Normaliza un asunto para dedupe (minusculas, espacios colapsados)."""
+        """Normaliza un asunto para mostrar (minusculas, espacios colapsados)."""
         import re as _re
         if not subject:
             return ""
-        key = str(subject).lower().strip()
+        key = str(subject).strip().lower()
         return _re.sub(r"\s+", " ", key)
+
+    @staticmethod
+    def registrar_descarga(vistos: set, msg: dict) -> bool:
+        """Registra un mensaje como descargado en esta búsqueda.
+
+        El dedupe es por ID de mensaje (único por correo), NO por asunto:
+        varias EPS (ej. Sanitas) repiten el mismo asunto en cada correo y
+        dedupar por asunto descargaba solo el primero.
+
+        Returns:
+            True si el mensaje YA estaba registrado (omitir descarga).
+        """
+        msg_id = msg.get("id") if isinstance(msg, dict) else None
+        if not msg_id:
+            return False
+        if msg_id in vistos:
+            logger.debug("Mensaje ya descargado en esta búsqueda, se omite: %s", msg_id)
+            return True
+        vistos.add(msg_id)
+        return False
 
     @staticmethod
     def matches(msg: dict, eps: dict | None) -> bool:
@@ -154,8 +174,8 @@ class EmailLoader:
         all_msgs = []
         downloaded_count = 0
         eps = self.app_state.selected_eps
-        # Dedupe por asunto normalizado dentro de esta busqueda.
-        seen_subjects = set()
+        # Dedupe por ID de mensaje dentro de esta búsqueda.
+        seen_ids = set()
 
         def on_found(msg):
             nonlocal downloaded_count
@@ -177,15 +197,10 @@ class EmailLoader:
                         str(msg.get("subject") or "")[:60],
                     )
                     return
-                subject_key = MessageFilter.normalize_subject(msg.get("subject"))
-                if subject_key and subject_key in seen_subjects:
-                    logger.debug(
-                        "Asunto duplicado, se omite descarga: %s",
-                        str(msg.get("subject") or "")[:60],
-                    )
+                # Dedupe por ID (el asunto se repite entre correos,
+                # ej. Sanitas usa asunto idéntico siempre).
+                if MessageFilter.registrar_descarga(seen_ids, msg):
                     return
-                if subject_key:
-                    seen_subjects.add(subject_key)
                 msg_id = msg.get("id")
                 if msg_id:
                     self._download_attachment(msg_id)

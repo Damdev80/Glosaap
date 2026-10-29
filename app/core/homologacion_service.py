@@ -30,13 +30,32 @@ class HomologacionService:
     # Archivos de homologación por EPS
     EPS_FILES = {
         "mutualser": "mutualser_homologacion.xlsx",
-        "coosalud": "coosalud_homologacion.xlsx"
+        "coosalud": "coosalud_homologacion.xlsx",
+        "sanitas": "sanitas_homologador_2.xlsx",
+        "sanitas_insumos": "sanitas_homologador.xlsx",
     }
 
-    # Columnas requeridas por EPS (Coosalud solo tiene 2 columnas)
+    # Columnas requeridas por EPS (Coosalud/Sanitas solo tienen 2 columnas)
     EPS_COLUMNAS = {
         "mutualser": ['Código Servicio de la ERP', 'Código producto en DGH', 'COD_SERV_FACT'],
-        "coosalud": ['Código Servicio de la ERP', 'Código producto en DGH']
+        "coosalud": ['Código Servicio de la ERP', 'Código producto en DGH'],
+        "sanitas": ['CODIGO PROCEDIMIENTO PRESTADOR', 'CODIGO HOMOLOGO'],
+        "sanitas_insumos": ['CUM', 'IUM RDA', 'CODIGO PRODUCTO'],
+    }
+
+    # Columna clave (lookup) por EPS: siempre columnas[0].
+    # Columna homóloga y extra opcional por EPS.
+    COL_HOMOLOGO = {
+        "mutualser": 'Código producto en DGH',
+        "coosalud": 'Código producto en DGH',
+        "sanitas": 'CODIGO HOMOLOGO',
+        "sanitas_insumos": 'CODIGO PRODUCTO',
+    }
+    COL_EXTRA = {
+        "mutualser": 'COD_SERV_FACT',
+        "coosalud": None,
+        "sanitas": None,
+        "sanitas_insumos": 'IUM RDA',
     }
 
     # Columnas por defecto (para compatibilidad)
@@ -57,6 +76,9 @@ class HomologacionService:
         self.homologacion_path: str | None = None
         self.df: pd.DataFrame | None = None
         self.columnas_actuales: list = self.COLUMNAS  # Columnas según EPS
+        self.col_clave: str = self.COLUMNAS[0]
+        self.col_homologo: str = self.COLUMNAS[1]
+        self.col_extra: str | None = self.COLUMNAS[2] if len(self.COLUMNAS) > 2 else None
         self._file_hash: str | None = None  # Hash para detectar cambios
 
         if eps:
@@ -100,8 +122,13 @@ class HomologacionService:
             del self._search_cache[search_cache_key]
 
     def _clear_search_cache(self, cache_key: str):
-        """Limpia el caché de búsqueda para una EPS específica"""
-        search_cache_key = f"{cache_key}_search"
+        """Limpia el caché de búsqueda para una EPS específica.
+
+        Recibe la clave tal cual se usa en buscar_* (f"{eps}_search").
+        """
+        search_cache_key = (
+            cache_key if cache_key.endswith("_search") else f"{cache_key}_search"
+        )
         if search_cache_key in self._search_cache:
             del self._search_cache[search_cache_key]
 
@@ -156,6 +183,9 @@ class HomologacionService:
         self.homologacion_path = os.path.join(self.HOMOLOGACION_DIR, self.EPS_FILES[eps_lower])
         # Configurar columnas según la EPS
         self.columnas_actuales = self.EPS_COLUMNAS.get(eps_lower, self.COLUMNAS)
+        self.col_clave = self.columnas_actuales[0]
+        self.col_homologo = self.COL_HOMOLOGO.get(eps_lower, self.columnas_actuales[1])
+        self.col_extra = self.COL_EXTRA.get(eps_lower)
         self._cargar()
 
     def cambiar_eps(self, eps: str):
@@ -308,7 +338,7 @@ class HomologacionService:
             self._search_cache[cache_key] = {}
 
         # Búsqueda en DataFrame
-        mask = self.df['Código Servicio de la ERP'].astype(str).str.strip() == codigo_str
+        mask = self.df[self.col_clave].astype(str).str.strip() == codigo_str
         resultado = self.df[mask]
 
         # Guardar en caché de búsqueda
@@ -350,7 +380,7 @@ class HomologacionService:
 
         # Buscar códigos no cacheados
         if codigos_a_buscar:
-            df_codigos = self.df['Código Servicio de la ERP'].astype(str).str.strip()
+            df_codigos = self.df[self.col_clave].astype(str).str.strip()
             for codigo_str in codigos_a_buscar:
                 mask = df_codigos == codigo_str
                 resultado = self.df[mask]
@@ -385,22 +415,23 @@ class HomologacionService:
 
             # Crear registro según columnas de la EPS
             nuevo_registro = {
-                'Código Servicio de la ERP': str(codigo_erp).strip(),
-                'Código producto en DGH': str(codigo_dgh).strip()
+                self.col_clave: str(codigo_erp).strip(),
+                self.col_homologo: str(codigo_dgh).strip()
             }
 
-            # Solo agregar COD_SERV_FACT si la EPS lo requiere (Mutualser)
-            if 'COD_SERV_FACT' in self.columnas_actuales:
-                if cod_serv_fact is None:
+            # Columna extra si la EPS la requiere (Mutualser: COD_SERV_FACT,
+            # insumos: IUM RDA). Mutualser hereda el DGH por defecto.
+            if self.col_extra and self.col_extra in self.columnas_actuales:
+                if cod_serv_fact is None and self.eps == "mutualser":
                     cod_serv_fact = codigo_dgh
-                nuevo_registro['COD_SERV_FACT'] = str(cod_serv_fact).strip()
+                nuevo_registro[self.col_extra] = str(cod_serv_fact or "").strip()
 
             nuevo = pd.DataFrame([nuevo_registro])
 
             self.df = pd.concat([self.df, nuevo], ignore_index=True)
 
             # Limpiar caché de búsqueda después de modificar datos
-            self._clear_search_cache(f"{self.eps}_homologacion")
+            self._clear_search_cache(f"{self.eps}_search")
 
             if self._guardar():
                 logger.info(f"Código agregado: {codigo_erp} → {codigo_dgh}")
@@ -429,20 +460,20 @@ class HomologacionService:
                 return False
 
             codigo_str = str(codigo_erp).strip()
-            mask = self.df['Código Servicio de la ERP'].astype(str).str.strip() == codigo_str
+            mask = self.df[self.col_clave].astype(str).str.strip() == codigo_str
 
             if not mask.any():
                 logger.warning(f"Código {codigo_erp} no encontrado")
                 return False
 
             if codigo_dgh:
-                self.df.loc[mask, 'Código producto en DGH'] = str(codigo_dgh).strip()
-            # Solo actualizar COD_SERV_FACT si la EPS lo tiene (Mutualser)
-            if cod_serv_fact and 'COD_SERV_FACT' in self.columnas_actuales:
-                self.df.loc[mask, 'COD_SERV_FACT'] = str(cod_serv_fact).strip()
+                self.df.loc[mask, self.col_homologo] = str(codigo_dgh).strip()
+            # Solo actualizar extra si la EPS lo tiene
+            if cod_serv_fact and self.col_extra and self.col_extra in self.columnas_actuales:
+                self.df.loc[mask, self.col_extra] = str(cod_serv_fact).strip()
 
             # Limpiar caché de búsqueda después de actualizar
-            self._clear_search_cache(f"{self.eps}_homologacion")
+            self._clear_search_cache(f"{self.eps}_search")
 
             if self._guardar():
                 logger.info(f"Código actualizado: {codigo_erp}")
@@ -469,7 +500,7 @@ class HomologacionService:
                 return False
 
             codigo_str = str(codigo_erp).strip()
-            mask = self.df['Código Servicio de la ERP'].astype(str).str.strip() == codigo_str
+            mask = self.df[self.col_clave].astype(str).str.strip() == codigo_str
 
             if not mask.any():
                 logger.warning(f"Código {codigo_erp} no encontrado")
@@ -478,7 +509,7 @@ class HomologacionService:
             self.df = self.df[~mask].copy()
 
             # Limpiar caché de búsqueda después de eliminar
-            self._clear_search_cache(f"{self.eps}_homologacion")
+            self._clear_search_cache(f"{self.eps}_search")
 
             if self._guardar():
                 logger.info(f"Código eliminado: {codigo_erp}")
@@ -503,20 +534,22 @@ class HomologacionService:
         for codigo in codigos:
             if len(codigo) == 2:
                 codigo_erp, codigo_dgh = codigo
-                cod_serv_fact = codigo_dgh
+                cod_serv_fact = None
             else:
-                codigo_erp, codigo_dgh, cod_serv_fact = codigo
+                codigo_erp, codigo_dgh, cod_serv_fact = codigo[0], codigo[1], codigo[2]
 
             # Validar que no exista
             if self.buscar_por_codigo_erp(codigo_erp) is None:
                 # Crear registro según columnas de la EPS
                 nuevo_registro = {
-                    'Código Servicio de la ERP': str(codigo_erp).strip(),
-                    'Código producto en DGH': str(codigo_dgh).strip()
+                    self.col_clave: str(codigo_erp).strip(),
+                    self.col_homologo: str(codigo_dgh).strip()
                 }
-                # Solo agregar COD_SERV_FACT si la EPS lo requiere
-                if 'COD_SERV_FACT' in self.columnas_actuales:
-                    nuevo_registro['COD_SERV_FACT'] = str(cod_serv_fact).strip()
+                # Columna extra si la EPS la requiere
+                if self.col_extra and self.col_extra in self.columnas_actuales:
+                    if cod_serv_fact is None and self.eps == "mutualser":
+                        cod_serv_fact = codigo_dgh
+                    nuevo_registro[self.col_extra] = str(cod_serv_fact or "").strip()
 
                 nuevo = pd.DataFrame([nuevo_registro])
                 self.df = pd.concat([self.df, nuevo], ignore_index=True)
@@ -541,7 +574,7 @@ class HomologacionService:
             return codigos_tecnologia
 
         codigos_existentes = set(
-            self.df['Código Servicio de la ERP']
+            self.df[self.col_clave]
             .dropna().astype(str).str.strip().tolist()
         )
 
@@ -565,12 +598,12 @@ class HomologacionService:
 
         stats = {
             'total': len(self.df),
-            'con_dgh': self.df['Código producto en DGH'].notna().sum() if 'Código producto en DGH' in self.df.columns else 0
+            'con_dgh': self.df[self.col_homologo].notna().sum() if self.col_homologo in self.df.columns else 0
         }
 
-        # Solo incluir con_serv_fact si la columna existe (Mutualser)
-        if 'COD_SERV_FACT' in self.columnas_actuales and 'COD_SERV_FACT' in self.df.columns:
-            stats['con_serv_fact'] = self.df['COD_SERV_FACT'].notna().sum()
+        # Solo incluir con_serv_fact si la columna extra existe
+        if self.col_extra and self.col_extra in self.columnas_actuales and self.col_extra in self.df.columns:
+            stats['con_serv_fact'] = self.df[self.col_extra].notna().sum()
         else:
             stats['con_serv_fact'] = 0
 
@@ -597,12 +630,12 @@ class HomologacionService:
 
         # Crear DataFrame según columnas de la EPS
         export_data = {
-            'Código Servicio de la ERP': codigos,
-            'Código producto en DGH': ''
+            self.col_clave: codigos,
+            self.col_homologo: ''
         }
-        # Solo agregar COD_SERV_FACT si la EPS lo requiere
-        if 'COD_SERV_FACT' in self.columnas_actuales:
-            export_data['COD_SERV_FACT'] = ''
+        # Columna extra si la EPS la requiere
+        if self.col_extra and self.col_extra in self.columnas_actuales:
+            export_data[self.col_extra] = ''
 
         df_export = pd.DataFrame(export_data)
 
@@ -619,7 +652,8 @@ class HomologacionService:
 
         Returns:
             Dict con:
-                - validos: Lista de tuplas (codigo_eps, codigo_homologo) válidas para agregar
+                - validos: Lista de tuplas (codigo_eps, codigo_homologo, extra)
+                  válidas para agregar (extra "" si no aplica)
                 - duplicados_archivo: Lista de códigos que ya existen en el archivo
                 - duplicados_carga: Lista de códigos duplicados dentro del archivo de carga
                 - errores: Lista de errores encontrados
@@ -657,11 +691,22 @@ class HomologacionService:
                 resultado['errores'].append("No se encontraron las columnas requeridas (código EPS y código homólogo)")
                 return resultado
 
+            # Columna extra si el layout la requiere (ej. IUM RDA en insumos):
+            # se busca por nombre y si no, se usa la tercera columna.
+            col_extra = None
+            if self.col_extra:
+                for i, col in enumerate(cols_lower):
+                    if col == self.col_extra.lower().strip():
+                        col_extra = df_carga.columns[i]
+                        break
+                if col_extra is None and len(df_carga.columns) >= 3:
+                    col_extra = df_carga.columns[2]
+
             # Obtener códigos existentes en el archivo de homologación
             codigos_existentes = set()
             if self.df is not None and not self.df.empty:
                 codigos_existentes = set(
-                    self.df['Código Servicio de la ERP']
+                    self.df[self.col_clave]
                     .dropna().astype(str).str.strip().tolist()
                 )
 
@@ -671,6 +716,11 @@ class HomologacionService:
             for idx, row in df_carga.iterrows():
                 codigo_eps = str(row[col_eps]).strip() if pd.notna(row[col_eps]) else ''
                 codigo_homologo = str(row[col_homologo]).strip() if pd.notna(row[col_homologo]) else ''
+                codigo_extra = (
+                    str(row[col_extra]).strip()
+                    if col_extra is not None and pd.notna(row[col_extra])
+                    else ''
+                )
 
                 # Validar que no estén vacíos
                 if not codigo_eps or codigo_eps.lower() == 'nan':
@@ -701,7 +751,7 @@ class HomologacionService:
 
                 # Es válido
                 codigos_en_carga[codigo_eps] = {'homologo': codigo_homologo, 'fila': idx + 2}
-                resultado['validos'].append((codigo_eps, codigo_homologo))
+                resultado['validos'].append((codigo_eps, codigo_homologo, codigo_extra))
 
         except Exception as e:
             resultado['errores'].append(f"Error procesando archivo: {str(e)}")
@@ -714,6 +764,7 @@ class HomologacionService:
 
         Args:
             codigos_validos: Lista de tuplas (codigo_eps, codigo_homologo)
+                o (codigo_eps, codigo_homologo, extra)
 
         Returns:
             Dict con cantidad agregada y errores
@@ -723,15 +774,19 @@ class HomologacionService:
 
         try:
             nuevos_registros = []
-            for codigo_eps, codigo_homologo in codigos_validos:
+            for item in codigos_validos:
+                codigo_eps, codigo_homologo = item[0], item[1]
+                extra = item[2] if len(item) > 2 else ""
                 # Crear registro según columnas de la EPS
                 nuevo_registro = {
-                    'Código Servicio de la ERP': str(codigo_eps).strip(),
-                    'Código producto en DGH': str(codigo_homologo).strip()
+                    self.col_clave: str(codigo_eps).strip(),
+                    self.col_homologo: str(codigo_homologo).strip()
                 }
-                # Solo agregar COD_SERV_FACT si la EPS lo requiere (Mutualser)
-                if 'COD_SERV_FACT' in self.columnas_actuales:
-                    nuevo_registro['COD_SERV_FACT'] = str(codigo_homologo).strip()  # Mismo valor por defecto
+                # Columna extra si la EPS la requiere
+                if self.col_extra and self.col_extra in self.columnas_actuales:
+                    if not extra and self.eps == "mutualser":
+                        extra = codigo_homologo  # Mismo valor por defecto
+                    nuevo_registro[self.col_extra] = str(extra or "").strip()
 
                 nuevos_registros.append(nuevo_registro)
 

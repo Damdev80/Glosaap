@@ -247,3 +247,34 @@ class TestBusinessLogicModule:
         """El módulo tiene logger configurado"""
         from app.ui.business_logic import logger
         assert logger is not None
+
+
+class TestRegistrarDescarga:
+    """Dedupe de descargas por ID de mensaje (no por asunto)."""
+
+    def test_mismo_asunto_distinto_id_no_es_duplicado(self):
+        """Caso Sanitas: asunto idéntico en cada correo descarga todos."""
+        from app.ui.business_logic import MessageFilter
+
+        vistos = set()
+        m1 = {"id": "1", "subject": "Referencia: Informe Glosas EPS Sanitas"}
+        m2 = {"id": "2", "subject": "Referencia: Informe Glosas EPS Sanitas"}
+        assert MessageFilter.registrar_descarga(vistos, m1) is False
+        assert MessageFilter.registrar_descarga(vistos, m2) is False
+        assert vistos == {"1", "2"}
+
+    def test_mismo_id_es_duplicado(self):
+        from app.ui.business_logic import MessageFilter
+
+        vistos = set()
+        m = {"id": "1", "subject": "A"}
+        assert MessageFilter.registrar_descarga(vistos, m) is False
+        assert MessageFilter.registrar_descarga(vistos, dict(m)) is True
+
+    def test_sin_id_no_es_duplicado(self):
+        from app.ui.business_logic import MessageFilter
+
+        vistos = set()
+        assert MessageFilter.registrar_descarga(vistos, {"subject": "A"}) is False
+        assert MessageFilter.registrar_descarga(vistos, {}) is False
+        assert vistos == set()

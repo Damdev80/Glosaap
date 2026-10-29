@@ -295,25 +295,24 @@ class EmailService:
             "total_files": 0,
             "errors": 0
         }
-        # Dedupe por asunto normalizado dentro de esta corrida: evita
-        # descargar dos veces el mismo correo reenviado/duplicado.
-        seen_subjects = set()
+        # Dedupe por ID de mensaje dentro de esta corrida: evita descargar
+        # dos veces el mismo correo. Por ID y no por asunto: el asunto se
+        # repite entre correos de la misma EPS (ej. Sanitas).
+        seen_ids = set()
 
         for idx, msg in enumerate(msgs):
             try:
-                subject_key = str(msg.get("subject") or "").lower().strip()
-                import re as _re
-                subject_key = _re.sub(r"\s+", " ", subject_key)
-                if subject_key and subject_key in seen_subjects:
-                    logger.debug(
-                        "Asunto duplicado, se omite descarga: %s",
-                        (msg.get("subject") or "")[:60],
-                    )
-                    if on_progress:
-                        on_progress(idx, len(msgs), msg, [])
-                    continue
-                if subject_key:
-                    seen_subjects.add(subject_key)
+                msg_id = msg.get("id")
+                if msg_id:
+                    if msg_id in seen_ids:
+                        logger.debug(
+                            "Mensaje ya descargado en esta corrida, se omite: %s",
+                            msg_id,
+                        )
+                        if on_progress:
+                            on_progress(idx, len(msgs), msg, [])
+                        continue
+                    seen_ids.add(msg_id)
                 # Extraer fecha del correo si está disponible
                 email_date = None
                 if "date" in msg and msg["date"]:

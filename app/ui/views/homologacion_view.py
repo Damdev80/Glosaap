@@ -86,9 +86,16 @@ class HomologacionView:
         # Colores por EPS (ft.Colors.*, sin hex fijo)
         colores = {
             "mutualser": ft.Colors.BLUE,
-            "coosalud": ft.Colors.GREEN
+            "coosalud": ft.Colors.GREEN,
+            "sanitas": ft.Colors.TEAL,
+            "sanitas_insumos": ft.Colors.CYAN,
         }
         color = colores.get(eps_info["key"], ft.Colors.PRIMARY)
+        nombres = {
+            "sanitas": "Sanitas",
+            "sanitas_insumos": "Sanitas Insumos",
+        }
+        nombre_mostrar = nombres.get(eps_info["key"], eps_info["name"])
 
         card = ft.Card(
             content=ft.Container(
@@ -109,7 +116,7 @@ class HomologacionView:
                     ft.Container(width=16),
                     ft.Column([
                         ft.Text(
-                            eps_info["name"],
+                            nombre_mostrar,
                             size=16,
                             weight=ft.FontWeight.W_600
                         ),
@@ -158,9 +165,18 @@ class HomologacionView:
 
     def _build_gestion_view(self):
         """Construye la vista de gestión de códigos"""
+        cols = list(self.service.columnas_actuales) if self.service else []  # type: ignore
+        es_insumos = self.current_eps == "sanitas_insumos"
+        etiquetas = {
+            "sanitas": ("Prestador", "Homólogo"),
+            "sanitas_insumos": ("CUM", "CODIGO PRODUCTO"),
+        }
+        label_clave, label_homologo = etiquetas.get(
+            self.current_eps or "", ("Código ERP", "Código DGH")
+        )
         # Campos de formulario para agregar individual
         self.codigo_erp_field = ft.TextField(
-            label="Código ERP",
+            label=label_clave,
             hint_text="881141",
             hint_style=ft.TextStyle(color=ft.Colors.ON_SURFACE_VARIANT),
             color=ft.Colors.ON_SURFACE,
@@ -174,7 +190,7 @@ class HomologacionView:
         )
 
         self.codigo_dgh_field = ft.TextField(
-            label="Código DGH",
+            label=label_homologo,
             hint_text="881141",
             hint_style=ft.TextStyle(color=ft.Colors.ON_SURFACE_VARIANT),
             color=ft.Colors.ON_SURFACE,
@@ -201,19 +217,33 @@ class HomologacionView:
             on_change=self._on_buscar
         )
 
-        # Determinar si mostrar columna COD_SERV_FACT (solo Mutualser)
-        mostrar_cod_serv_fact = self.current_eps == "mutualser"
+        # Tercer campo solo para layouts de 3 columnas con captura
+        # (insumos: IUM RDA). Mutualser mantiene 2 campos (FACT hereda DGH).
+        self.codigo_extra_field = None
+        campos_form = [self.codigo_erp_field, self.codigo_dgh_field]
+        if es_insumos:
+            self.codigo_extra_field = ft.TextField(
+                label="IUM RDA",
+                hint_text="IUM001",
+                hint_style=ft.TextStyle(color=ft.Colors.ON_SURFACE_VARIANT),
+                color=ft.Colors.ON_SURFACE,
+                border_color=ft.Colors.OUTLINE,
+                focused_border_color=ft.Colors.PRIMARY,
+                border_radius=8,
+                content_padding=ft.padding.symmetric(horizontal=16, vertical=12),
+                text_size=14,
+                label_style=ft.TextStyle(size=12, color=ft.Colors.ON_SURFACE_VARIANT),
+                expand=True
+            )
+            campos_form.append(self.codigo_extra_field)
 
-        # Tabla de códigos existentes - columnas según EPS
+        # Tabla de códigos existentes - columnas según EPS (dinámico desde
+        # columnas_actuales: 2 para Coosalud/Sanitas, 3 para Mutualser e insumos).
         columnas_tabla = [
-            ft.DataColumn(ft.Text("Código ERP", size=12, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT), numeric=False),
-            ft.DataColumn(ft.Text("Código DGH", size=12, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT), numeric=False),
+            ft.DataColumn(ft.Text(col, size=12, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT), numeric=False)
+            for col in cols
         ]
-        if mostrar_cod_serv_fact:
-            columnas_tabla.append(ft.DataColumn(ft.Text("COD_SERV_FACT", size=12, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT), numeric=False))
         columnas_tabla.append(ft.DataColumn(ft.Text("", size=12)))
-
-        self.mostrar_cod_serv_fact = mostrar_cod_serv_fact
 
         self.tabla = ft.DataTable(
             columns=columnas_tabla,
@@ -237,7 +267,9 @@ class HomologacionView:
         # Colores por EPS (ft.Colors.*, sin hex fijo)
         colores = {
             "mutualser": ft.Colors.BLUE,
-            "coosalud": ft.Colors.GREEN
+            "coosalud": ft.Colors.GREEN,
+            "sanitas": ft.Colors.TEAL,
+            "sanitas_insumos": ft.Colors.CYAN,
         }
         eps_color = colores.get(self.current_eps or "", ft.Colors.PRIMARY)
 
@@ -316,7 +348,7 @@ class HomologacionView:
                             ft.Row([
                                 self.codigo_erp_field,
                                 self.codigo_dgh_field,
-                            ], spacing=16),
+                            ] + ([self.codigo_extra_field] if self.codigo_extra_field else []), spacing=16),
                             ft.Container(height=12),
                             ft.Row([
                                 self.status_text,
@@ -393,7 +425,9 @@ class HomologacionView:
                             ], spacing=8),
                             ft.Container(height=8),
                             ft.Text(
-                                "Selecciona un archivo Excel con 2 columnas:\n• Columna 1: Código EPS (código de la glosa)\n• Columna 2: Código Homólogo (código DGH)",
+                                "Selecciona un archivo Excel con 2 columnas:\n• Columna 1: Código EPS (código de la glosa)\n• Columna 2: Código Homólogo (código DGH)"
+                                if self.current_eps != "sanitas_insumos" else
+                                "Selecciona un archivo Excel con 3 columnas:\n• Columna 1: CUM\n• Columna 2: IUM RDA\n• Columna 3: CODIGO PRODUCTO",
                                 size=12,
                                 color=ft.Colors.ON_SURFACE_VARIANT
                             ),
@@ -528,19 +562,13 @@ class HomologacionView:
         df = self.service.listar(filtro=filtro, limite=100)
 
         for _, row in df.iterrows():
-            codigo_erp = str(row.get('Código Servicio de la ERP', ''))
-            codigo_dgh = str(row.get('Código producto en DGH', ''))
+            clave = str(row.get(self.service.col_clave, ''))
 
             # Crear celdas según columnas de la EPS
             celdas = [
-                ft.DataCell(ft.Text(codigo_erp, size=13, color=ft.Colors.ON_SURFACE_VARIANT)),
-                ft.DataCell(ft.Text(codigo_dgh, size=13, color=ft.Colors.ON_SURFACE_VARIANT)),
+                ft.DataCell(ft.Text(str(row.get(col, '')), size=13, color=ft.Colors.ON_SURFACE_VARIANT))
+                for col in self.service.columnas_actuales
             ]
-
-            # Solo agregar COD_SERV_FACT si es Mutualser
-            if self.mostrar_cod_serv_fact:
-                cod_serv_fact = str(row.get('COD_SERV_FACT', ''))
-                celdas.append(ft.DataCell(ft.Text(cod_serv_fact, size=13, color=ft.Colors.ON_SURFACE_VARIANT)))
 
             # Botón de eliminar
             celdas.append(ft.DataCell(
@@ -549,7 +577,7 @@ class HomologacionView:
                     icon_color=ft.Colors.ON_SURFACE_VARIANT,
                     icon_size=18,
                     tooltip="Eliminar",
-                    data=codigo_erp,
+                    data=clave,
                     on_click=self._on_eliminar
                 )
             ))
@@ -583,6 +611,11 @@ class HomologacionView:
 
         codigo_erp = self.codigo_erp_field.value.strip() if self.codigo_erp_field else ""  # type: ignore
         codigo_dgh = self.codigo_dgh_field.value.strip() if self.codigo_dgh_field else ""  # type: ignore
+        codigo_extra = (
+            self.codigo_extra_field.value.strip()
+            if self.codigo_extra_field and self.codigo_extra_field.value
+            else None
+        )
 
         if not codigo_erp or not codigo_dgh:
             self.status_text.value = "❌ Completa ambos campos"  # type: ignore
@@ -590,11 +623,13 @@ class HomologacionView:
             self.page.update()
             return
 
-        if self.service.agregar(codigo_erp, codigo_dgh):  # type: ignore
+        if self.service.agregar(codigo_erp, codigo_dgh, codigo_extra):  # type: ignore
             self.status_text.value = f"✅ Código {codigo_erp} agregado"  # type: ignore
             self.status_text.color = ft.Colors.GREEN  # type: ignore
             self.codigo_erp_field.value = ""  # type: ignore
             self.codigo_dgh_field.value = ""  # type: ignore
+            if self.codigo_extra_field:
+                self.codigo_extra_field.value = ""
             self._cargar_tabla()
             self._actualizar_estadisticas()
         else:
@@ -776,7 +811,8 @@ class HomologacionView:
             return
 
         # Agregar válidos
-        for codigo_eps, codigo_homologo in self.resultado_verificacion['validos'][:50]:
+        for item in self.resultado_verificacion['validos'][:50]:
+            codigo_eps, codigo_homologo = item[0], item[1]
             self.tabla_verificacion.rows.append(  # type: ignore
                 ft.DataRow(cells=[
                     ft.DataCell(ft.Container(

@@ -496,8 +496,8 @@ def main(page: ft.Page):
                 messages_view.set_loading(True, "🔍 Buscando correos...")
 
                 all_msgs = []
-                # Dedupe por asunto normalizado dentro de esta busqueda.
-                seen_subjects = set()
+                # Dedupe por ID de mensaje dentro de esta búsqueda.
+                seen_ids = set()
 
                 def on_found(msg):
                     if messages_view.is_cancelled(load_seq):
@@ -517,15 +517,14 @@ def main(page: ft.Page):
                                 str(msg.get("subject") or "")[:60],
                             )
                             return
-                        _skey = MessageFilter.normalize_subject(msg.get("subject"))
-                        if _skey and _skey in seen_subjects:
+                        # Dedupe por ID (el asunto se repite entre correos,
+                        # ej. Sanitas usa asunto idéntico siempre).
+                        if MessageFilter.registrar_descarga(seen_ids, msg):
                             logger.debug(
-                                "Asunto duplicado, se omite descarga: %s",
+                                "Correo ya procesado, se omite descarga: %s",
                                 str(msg.get("subject") or "")[:60],
                             )
                             return
-                        if _skey:
-                            seen_subjects.add(_skey)
                         msg_id = msg.get("id")
                         if msg_id:
                             messages_view.update_message_status(msg_id, "📥 Descargando...")
@@ -647,7 +646,7 @@ def main(page: ft.Page):
 
                 downloaded = 0
                 total_files = 0
-                seen_selected = set()
+                seen_ids = set()
 
                 for msg in ui_state.found_messages:
                     if messages_view.is_cancelled(dl_seq):
@@ -659,15 +658,12 @@ def main(page: ft.Page):
                                 str(msg.get("subject") or "")[:60],
                             )
                             continue
-                        _skey2 = MessageFilter.normalize_subject(msg.get("subject"))
-                        if _skey2 and _skey2 in seen_selected:
+                        if MessageFilter.registrar_descarga(seen_ids, msg):
                             logger.debug(
-                                "Asunto duplicado en descarga manual, se omite: %s",
+                                "Correo ya descargado en esta pasada, se omite: %s",
                                 str(msg.get("subject") or "")[:60],
                             )
                             continue
-                        if _skey2:
-                            seen_selected.add(_skey2)
                         messages_view.update_message_status(msg["id"], "Descargando...")
 
                         try:
