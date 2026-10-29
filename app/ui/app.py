@@ -667,7 +667,14 @@ def main(page: ft.Page):
                         messages_view.update_message_status(msg["id"], "Descargando...")
 
                         try:
-                            files = email_service.download_message_attachments(msg["id"])
+                            parsed = _parse_email_date(msg.get('date'))
+                            email_date_str = (
+                                parsed.strftime('%Y-%m-%d %H:%M:%S')
+                                if parsed is not None else None
+                            )
+                            files = email_service.download_message_attachments(
+                                msg["id"], email_date=email_date_str
+                            )
                             downloaded += 1
 
                             if files:

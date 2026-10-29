@@ -203,7 +203,7 @@ class EmailLoader:
                     return
                 msg_id = msg.get("id")
                 if msg_id:
-                    self._download_attachment(msg_id)
+                    self._download_attachment(msg_id, msg.get("date"))
                     downloaded_count += 1
 
         # Obtener palabra clave de búsqueda
@@ -235,11 +235,35 @@ class EmailLoader:
         # Mostrar resultados
         self._show_results(msgs, all_msgs, search_info)
 
-    def _download_attachment(self, msg_id: str):
-        """Descarga adjuntos de un mensaje"""
+    def _download_attachment(self, msg_id: str, msg_date=None):
+        """Descarga adjuntos de un mensaje preservando fecha para CROFECOBJ"""
         self.messages_view.update_message_status(msg_id, "📥 Descargando...")
         try:
-            files = self.email_service.download_message_attachments(msg_id)
+            email_date = None
+            try:
+                if isinstance(msg_date, str) and msg_date.strip():
+                    import re as _re
+                    from datetime import datetime as _dt
+                    txt = _re.sub(r"\s*\(.*?\)\s*", " ", msg_date.strip()).strip()
+                    txt = _re.sub(r"\s+GMT(\s|$)", " ", txt).strip()
+                    for fmt in (
+                        '%a, %d %b %Y %H:%M:%S %z',
+                        '%a, %d %b %Y %H:%M:%S',
+                        '%d %b %Y %H:%M:%S %z',
+                        '%d %b %Y %H:%M:%S',
+                        '%Y-%m-%d %H:%M:%S',
+                        '%d/%m/%Y %H:%M:%S',
+                    ):
+                        try:
+                            email_date = _dt.strptime(txt, fmt).strftime('%Y-%m-%d %H:%M:%S')
+                            break
+                        except ValueError:
+                            continue
+                elif hasattr(msg_date, 'strftime'):
+                    email_date = msg_date.strftime('%Y-%m-%d %H:%M:%S')
+            except Exception:
+                email_date = None
+            files = self.email_service.download_message_attachments(msg_id, email_date=email_date)
             if files:
                 self.messages_view.update_message_status(msg_id, f"✅ {len(files)} archivo(s)")
             else:

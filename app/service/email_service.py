@@ -216,14 +216,15 @@ class EmailService:
         )
 
         if saved_files:
-            # Crear metadata con fecha del correo si está disponible
+            # Metadata por archivo: siempre message_id; email_date si disponible.
+            # Sin esto CROFECOBJ de Sanitas cae a fecha actual en vez de la
+            # fecha en que llega el correo.
             metadata = {}
-            if email_date:
-                for file_path in saved_files:
-                    metadata[file_path] = {
-                        "email_date": email_date,
-                        "message_id": message_id
-                    }
+            for file_path in saved_files:
+                metadata[file_path] = {
+                    "email_date": email_date,
+                    "message_id": message_id,
+                }
 
             self.attachment_service.add_files(saved_files, metadata=metadata)
 
@@ -313,17 +314,29 @@ class EmailService:
                             on_progress(idx, len(msgs), msg, [])
                         continue
                     seen_ids.add(msg_id)
-                # Extraer fecha del correo si está disponible
+                # Extraer fecha del correo si está disponible (mismos formatos
+                # que app.ui.app._parse_email_date + limpieza de zona horaria).
                 email_date = None
                 if "date" in msg and msg["date"]:
                     from datetime import datetime
                     msg_date = msg["date"]
                     try:
-                        # Intentar convertir a formato estándar
                         if isinstance(msg_date, str):
-                            for fmt in ['%a, %d %b %Y %H:%M:%S %z', '%a, %d %b %Y %H:%M:%S', '%Y-%m-%d %H:%M:%S']:
+                            txt = msg_date.strip()
+                            # Quitar sufijos como (UTC), (GMT), GMT sin offset.
+                            import re as _re
+                            txt = _re.sub(r"\s*\(.*?\)\s*", " ", txt).strip()
+                            txt = _re.sub(r"\s+GMT(\s|$)", " ", txt).strip()
+                            for fmt in [
+                                '%a, %d %b %Y %H:%M:%S %z',
+                                '%a, %d %b %Y %H:%M:%S',
+                                '%d %b %Y %H:%M:%S %z',
+                                '%d %b %Y %H:%M:%S',
+                                '%Y-%m-%d %H:%M:%S',
+                                '%d/%m/%Y %H:%M:%S',
+                            ]:
                                 try:
-                                    parsed = datetime.strptime(msg_date.strip(), fmt)
+                                    parsed = datetime.strptime(txt, fmt)
                                     email_date = parsed.strftime('%Y-%m-%d %H:%M:%S')
                                     break
                                 except ValueError:
