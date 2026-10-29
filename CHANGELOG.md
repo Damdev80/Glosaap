@@ -6,6 +6,17 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.11.27] - 2026-10-29
+
+### 🐛 Correcciones
+- Búsqueda Sanitas: dedupe de descargas por ID de mensaje (antes por
+  asunto; como Sanitas repite asunto, solo descargaba 1 archivo).
+
+### ✨ Nuevas Características
+- CRUD de homologación para las dos tablas Sanitas (normal e insumos)
+  en Herramientas → Homologación.
+
+
 ## [0.11.26] - 2026-10-29
 
 ### ✨ Nuevas Características
