@@ -128,6 +128,25 @@ class SanitasEps(EpsInfo):
         )
 
 
+class PrevisoraEps(EpsInfo):
+    """Configuración para Previsora Seguros SOAT"""
+
+    def __init__(self):
+        super().__init__(
+            name="Previsora",
+            icon="🏥",
+            description="Previsora Seguros SOAT",
+            filter_value="previsora",
+            filter_type="subject_exact_pattern",
+            subject_pattern="Registrado: Notificación agrupada",
+            processor_class="PrevisoraProcessor",
+            enabled=True,
+            image_path=os.path.join(ASSETS_DIR, "img", "eps", "previsora.png"),
+            sender_filter="radicacionambulatorio@laconcepcion.org",
+            homologador_file="previsora",
+        )
+
+
 class NuevaEps(EpsInfo):
     """Configuración para Nueva EPS (sin procesador: deshabilitada)"""
 
@@ -195,6 +214,7 @@ EPS_CONFIG = [
     MutualserEps(),
     CoosaludEps(),
     SanitasEps(),
+    PrevisoraEps(),
     NuevaEps(),
     CompensarEps(),
     FamisanarEps(),

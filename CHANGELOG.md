@@ -6,6 +6,28 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.11.29] - 2026-10-30
+
+### ✨ Nuevas Características
+- Nueva EPS Previsora Seguros SOAT: procesador de PDFs de liquidación
+  (`PrevisoraProcessor`) que genera `PREVISORA_REGISTRO_<ts>.xlsx` con
+  NRO_FACTURA + columnas rojas (Cant/Código/Procedimiento/%/Cobrado/
+  Objeción/Liquidado) + Observación. Objeciones aún NO (fase 2).
+- Filtro IMAP por asunto "Registrado: Notificación agrupada" (contiene) +
+  remitente `radicacionambulatorio@laconcepcion.org`, botón Procesar
+  PREVISORA, tarjeta EPS con logo y homologador manual/gestión cableados
+  (tabla `previsora_homologacion.xlsx` pendiente).
+
+### 🐛 Correcciones
+- Búsqueda IMAP con tildes (ej. "Notificación"): el criterio viaja como
+  bytes UTF-8 con `CHARSET UTF-8` (este imaplib codifica en ASCII) y
+  fallback sin tildes si el servidor lo rechaza.
+- Parseo Previsora reescrito al formato real: ítems delimitados por su
+  línea de encabezado con valores desnudos, variantes de rótulos,
+  bloque huérfano a primera factura y volcado `PREVISORA_DEBUG_*.txt`
+  para diagnóstico.
+
+
 ## [0.11.28] - 2026-10-29
 
 ### ✨ Nuevas Características

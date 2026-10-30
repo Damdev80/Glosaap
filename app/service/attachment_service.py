@@ -222,6 +222,15 @@ class AttachmentService:
 
         return filtered
 
+    def get_session_pdf_files(self):
+        """Filtra y retorna archivos PDF SOLO de la sesión actual (Previsora)."""
+        pdf_files = [
+            f for f in self.session_files
+            if str(f).lower().endswith('.pdf')
+        ]
+        logger.debug("[SESSION] Archivos PDF en sesion: %s", len(pdf_files))
+        return pdf_files
+
     def get_all_files(self):
         """Retorna todos los archivos descargados"""
         return self.downloaded_files

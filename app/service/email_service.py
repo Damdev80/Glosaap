@@ -9,6 +9,7 @@ from app.core.imap_client import ImapClient
 from app.core.mutualser_processor import MutualserProcessor
 from app.service.attachment_service import AttachmentService
 from app.service.processors.coosalud_processor import CoosaludProcessor
+from app.service.processors.previsora_processor import PrevisoraProcessor
 from app.service.processors.sanitas_processor import SanitasProcessor
 
 
@@ -61,6 +62,18 @@ class EmailService:
             homologador_insumos_path=sanitas_insumos,
         )
         logger.info("SANITAS guardara en: %s", sanitas_output)
+
+        # Procesador PREVISORA - fuente unica de rutas en app/config/settings.py
+        previsora_output = self._get_output_path(
+            NETWORK_PATHS.get("previsora_output", "outputs/previsora"),
+            "outputs/previsora",
+        )
+        self.previsora_output_dir = previsora_output
+        previsora_homologador = self._resolve_homologador("previsora", "Previsora")
+        self.previsora_processor = PrevisoraProcessor(
+            homologador_path=previsora_homologador,
+        )
+        logger.info("PREVISORA guardara en: %s", previsora_output)
 
     def _resolve_homologador(self, key: str, label: str) -> str:
         """Resuelve ruta de homologador con fallback a "" si no existe.
@@ -795,6 +808,135 @@ class EmailService:
             'message': message or 'Procesamiento Sanitas completado',
             'output_file': output_file,
             'objeciones_file': objeciones_file,
+            'path': output_file,
+            'resumen': resumen,
+        }
+
+
+
+    def procesar_previsora(self, archivos=None, email_date=None):
+        """
+        Procesa PDFs de liquidación de PREVISORA y genera Excel de registro.
+
+        Fase 1: solo REGISTRO (NRO_FACTURA + columnas rojas + OBSERVACION).
+        Objeciones aún NO (fase 2 pendiente por el usuario).
+
+        Args:
+            archivos (list, optional): Rutas a PDFs. Si None, usa PDFs de
+                la sesión actual.
+            email_date (str, optional): Fecha del correo '%Y-%m-%d %H:%M:%S'.
+                Si None, se usan metadatos individuales con fallback a actual.
+
+        Returns:
+            dict: success, message, output_file, objeciones_file (None en
+                fase 1), path, resumen.
+        """
+        if archivos is None:
+            try:
+                archivos = self.attachment_service.get_session_pdf_files()
+            except Exception:
+                archivos = [
+                    f for f in self.attachment_service.get_session_files()
+                    if str(f).lower().endswith('.pdf')
+                ]
+
+        if not archivos:
+            return {
+                'success': False,
+                'message': 'No hay archivos para procesar'
+            }
+
+        if not hasattr(self, 'previsora_processor') or self.previsora_processor is None:
+            previsora_homologador = self._resolve_homologador("previsora", "Previsora")
+            self.previsora_processor = PrevisoraProcessor(
+                homologador_path=previsora_homologador,
+            )
+        if not hasattr(self, 'previsora_output_dir') or not self.previsora_output_dir:
+            self.previsora_output_dir = self._get_output_path(
+                NETWORK_PATHS.get("previsora_output", "outputs/previsora"),
+                "outputs/previsora",
+            )
+
+        output_dir = self.previsora_output_dir
+        try:
+            os.makedirs(output_dir, exist_ok=True)
+        except Exception as exc:
+            logger.warning("No se pudo crear directorio Previsora %s: %s", output_dir, exc)
+
+        try:
+            archivos_previos = set(os.listdir(output_dir)) if os.path.exists(output_dir) else set()
+        except Exception:
+            archivos_previos = set()
+
+        try:
+            result_data, message = self.previsora_processor.process_glosas(
+                archivos,
+                output_dir=output_dir,
+                email_date=email_date,
+                attachment_service=self.attachment_service,
+            )
+        except Exception as exc:
+            logger.exception("Error al procesar Previsora: %s", exc)
+            return {
+                'success': False,
+                'message': f'Error al procesar archivos de Previsora: {exc}'
+            }
+
+        if result_data is None:
+            return {
+                'success': False,
+                'message': message or 'No se pudo procesar ningun archivo'
+            }
+
+        detalle_df = result_data.get("detalle") if isinstance(result_data, dict) else None
+        total = len(detalle_df) if detalle_df is not None else 0
+
+        output_file = None
+        try:
+            actuales = os.listdir(output_dir) if os.path.exists(output_dir) else []
+            nuevos = [f for f in actuales if f not in archivos_previos]
+            candidatos = nuevos if nuevos else actuales
+            registros = [
+                os.path.join(output_dir, f) for f in candidatos
+                if f.startswith("PREVISORA_REGISTRO_") and f.endswith(".xlsx")
+            ]
+            if registros:
+                output_file = max(registros, key=os.path.getmtime)
+        except Exception as exc:
+            logger.warning("No se pudieron localizar archivos generados: %s", exc)
+
+        try:
+            facturas_unicas = 0
+            if detalle_df is not None and not detalle_df.empty:
+                if "NRO_FACTURA" in detalle_df.columns:
+                    facturas_unicas = int(detalle_df["NRO_FACTURA"].nunique())
+            codigos_homologados = 0
+            if detalle_df is not None and "SLNSERPRO" in detalle_df.columns:
+                codigos_homologados = int((detalle_df["SLNSERPRO"] != "").sum())
+        except Exception:
+            facturas_unicas = 0
+            codigos_homologados = 0
+
+        resumen = {
+            'total_registros': total,
+            'total_detalles': total,
+            'total_glosas': total,
+            'archivos_procesados': len(archivos),
+            'facturas_unicas': facturas_unicas,
+            'codigos_homologados': codigos_homologados,
+            'errores': len(getattr(self.previsora_processor, 'errors', []) or []),
+        }
+
+        logger.info(
+            "Previsora procesado: %s filas, %s archivos",
+            total, len(archivos),
+        )
+
+        return {
+            'success': True,
+            'message': message or 'Procesamiento Previsora completado',
+            'output_file': output_file,
+            'objeciones_file': None,
             'path': output_file,
             'resumen': resumen,
         }

@@ -95,11 +95,13 @@ class HomologacionView:
             "coosalud": ft.Colors.GREEN,
             "sanitas": ft.Colors.TEAL,
             "sanitas_insumos": ft.Colors.CYAN,
+            "previsora": ft.Colors.DEEP_ORANGE,
         }
         color = colores.get(eps_info["key"], ft.Colors.PRIMARY)
         nombres = {
             "sanitas": "Sanitas",
             "sanitas_insumos": "Sanitas Insumos",
+            "previsora": "Previsora",
         }
         nombre_mostrar = nombres.get(eps_info["key"], eps_info["name"])
 
@@ -249,6 +251,7 @@ class HomologacionView:
         etiquetas = {
             "sanitas": ("Prestador", "Homólogo"),
             "sanitas_insumos": ("CUM", "CODIGO PRODUCTO"),
+            "previsora": ("CODIGO PREVISORA", "CODIGO HOMOLOGO"),
         }
         label_clave, label_homologo = etiquetas.get(
             self.current_eps or "", ("Código ERP", "Código DGH")
@@ -349,6 +352,7 @@ class HomologacionView:
             "coosalud": ft.Colors.GREEN,
             "sanitas": ft.Colors.TEAL,
             "sanitas_insumos": ft.Colors.CYAN,
+            "previsora": ft.Colors.DEEP_ORANGE,
         }
         eps_color = colores.get(self.current_eps or "", ft.Colors.PRIMARY)
 

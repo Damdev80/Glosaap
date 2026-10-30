@@ -469,6 +469,14 @@ def main(page: ft.Page):
                 bgcolor=ft.Colors.BLUE,
             )
             messages_view.process_eps_btn.data = "sanitas"
+        elif eps_filter == "previsora":
+            messages_view.show_process_button(True)
+            messages_view.process_eps_btn.text = " Procesar PREVISORA"
+            messages_view.process_eps_btn.style = ft.ButtonStyle(
+                color=ft.Colors.WHITE,
+                bgcolor=ft.Colors.BLUE,
+            )
+            messages_view.process_eps_btn.data = "previsora"
         else:
             messages_view.show_process_button(False)
 
@@ -1049,6 +1057,78 @@ def main(page: ft.Page):
 
                     messages_view.process_eps_btn.disabled = False
                     # Refresca vía canal de la vista (set_processing/show hacen page.update)
+                    messages_view.show_process_button(True)
+
+                elif eps_type == "previsora":
+                    # Previsora envía PDFs (uno o varios por notificación agrupada).
+                    try:
+                        pdf_files = email_service.attachment_service.get_session_pdf_files()
+                    except Exception:
+                        pdf_files = [
+                            f for f in email_service.attachment_service.get_session_files()
+                            if str(f).lower().endswith('.pdf')
+                        ]
+
+                    if not pdf_files:
+                        messages_view.process_eps_btn.disabled = False
+                        messages_view.set_processing(False, "❌ No hay archivos PDF para procesar")
+
+                        AlertDialog.show_warning(
+                            page=page,
+                            title="Sin archivos para procesar",
+                            message="No se descargaron archivos PDF de PREVISORA en esta búsqueda.\n\nPrimero descarga los adjuntos de los correos."
+                        )
+                        return
+
+                    logger.info("PREVISORA procesando %s archivos PDF", len(pdf_files))
+                    messages_view.set_processing(True, f"📊 Procesando {len(pdf_files)} archivo(s) PDF...")
+
+                    email_date = _latest_email_date_str(ui_state.found_messages)
+                    resultado = email_service.procesar_previsora(email_date=email_date)
+
+                    if messages_view.is_cancelled(proc_seq):
+                        messages_view.process_eps_btn.disabled = False
+                        messages_view.set_processing(False, "⚠️ Procesado cancelado")
+                        messages_view.show_toast("Procesado cancelado", is_success=False)
+                        messages_view.show_process_button(True)
+                        return
+
+                    messages_view.process_eps_btn.disabled = False
+
+                    if resultado['success']:
+                        resumen = resultado['resumen']
+                        msg = "✅ ¡Archivo generado!\n"
+                        msg += f"📄 {resultado['output_file']}\n"
+                        msg += f"📊 {resumen['total_registros']} filas | {resumen['facturas_unicas']} facturas"
+                        messages_view.set_processing(False, msg)
+                        messages_view.processing_status.color = ft.Colors.GREEN
+
+                        output_files = [resultado['output_file']] if resultado.get('output_file') else []
+                        _previsora_output = str(resultado.get('output_file') or "")
+                        resumen_summary = dict(resumen)
+                        resumen_summary['output_dir'] = os.path.dirname(_previsora_output) if _previsora_output else ""
+
+                        def open_previsora_folder():
+                            _open_folder_in_explorer(os.path.dirname(_previsora_output) if _previsora_output else "")
+
+                        AlertDialog.show_processing_complete(
+                            page=page,
+                            eps_name="PREVISORA",
+                            stats=resumen_summary,
+                            output_files=output_files if output_files else [f"📁 {resumen_summary.get('output_dir', '')}"],
+                            on_open_folder=open_previsora_folder,
+                        )
+                    else:
+                        messages_view.set_processing(False, f"❌ Error: {resultado['message']}")
+                        messages_view.processing_status.color = ft.Colors.RED
+
+                        AlertDialog.show_error(
+                            page=page,
+                            title="Error al procesar",
+                            message=f"No se pudo procesar los archivos:\n\n{resultado['message']}"
+                        )
+
+                    messages_view.process_eps_btn.disabled = False
                     messages_view.show_process_button(True)
 
             except Exception as ex:

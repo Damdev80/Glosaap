@@ -21,6 +21,7 @@ class HomologadorManualView:
     HOMOLOGACION_PATHS = {
         "MUTUALSER": get_homologador_path("mutualser"),
         "COOSALUD": get_homologador_path("coosalud"),
+        "PREVISORA": get_homologador_path("previsora"),
     }
 
     # Ruta de salida
@@ -69,6 +70,7 @@ class HomologadorManualView:
                 ft.dropdown.Option("MUTUALSER", "MUTUALSER"),
                 ft.dropdown.Option("COOSALUD", "COOSALUD"),
                 ft.dropdown.Option("SANITAS", "SANITAS"),
+                ft.dropdown.Option("PREVISORA", "PREVISORA"),
             ],
             on_change=self._on_eps_change,
             border_color=ft.Colors.PRIMARY,
@@ -314,6 +316,13 @@ class HomologadorManualView:
         elif self.selected_eps == "SANITAS":
             self.eps_logo.src = os.path.join(self.ASSETS_DIR, "img", "eps", "sanitas.png")
             self.eps_logo.visible = True
+        elif self.selected_eps == "PREVISORA":
+            logo = os.path.join(self.ASSETS_DIR, "img", "eps", "previsora.png")
+            if os.path.exists(logo):
+                self.eps_logo.src = logo
+                self.eps_logo.visible = True
+            else:
+                self.eps_logo.visible = False
 
         # SANITAS agrupa 2 tablas: mostrar sub-selector y esperar elección.
         if self.selected_eps == "SANITAS":
@@ -397,22 +406,7 @@ class HomologadorManualView:
             return
 
         # tipo == "normal" (comportamiento previo)
-        try:
-            _normal_path = normal_path
-        except Exception as ex:
-            self.status_text.value = f"❌ Error obteniendo ruta de homologación: {ex}"  # type: ignore
-            self.status_text.color = ft.Colors.RED  # type: ignore
-            self._sanitas_processor = None
-            self.df_homologacion = None
-            self.page.update()
-            return
-        except Exception as ex:
-            self.status_text.value = f"❌ Error obteniendo ruta de homologación: {ex}"  # type: ignore
-            self.status_text.color = ft.Colors.RED  # type: ignore
-            self._sanitas_processor = None
-            self.df_homologacion = None
-            self.page.update()
-            return
+        _normal_path = normal_path
 
         self._sanitas_processor = SanitasProcessor(homologador_path=normal_path)
 
@@ -440,6 +434,11 @@ class HomologadorManualView:
             return
 
         path = self.HOMOLOGACION_PATHS.get(self.selected_eps)
+        if not path:
+            try:
+                path = get_homologador_path(self.selected_eps.lower())
+            except Exception:
+                path = ""
         if not path or not os.path.exists(path):
             self.status_text.value = f"❌ Archivo de homologación no encontrado: {path}"  # type: ignore
             self.status_text.color = ft.Colors.RED  # type: ignore
@@ -528,6 +527,45 @@ class HomologadorManualView:
         """Busca código homologado usando las reglas de la EPS"""
         if self.df_homologacion is None or pd.isna(codigo):
             return ''
+
+        # PREVISORA (tabla futura CODIGO PREVISORA -> CODIGO HOMOLOGO,
+        # acepta layout ERP/DGH como fallback): homologación directa.
+        if self.selected_eps == "PREVISORA":
+            try:
+                codigo_str = str(codigo).strip()
+                if not codigo_str or codigo_str == 'nan':
+                    return ''
+                col_prev = None
+                col_homo = None
+                for cand_prev, cand_homo in (
+                    ("CODIGO PREVISORA", "CODIGO HOMOLOGO"),
+                    ("Código Servicio de la ERP", "Código producto en DGH"),
+                ):
+                    if cand_prev in self.df_homologacion.columns and cand_homo in self.df_homologacion.columns:
+                        col_prev, col_homo = cand_prev, cand_homo
+                        break
+                if col_prev is None or col_homo is None:
+                    return ''
+                mask = self.df_homologacion[col_prev].astype(str).str.strip() == codigo_str
+                resultado = self.df_homologacion[mask]
+                if resultado.empty:
+                    codigo_num = ''.join(filter(str.isdigit, codigo_str))
+                    if codigo_num:
+                        mask = (
+                            self.df_homologacion[col_prev].astype(str)
+                            .str.replace(r'\D', '', regex=True) == codigo_num
+                        )
+                        resultado = self.df_homologacion[mask]
+                if not resultado.empty:
+                    val = resultado.iloc[0][col_homo]
+                    if pd.notna(val):
+                        cod = str(val).strip()
+                        if cod and cod not in ('0', 'nan'):
+                            return cod
+                return ''
+            except Exception as e:
+                print(f"⚠️ Error homologando {codigo}: {e}")
+                return ''
 
         try:
             codigo_str = str(codigo).strip()

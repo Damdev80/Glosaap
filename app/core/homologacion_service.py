@@ -33,6 +33,7 @@ class HomologacionService:
         "coosalud": "coosalud_homologacion.xlsx",
         "sanitas": "sanitas_homologador_2.xlsx",
         "sanitas_insumos": "sanitas_homologador.xlsx",
+        "previsora": "previsora_homologacion.xlsx",
     }
 
     # Columnas requeridas por EPS (Coosalud/Sanitas solo tienen 2 columnas)
@@ -41,6 +42,7 @@ class HomologacionService:
         "coosalud": ['Código Servicio de la ERP', 'Código producto en DGH'],
         "sanitas": ['CODIGO PROCEDIMIENTO PRESTADOR', 'CODIGO HOMOLOGO'],
         "sanitas_insumos": ['CUM', 'IUM RDA', 'CODIGO PRODUCTO'],
+        "previsora": ['CODIGO PREVISORA', 'CODIGO HOMOLOGO'],
     }
 
     # Columna clave (lookup) por EPS: siempre columnas[0].
@@ -50,12 +52,14 @@ class HomologacionService:
         "coosalud": 'Código producto en DGH',
         "sanitas": 'CODIGO HOMOLOGO',
         "sanitas_insumos": 'CODIGO PRODUCTO',
+        "previsora": 'CODIGO HOMOLOGO',
     }
     COL_EXTRA = {
         "mutualser": 'COD_SERV_FACT',
         "coosalud": None,
         "sanitas": None,
         "sanitas_insumos": 'IUM RDA',
+        "previsora": None,
     }
 
     # Columnas por defecto (para compatibilidad)

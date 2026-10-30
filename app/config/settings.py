@@ -12,7 +12,7 @@ from pathlib import Path
 
 # Versión actual de la aplicación (seguir semver: MAJOR.MINOR.PATCH)
 # Actualizar manualmente en cada release
-APP_VERSION = "0.11.28"
+APP_VERSION = "0.11.29"
 
 # Nombre de la aplicación
 APP_NAME = "Glosaap"
@@ -55,6 +55,7 @@ NETWORK_PATHS = {
     "mutualser_output": os.path.join(NETWORK_BASE, "REPOSITORIO DE RESULTADOS", "MUTUALSER"),
     "coosalud_output": os.path.join(NETWORK_BASE, "REPOSITORIO DE RESULTADOS", "COOSALUD"),
     "sanitas_output": os.path.join(NETWORK_BASE, "REPOSITORIO DE RESULTADOS", "SANITAS"),
+    "previsora_output": os.path.join(NETWORK_BASE, "REPOSITORIO DE RESULTADOS", "PREVISORA"),
 }
 
 # Archivos de homologación por EPS
@@ -65,6 +66,8 @@ HOMOLOGADOR_FILES = {
     # estilo Mutualser) y el de insumos (CUM / IUM RDA / CODIGO PRODUCTO).
     "sanitas": os.path.join(NETWORK_PATHS["homologador"], "sanitas_homologador_2.xlsx"),
     "sanitas_insumos": os.path.join(NETWORK_PATHS["homologador"], "sanitas_homologador.xlsx"),
+    # Previsora: tabla aún no entregada; placeholder para fase 2.
+    "previsora": os.path.join(NETWORK_PATHS["homologador"], "previsora_homologacion.xlsx"),
 }
 
 # ==================== CONFIGURACIÓN IMAP ====================

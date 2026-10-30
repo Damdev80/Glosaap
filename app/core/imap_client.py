@@ -228,6 +228,21 @@ class ImapClient:
             return '(' + ' '.join(criteria_parts) + ')'
         return "ALL"
 
+    @staticmethod
+    def _ascii_fallback(texto: str) -> str:
+        """Quita tildes de un criterio para reintento ASCII.
+
+        Algunos servidores no aceptan CHARSET UTF-8; el fallback sin
+        tildes ("Notificacion") evita el UnicodeEncodeError y la mayoría
+        (Gmail/Exchange) matchea insensible a acentos.
+        """
+        import unicodedata
+
+        return "".join(
+            c for c in unicodedata.normalize("NFD", texto)
+            if unicodedata.category(c) != "Mn"
+        )
+
     def _execute_search(self, criteria: str) -> list[bytes]:
         """
         Ejecuta la búsqueda IMAP y retorna los IDs.
@@ -240,7 +255,17 @@ class ImapClient:
         """
         logger.info(f"Criterio de búsqueda IMAP: {criteria}")
 
-        typ, data = self.conn.search(None, criteria)
+        try:
+            if any(ord(ch) > 127 for ch in criteria):
+                # RFC 3501: el criterio va en bytes UTF-8 con CHARSET.
+                # (Este imaplib codifica los str en ASCII, así que hay que
+                # pasar bytes explícitos; si no, ni el CHARSET sale.)
+                typ, data = self.conn.search("UTF-8", criteria.encode("utf-8"))
+            else:
+                typ, data = self.conn.search(None, criteria)
+        except (UnicodeEncodeError, imaplib.IMAP4.error) as e:
+            logger.warning("Búsqueda UTF-8 falló (%s); reintentando sin tildes", e)
+            typ, data = self.conn.search(None, self._ascii_fallback(criteria))
 
         if typ != "OK" or data[0] is None:
             logger.info("Búsqueda IMAP no retornó resultados")
