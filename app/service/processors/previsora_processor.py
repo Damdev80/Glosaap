@@ -8,10 +8,17 @@ Cada PDF puede traer una o varias liquidaciones agrupadas. Por cada
   (columnas marcadas en rojo) + Observación del ítem.
 - Nro Radicado y Siniestro SISE como contexto por sección.
 
-Salida (fase 1, objeciones aún NO): PREVISORA_REGISTRO_<ts>.xlsx con
-exactamente NRO_FACTURA + columnas rojas + OBSERVACION. Sin homologador
-(aún no lo pasan): SLNSERPRO conserva el código original con warning.
-Fecha de objeción futura = fecha de recepción del correo (email_date).
+Salida (registro + objeciones para montar en Dinámica):
+- PREVISORA_REGISTRO_<ts>.xlsx con NRO_FACTURA + columnas rojas +
+  OBSERVACION + FECHA_CORREO (fecha de recepción del correo por archivo).
+- Objeciones_PREvisora_<ts>.xlsx con el set estándar de 15 columnas
+  (CDCONSEC...CRDOBSERV): CRNCXC=factura, CROFECOBJ=fecha del correo por
+  fila, CROVALOBJ=valor objetado, SLNSERPRO=código homologado (columna
+  "codigo" del PDF), CRDOBSERV=observación. CRNCONOBJ queda vacío: el PDF
+  no trae columnas de concepto de glosa (confirmar si Dinámica lo exige).
+Homologador real Previsora_homologador.xlsx: CODIGO PREVISORA (columna
+"codigo" del PDF) -> codigo homologado. Sin match se conserva el original.
+Fecha de objeción = fecha de recepción del correo (email_date por archivo).
 
 Sigue el Template Method de BaseProcessor: identify_files (TODOS los
 PDF, nunca solo el primero), validate_files, extract_data, homologate
@@ -28,7 +35,7 @@ from app.config.settings import logger
 
 from .base_processor import BaseProcessor
 
-# Columnas del Excel de registro a entregar (rojo + factura adicional).
+# Columnas del Excel de registro a entregar (rojo + factura + fecha correo).
 REGISTRO_COLUMNS = [
     "NRO_FACTURA",
     "CANT",
@@ -39,12 +46,33 @@ REGISTRO_COLUMNS = [
     "OBJECION",
     "LIQUIDADO",
     "OBSERVACION",
+    "FECHA_CORREO",
 ]
 
-# Homologador futuro (aún no lo pasan): previsora_homologacion.xlsx con
-# "CODIGO PREVISORA" / "CODIGO HOMOLOGO" (acepta layout ERP/DGH fallback).
+# Columnas del archivo de objeciones: mismo set estándar que
+# Mutualser/Coosalud/Sanitas para montar en Dinámica.
+OBJECIONES_COLUMNS = [
+    "CDCONSEC",
+    "CDFECDOC",
+    "CRNCXC",
+    "CROFECOBJ",
+    "CROREFERE",
+    "CROOBSERV",
+    "CROCLAOBJ",
+    "CRNCLAOBJ",
+    "GENUSUARIO4",
+    "CRNCONOBJ",
+    "SLNSERPRO",
+    "CTNCENCOS",
+    "IDRIPS",
+    "CROVALOBJ",
+    "CRDOBSERV",
+]
+
+# Homologador real Previsora_homologador.xlsx: CODIGO PREVISORA (columna
+# "codigo" del PDF) -> codigo homologado (acepta layout ERP/DGH fallback).
 HOMOLOGADOR_PREV_COL = "CODIGO PREVISORA"
-HOMOLOGADOR_HOMO_COL = "CODIGO HOMOLOGO"
+HOMOLOGADOR_HOMO_COL = "codigo homologado"
 HOMOLOGADOR_ERP_COL = "Código Servicio de la ERP"
 HOMOLOGADOR_DGH_COL = "Código producto en DGH"
 
@@ -57,6 +85,7 @@ class PrevisoraProcessor(BaseProcessor):
     def __init__(self, homologador_path: str | None = None):
         super().__init__(homologador_path or "")
         self.previsora_df: pd.DataFrame | None = None
+        self._last_objeciones_df: pd.DataFrame | None = None
         self._dict_cache: dict[str, str] | None = None
 
     # ==================== HOMOLOGADOR (futuro) ====================
@@ -91,7 +120,7 @@ class PrevisoraProcessor(BaseProcessor):
             return None
         if exact_match:
             for col in self.homologador_df.columns:
-                if str(col).strip() == exact_match:
+                if str(col).strip().upper() == exact_match.strip().upper():
                     return col
         for col in self.homologador_df.columns:
             col_lower = str(col).lower()
@@ -552,10 +581,10 @@ class PrevisoraProcessor(BaseProcessor):
     def homologate(self, data: dict[str, pd.DataFrame]) -> pd.DataFrame:
         """Normaliza filas de Previsora y retorna DataFrame (contrato Base).
 
-        Calcula por fila: CRNCXC (FC0000+factura), SLNSERPRO (homologado o
-        código original; aún sin tabla se conserva original), CROVALOBJ
-        (numérico de OBJECION), CRDOBSERV (OBSERVACION). Conserva las
-        columnas del registro para el Excel de entrega.
+        Calcula por fila: CRNCXC (FC0000+factura), SLNSERPRO (homologado vía
+        CODIGO PREVISORA -> codigo homologado; sin match conserva original),
+        CROVALOBJ (numérico de OBJECION), CRDOBSERV (OBSERVACION) y
+        FECHA_CORREO visible (DD/MM/AAAA desde fecha_correo).
         """
         df: pd.DataFrame | None = None
         if isinstance(data, dict):
@@ -583,6 +612,10 @@ class PrevisoraProcessor(BaseProcessor):
         work["_FACTURA"] = work["NRO_FACTURA"]
         if "fecha_correo" not in work.columns:
             work["fecha_correo"] = ""
+
+        # FECHA_CORREO visible en el registro: fecha de recepción del correo
+        # por fila (DD/MM/AAAA), misma que alimenta CROFECOBJ de objeciones.
+        work["FECHA_CORREO"] = work["fecha_correo"].apply(self._formatear_fecha_dmy)
 
         sln: list[str] = []
         homologados = 0
@@ -615,6 +648,99 @@ class PrevisoraProcessor(BaseProcessor):
             work["CRDOBSERV"] = ""
         return work
 
+    # ==================== OBJECIONES ====================
+
+    def _build_objeciones_df(
+        self, detalle_df: pd.DataFrame, email_date: str | None = None
+    ) -> pd.DataFrame:
+        """Construye el DataFrame de objeciones (set estándar 15 columnas).
+
+        CRNCONOBJ queda vacío: el PDF no trae columnas de concepto de glosa
+        (confirmar si Dinámica lo exige o acepta el archivo así).
+        """
+        hoy_doc = (
+            datetime.now().strftime("%#d/%#m/%Y")
+            if os.name == "nt"
+            else datetime.now().strftime("%-d/%-m/%Y")
+        )
+        hoy_dmy = datetime.now().strftime("%d/%m/%Y")
+
+        df_obj = pd.DataFrame()
+
+        if "CRNCXC" in detalle_df.columns and detalle_df["CRNCXC"].notna().any():
+            facturas = detalle_df["CRNCXC"]
+        elif "_FACTURA" in detalle_df.columns:
+            facturas = detalle_df["_FACTURA"]
+        else:
+            facturas = None
+
+        if facturas is not None:
+            mapa = {f: i + 1 for i, f in enumerate(pd.unique(facturas))}
+            df_obj["CDCONSEC"] = facturas.map(mapa)
+        else:
+            df_obj["CDCONSEC"] = range(1, len(detalle_df) + 1)
+
+        df_obj["CDFECDOC"] = hoy_doc
+        df_obj["CRNCXC"] = detalle_df["CRNCXC"] if "CRNCXC" in detalle_df.columns else ""
+
+        # CROFECOBJ: fecha de recepción del correo por fila (DD/MM/AAAA).
+        if "fecha_correo" in detalle_df.columns and (
+            detalle_df["fecha_correo"].astype(str).str.strip() != ""
+        ).any():
+            df_obj["CROFECOBJ"] = detalle_df["fecha_correo"].apply(
+                lambda v: self._formatear_fecha_dmy(v) or hoy_dmy
+            )
+        elif email_date:
+            df_obj["CROFECOBJ"] = self._formatear_fecha_dmy(email_date) or hoy_dmy
+        else:
+            df_obj["CROFECOBJ"] = hoy_dmy
+
+        df_obj["CROREFERE"] = ""
+        df_obj["CROOBSERV"] = df_obj["CROFECOBJ"].apply(
+            lambda fecha: f"REG, GLOSA SEGÚN RAD N. {fecha}" if fecha else ""
+        )
+        df_obj["CROCLAOBJ"] = 0
+        df_obj["CRNCLAOBJ"] = ""
+        df_obj["GENUSUARIO4"] = GENUSUARIO4_FIJO
+        df_obj["CRNCONOBJ"] = ""
+        df_obj["SLNSERPRO"] = detalle_df["SLNSERPRO"] if "SLNSERPRO" in detalle_df.columns else ""
+        df_obj["CTNCENCOS"] = ""
+        df_obj["IDRIPS"] = ""
+        df_obj["CROVALOBJ"] = detalle_df["CROVALOBJ"] if "CROVALOBJ" in detalle_df.columns else 0.0
+        if "CRDOBSERV" in detalle_df.columns:
+            df_obj["CRDOBSERV"] = detalle_df["CRDOBSERV"].fillna("")
+        else:
+            df_obj["CRDOBSERV"] = ""
+
+        return df_obj[OBJECIONES_COLUMNS]
+
+    def _generar_archivo_objeciones(
+        self,
+        detalle_df: pd.DataFrame,
+        output_dir: str,
+        email_date: str | None = None,
+    ) -> str | None:
+        """Genera Objeciones_Previsora_<ts>.xlsx a partir del detalle."""
+        if detalle_df is None or detalle_df.empty:
+            self.errors.append("No hay datos para generar objeciones (Previsora)")
+            return None
+        try:
+            logger.info("Previsora generando Objeciones.xlsx")
+            df_obj = self._build_objeciones_df(detalle_df, email_date)
+            self._last_objeciones_df = df_obj
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_path = os.path.join(output_dir, f"Objeciones_Previsora_{timestamp}.xlsx")
+            with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+                df_obj.to_excel(writer, sheet_name="OBJECIONES", index=False)
+            logger.info(
+                "Previsora objeciones generadas: %s (%s registros)", output_path, len(df_obj)
+            )
+            return output_path
+        except Exception as e:
+            self.errors.append(f"Error generando objeciones Previsora: {str(e)}")
+            logger.error("Error generando objeciones Previsora: %s", e)
+            return None
+
     # ==================== SALIDA ====================
 
     def save_to_excel(self, data: dict[str, pd.DataFrame], output_path: str) -> bool:
@@ -643,7 +769,7 @@ class PrevisoraProcessor(BaseProcessor):
         email_date: str | None = None,
         attachment_service: Any = None,
     ) -> tuple[dict[str, pd.DataFrame] | None, str]:
-        """Procesa los PDFs de Previsora a Excel de registro.
+        """Procesa los PDFs de Previsora a registro + objeciones.
 
         Args:
             file_paths: Rutas a los PDFs (uno o varios por correo agrupado).
@@ -652,11 +778,12 @@ class PrevisoraProcessor(BaseProcessor):
             attachment_service: Metadatos con fecha individual por archivo.
 
         Returns:
-            Tupla (dict {"detalle"}, mensaje). Objeciones aún NO (fase 2).
+            Tupla (dict {"detalle", "glosa", "objeciones"}, mensaje).
         """
         self.errors = []
         self.warnings = []
         self._dict_cache = None
+        self._last_objeciones_df = None
 
         logger.info("PREVISORA procesador glosas: inicio")
 
@@ -721,7 +848,12 @@ class PrevisoraProcessor(BaseProcessor):
         if detalle is None or detalle.empty:
             return None, f"[ERROR] Error: {'; '.join(self.errors) or 'sin datos homologados'}"
 
-        result_data: dict[str, pd.DataFrame] = {"detalle": detalle}
+        objeciones_df = self._build_objeciones_df(detalle, email_date)
+        result_data: dict[str, pd.DataFrame] = {
+            "detalle": detalle,
+            "glosa": objeciones_df,
+            "objeciones": objeciones_df,
+        }
 
         if output_dir:
             try:
@@ -729,12 +861,24 @@ class PrevisoraProcessor(BaseProcessor):
             except Exception as exc:
                 logger.warning("No se pudo crear directorio Previsora %s: %s", output_dir, exc)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_files = []
+
             output_path = os.path.join(output_dir, f"PREVISORA_REGISTRO_{timestamp}.xlsx")
             logger.info("Previsora guardando registro")
             if self.save_to_excel({"detalle": detalle}, output_path):
-                return result_data, (
-                    f"[OK] Procesado exitosamente. Archivos: {os.path.basename(output_path)}"
-                )
+                output_files.append(os.path.basename(output_path))
+
+            obj_path = self._generar_archivo_objeciones(detalle, output_dir, email_date)
+            if obj_path:
+                output_files.append(os.path.basename(obj_path))
+                # Reusar el df ya procesado para el retorno.
+                if self._last_objeciones_df is not None:
+                    result_data["glosa"] = self._last_objeciones_df
+                    result_data["objeciones"] = self._last_objeciones_df
+
+            if output_files:
+                files_str = ", ".join(output_files)
+                return result_data, f"[OK] Procesado exitosamente. Archivos: {files_str}"
             return result_data, f"[WARNING] Procesado pero error al guardar: {'; '.join(self.errors)}"
 
         return result_data, f"[OK] Procesados {len(pdfs)} archivos pdf"

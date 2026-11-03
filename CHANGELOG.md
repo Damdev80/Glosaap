@@ -6,6 +6,20 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.11.31] - 2026-11-04
+
+### ✨ Nuevas Características
+- Previsora fase 2: archivo de objeciones `Objeciones_Previsora_<ts>.xlsx`
+  (set estándar 15 columnas, `CROFECOBJ` por fecha de correo,
+  `SLNSERPRO` homologado) y columna `FECHA_CORREO` en el registro.
+  `CRNCONOBJ` sale vacío (el PDF no trae concepto de glosa) y
+  `GENUSUARIO4=1103858268`: confirmar ambos antes de montar.
+- Homologador real `Previsora_homologador.xlsx` (91 filas,
+  `CODIGO PREVISORA` -> `codigo homologado`) conectado en settings,
+  servicio, homologador manual (insensible a mayúsculas) y gestión;
+  la UI de PREVISORA muestra registro + objeciones con homologados.
+
+
 ## [0.11.30] - 2026-11-04
 
 ### 🐛 Correcciones

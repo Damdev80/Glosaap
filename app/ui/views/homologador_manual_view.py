@@ -528,22 +528,24 @@ class HomologadorManualView:
         if self.df_homologacion is None or pd.isna(codigo):
             return ''
 
-        # PREVISORA (tabla futura CODIGO PREVISORA -> CODIGO HOMOLOGO,
-        # acepta layout ERP/DGH como fallback): homologación directa.
+        # PREVISORA (tabla CODIGO PREVISORA -> codigo homologado,
+        # insensible a mayúsculas: el archivo real trae minúsculas).
         if self.selected_eps == "PREVISORA":
             try:
                 codigo_str = str(codigo).strip()
                 if not codigo_str or codigo_str == 'nan':
                     return ''
-                col_prev = None
-                col_homo = None
-                for cand_prev, cand_homo in (
-                    ("CODIGO PREVISORA", "CODIGO HOMOLOGO"),
-                    ("Código Servicio de la ERP", "Código producto en DGH"),
-                ):
-                    if cand_prev in self.df_homologacion.columns and cand_homo in self.df_homologacion.columns:
-                        col_prev, col_homo = cand_prev, cand_homo
-                        break
+                norm = {str(c).strip().upper(): c for c in self.df_homologacion.columns}
+                col_prev = norm.get("CODIGO PREVISORA")
+                col_homo = norm.get("CODIGO HOMOLOGO")
+                if col_prev is None or col_homo is None:
+                    for cand_prev, cand_homo in (
+                        ("CODIGO PREVISORA", "codigo homologado"),
+                        ("Código Servicio de la ERP", "Código producto en DGH"),
+                    ):
+                        if cand_prev in self.df_homologacion.columns and cand_homo in self.df_homologacion.columns:
+                            col_prev, col_homo = cand_prev, cand_homo
+                            break
                 if col_prev is None or col_homo is None:
                     return ''
                 mask = self.df_homologacion[col_prev].astype(str).str.strip() == codigo_str

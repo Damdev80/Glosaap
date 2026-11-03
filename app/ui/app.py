@@ -1097,19 +1097,48 @@ def main(page: ft.Page):
 
                     if resultado['success']:
                         resumen = resultado['resumen']
-                        msg = "✅ ¡Archivo generado!\n"
+                        msg = "✅ ¡Archivos generados!\n"
                         msg += f"📄 {resultado['output_file']}\n"
-                        msg += f"📊 {resumen['total_registros']} filas | {resumen['facturas_unicas']} facturas"
+                        if resultado.get('objeciones_file'):
+                            msg += f"📋 {resultado['objeciones_file']}\n"
+                        msg += f"📊 {resumen['total_registros']} filas | {resumen['facturas_unicas']} facturas | {resumen['codigos_homologados']} homologados"
                         messages_view.set_processing(False, msg)
                         messages_view.processing_status.color = ft.Colors.GREEN
 
                         output_files = [resultado['output_file']] if resultado.get('output_file') else []
+                        if resultado.get('objeciones_file'):
+                            output_files.append(resultado['objeciones_file'])
                         _previsora_output = str(resultado.get('output_file') or "")
+                        _previsora_obj = str(resultado.get('objeciones_file') or "")
+                        try:
+                            _total = int(resumen.get('total_registros', 0) or 0)
+                        except (TypeError, ValueError):
+                            _total = 0
+                        try:
+                            _hom = int(resumen.get('codigos_homologados', 0) or 0)
+                        except (TypeError, ValueError):
+                            _hom = 0
                         resumen_summary = dict(resumen)
+                        resumen_summary['no_homologados'] = max(_total - _hom, 0) if _total else 0
                         resumen_summary['output_dir'] = os.path.dirname(_previsora_output) if _previsora_output else ""
 
                         def open_previsora_folder():
                             _open_folder_in_explorer(os.path.dirname(_previsora_output) if _previsora_output else "")
+
+                        def open_previsora_non_homologated():
+                            if _previsora_obj and os.path.exists(_previsora_obj):
+                                if not _open_file_default(_previsora_obj):
+                                    AlertDialog.show_info(
+                                        page=page,
+                                        title="No homologados",
+                                        message=f"Hay {resumen_summary['no_homologados']} registro(s) no homologados.\n\nArchivo:\n{_previsora_obj}",
+                                    )
+                            else:
+                                AlertDialog.show_info(
+                                    page=page,
+                                    title="No homologados",
+                                    message=f"Hay {resumen_summary['no_homologados']} registro(s) no homologados.",
+                                )
 
                         AlertDialog.show_processing_complete(
                             page=page,
@@ -1117,6 +1146,7 @@ def main(page: ft.Page):
                             stats=resumen_summary,
                             output_files=output_files if output_files else [f"📁 {resumen_summary.get('output_dir', '')}"],
                             on_open_folder=open_previsora_folder,
+                            on_view_non_homologated=open_previsora_non_homologated if resumen_summary['no_homologados'] > 0 else None,
                         )
                     else:
                         messages_view.set_processing(False, f"❌ Error: {resultado['message']}")

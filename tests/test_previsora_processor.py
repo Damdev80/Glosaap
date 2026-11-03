@@ -226,16 +226,19 @@ class TestHomologate:
 
 
 class TestProcessGlosas:
-    def test_genera_registro(self, tmp_path, pdf_simple):
+    def test_genera_registro_y_objeciones(self, tmp_path, pdf_simple):
         proc = PrevisoraProcessor(homologador_path="")
         result, message = proc.process_glosas(
             [pdf_simple], output_dir=str(tmp_path), email_date="2026-10-30 10:00:00"
         )
         assert result is not None
         assert "detalle" in result
+        assert "objeciones" in result
         assert len(result["detalle"]) == 2
+        assert len(result["objeciones"]) == 2
         archivos = os.listdir(str(tmp_path))
         assert any(a.startswith("PREVISORA_REGISTRO_") and a.endswith(".xlsx") for a in archivos)
+        assert any(a.startswith("Objeciones_Previsora_") and a.endswith(".xlsx") for a in archivos)
         assert message.startswith("[OK]")
 
     def test_fecha_por_archivo(self, tmp_path, monkeypatch):
@@ -267,7 +270,7 @@ class TestWiring:
         assert settings.NETWORK_PATHS["previsora_output"].endswith("PREVISORA")
         assert "previsora" in settings.HOMOLOGADOR_FILES
         assert settings.HOMOLOGADOR_FILES["previsora"].endswith(
-            "previsora_homologacion.xlsx"
+            "Previsora_homologador.xlsx"
         )
 
     def test_eps_config_processor(self):
@@ -287,13 +290,107 @@ class TestWiring:
         service.previsora_output_dir = str(tmp_path)
         resultado = service.procesar_previsora([pdf_simple], email_date="2026-10-30 10:00:00")
         assert resultado["success"] is True
-        for key in ("message", "output_file", "path", "resumen"):
+        for key in ("message", "output_file", "objeciones_file", "path", "resumen"):
             assert key in resultado
-        assert resultado["objeciones_file"] is None
+        assert resultado["output_file"] and resultado["output_file"].endswith(".xlsx")
+        assert resultado["objeciones_file"] and resultado["objeciones_file"].endswith(".xlsx")
         assert resultado["resumen"]["total_registros"] == 2
+        assert resultado["resumen"]["total_glosas"] == 2
         assert resultado["resumen"]["facturas_unicas"] == 1
 
     def test_email_service_sin_archivos(self):
         service = EmailService()
         resultado = service.procesar_previsora([])
         assert resultado["success"] is False
+
+
+def _df_previsora():
+    return pd.DataFrame(
+        [
+            {
+                "NRO_FACTURA": "FC831591",
+                "CANT": "1",
+                "CODIGO": "21102",
+                "PROCEDIMIENTO": "Brazo",
+                "PORCENTAJE": "0.00%",
+                "COBRADO": "99.900,00",
+                "OBJECION": "0,00",
+                "LIQUIDADO": "99.900,00",
+                "OBSERVACION": "",
+            },
+            {
+                "NRO_FACTURA": "FC831591",
+                "CANT": "1",
+                "CODIGO": "19304",
+                "PROCEDIMIENTO": "Cuadro hemático",
+                "PORCENTAJE": "100.00%",
+                "COBRADO": "37.900,00",
+                "OBJECION": "37.900,00",
+                "LIQUIDADO": "0,00",
+                "OBSERVACION": "Se glosa",
+            },
+        ]
+    )
+
+
+def _homologador(tmp_path):
+    path = tmp_path / "Previsora_homologador.xlsx"
+    pd.DataFrame(
+        {
+            "CODIGO PREVISORA": ["21102", "19304"],
+            "codigo homologado": ["21102ST", "19304ST"],
+        }
+    ).to_excel(path, index=False)
+    return str(path)
+
+
+class TestHomologadorReal:
+    def test_layout_real_homologa_codigo(self, tmp_path):
+        proc = PrevisoraProcessor(homologador_path=_homologador(tmp_path))
+        assert proc.load_homologador() is True
+        result = proc.homologate({"previsora": _df_previsora()})
+        assert result.loc[0, "SLNSERPRO"] == "21102ST"
+        assert result.loc[1, "SLNSERPRO"] == "19304ST"
+
+    def test_fecha_correo_en_registro(self, tmp_path):
+        df = _df_previsora()
+        df["fecha_correo"] = "2026-10-30 10:00:00"
+        proc = PrevisoraProcessor(homologador_path="")
+        result = proc.homologate({"previsora": df})
+        assert result.loc[0, "FECHA_CORREO"] == "30/10/2026"
+        out = str(tmp_path / "reg.xlsx")
+        assert proc.save_to_excel({"detalle": result}, out) is True
+        leido = pd.read_excel(out)
+        assert "FECHA_CORREO" in list(leido.columns)
+        assert leido.loc[0, "FECHA_CORREO"] == "30/10/2026"
+
+
+class TestObjeciones:
+    def test_columnas_y_crnconobj_vacio(self, tmp_path):
+        from app.service.processors.previsora_processor import OBJECIONES_COLUMNS
+
+        df = _df_previsora()
+        df["fecha_correo"] = "2026-10-30 10:00:00"
+        proc = PrevisoraProcessor(homologador_path=_homologador(tmp_path))
+        assert proc.load_homologador() is True
+        detalle = proc.homologate({"previsora": df})
+        obj = proc._build_objeciones_df(detalle, "2026-10-30 10:00:00")
+        assert list(obj.columns) == OBJECIONES_COLUMNS
+        assert len(obj) == 2
+        assert (obj["CRNCONOBJ"] == "").all()
+        assert (obj["CROCLAOBJ"] == 0).all()
+        assert (obj["GENUSUARIO4"] == 1103858268).all()
+        assert obj.loc[0, "CRNCXC"] == "FC0000831591"
+        assert obj.loc[0, "CROFECOBJ"] == "30/10/2026"
+        assert obj.loc[0, "SLNSERPRO"] == "21102ST"
+        assert obj.loc[1, "CROVALOBJ"] == pytest.approx(37900.0)
+        assert obj.loc[1, "CRDOBSERV"] == "Se glosa"
+
+    def test_fecha_por_fila(self, tmp_path):
+        df = _df_previsora()
+        df["fecha_correo"] = ["2026-10-25 10:00:00", "2026-10-30 10:00:00"]
+        proc = PrevisoraProcessor(homologador_path="")
+        detalle = proc.homologate({"previsora": df})
+        obj = proc._build_objeciones_df(detalle, None)
+        assert obj.loc[0, "CROFECOBJ"] == "25/10/2026"
+        assert obj.loc[1, "CROFECOBJ"] == "30/10/2026"

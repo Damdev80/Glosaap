@@ -251,7 +251,7 @@ class HomologacionView:
         etiquetas = {
             "sanitas": ("Prestador", "Homólogo"),
             "sanitas_insumos": ("CUM", "CODIGO PRODUCTO"),
-            "previsora": ("CODIGO PREVISORA", "CODIGO HOMOLOGO"),
+            "previsora": ("CODIGO PREVISORA", "codigo homologado"),
         }
         label_clave, label_homologo = etiquetas.get(
             self.current_eps or "", ("Código ERP", "Código DGH")

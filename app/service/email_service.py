@@ -816,10 +816,7 @@ class EmailService:
 
     def procesar_previsora(self, archivos=None, email_date=None):
         """
-        Procesa PDFs de liquidación de PREVISORA y genera Excel de registro.
-
-        Fase 1: solo REGISTRO (NRO_FACTURA + columnas rojas + OBSERVACION).
-        Objeciones aún NO (fase 2 pendiente por el usuario).
+        Procesa PDFs de liquidación de PREVISORA y genera registro + objeciones.
 
         Args:
             archivos (list, optional): Rutas a PDFs. Si None, usa PDFs de
@@ -828,8 +825,7 @@ class EmailService:
                 Si None, se usan metadatos individuales con fallback a actual.
 
         Returns:
-            dict: success, message, output_file, objeciones_file (None en
-                fase 1), path, resumen.
+            dict: success, message, output_file, objeciones_file, path, resumen.
         """
         if archivos is None:
             try:
@@ -889,9 +885,14 @@ class EmailService:
             }
 
         detalle_df = result_data.get("detalle") if isinstance(result_data, dict) else None
+        glosa_df = None
+        if isinstance(result_data, dict):
+            glosa_df = result_data.get("objeciones", result_data.get("glosa"))
         total = len(detalle_df) if detalle_df is not None else 0
+        total_glosas = len(glosa_df) if glosa_df is not None else 0
 
         output_file = None
+        objeciones_file = None
         try:
             actuales = os.listdir(output_dir) if os.path.exists(output_dir) else []
             nuevos = [f for f in actuales if f not in archivos_previos]
@@ -902,6 +903,12 @@ class EmailService:
             ]
             if registros:
                 output_file = max(registros, key=os.path.getmtime)
+            objeciones = [
+                os.path.join(output_dir, f) for f in candidatos
+                if f.startswith("Objeciones_Previsora_") and f.endswith(".xlsx")
+            ]
+            if objeciones:
+                objeciones_file = max(objeciones, key=os.path.getmtime)
         except Exception as exc:
             logger.warning("No se pudieron localizar archivos generados: %s", exc)
 
@@ -920,7 +927,7 @@ class EmailService:
         resumen = {
             'total_registros': total,
             'total_detalles': total,
-            'total_glosas': total,
+            'total_glosas': total_glosas,
             'archivos_procesados': len(archivos),
             'facturas_unicas': facturas_unicas,
             'codigos_homologados': codigos_homologados,
@@ -928,15 +935,15 @@ class EmailService:
         }
 
         logger.info(
-            "Previsora procesado: %s filas, %s archivos",
-            total, len(archivos),
+            "Previsora procesado: %s filas, %s glosas, %s archivos",
+            total, total_glosas, len(archivos),
         )
 
         return {
             'success': True,
             'message': message or 'Procesamiento Previsora completado',
             'output_file': output_file,
-            'objeciones_file': None,
+            'objeciones_file': objeciones_file,
             'path': output_file,
             'resumen': resumen,
         }
