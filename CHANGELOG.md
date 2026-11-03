@@ -6,6 +6,15 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.11.30] - 2026-11-04
+
+### 🐛 Correcciones
+- `py main.py` con el Python del sistema ya no revienta con
+  `ModuleNotFoundError: No module named 'flet'`: `main.py` detecta si no
+  corre en el venv y se relanza solo con `.venv\Scripts\python.exe`
+  (mismo patrón que `build.py`).
+
+
 ## [0.11.29] - 2026-10-30
 
 ### ✨ Nuevas Características

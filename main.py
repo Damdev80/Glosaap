@@ -20,6 +20,17 @@ try:
 except Exception:
     pass
 
+# Si no está en el venv, redirigir al venv (mismo patrón que build.py):
+# `py main.py` usa el Python del sistema, que no tiene flet ni pandas.
+if not hasattr(sys, "real_prefix") and not (
+    hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix
+):
+    venv_python = os.path.join(ROOT_DIR, ".venv", "Scripts", "python.exe")
+    if os.path.exists(venv_python):
+        import subprocess
+
+        sys.exit(subprocess.run([venv_python, __file__] + sys.argv[1:]).returncode)
+
 # Importar settings primero (configura Playwright automáticamente)
 from app.config.settings import PLAYWRIGHT_BROWSERS_PATH
 
