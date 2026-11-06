@@ -297,7 +297,19 @@ def main(page: ft.Page):
 
     def show_guide_for(view_key=None):
         """Muestra la ayuda de la vista actual (hilo principal)."""
-        guide_overlay.show_help(view_key or ui_state.current_view)
+        key = view_key or ui_state.current_view
+        guide_overlay.show_help(key, on_flash=flash_guide_targets)
+
+    def flash_guide_targets(names):
+        """Parpadea los controles mencionados por la ayuda (focus guiado)."""
+        try:
+            for name in (names or []):
+                if name == "checklist":
+                    messages_view.flash_checklist()
+                elif name == "process":
+                    messages_view.flash_process_button()
+        except Exception:
+            pass
 
     def replay_tour():
         """Relanza el tour completo a pedido (ignora el "no volver a mostrar")."""

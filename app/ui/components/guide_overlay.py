@@ -1,8 +1,12 @@
-"""Overlay de guías interactivas (tour + ayuda por vista).
+"""Guía interactiva: tour y ayuda por vista en tarjeta flotante no modal.
 
-Renderiza sobre `ft.AlertDialog` (mismo canal que el resto de la app:
-hilo principal, `page.open/close`). El texto y la lógica viven en
-`app/ui/guide_content.py` para poder probarse sin Flet.
+A diferencia de un AlertDialog (que apilaba instancias y no se cerraba),
+aquí hay UNA sola tarjeta reutilizada en `page.overlay`: se muestra,
+se actualiza por paso y al cerrar se retira del overlay. Al no ser
+modal, la app sigue visible e interactuable, así el "focus" (parpadeo
+del control mencionado, vía callback `on_flash`) sí se ve.
+
+El texto y la lógica viven en `app/ui/guide_content.py`.
 """
 from __future__ import annotations
 
@@ -14,7 +18,7 @@ from app.ui import guide_content
 
 
 class GuideOverlay:
-    """Tour modal paso a paso con "no volver a mostrar"."""
+    """Tarjeta flotante de guía con pasos y "no volver a mostrar"."""
 
     def __init__(
         self,
@@ -28,13 +32,54 @@ class GuideOverlay:
         self._steps: list[dict[str, str]] = []
         self._index = 0
         self._storage_key: str | None = None
-        self._dialog: ft.AlertDialog | None = None
+        self._on_flash: Callable[[list[str]], None] | None = None
+        self._flash: list[str] = []
+        self._visible = False
+
         self._title = ft.Text("", size=16, weight=ft.FontWeight.W_600)
         self._counter = ft.Text("", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
         self._body = ft.Text("", size=13)
         self._btn_back = ft.TextButton("Atrás", on_click=lambda e: self.back())
         self._btn_next = ft.ElevatedButton("Siguiente", on_click=lambda e: self.next())
         self._btn_skip = ft.TextButton("Omitir", on_click=lambda e: self.close())
+        self._btn_hide = ft.TextButton(
+            "No volver a mostrar", on_click=lambda e: self.close(mark_seen=True)
+        )
+        self._btn_close = ft.IconButton(
+            icon=ft.Icons.CLOSE, tooltip="Cerrar", on_click=lambda e: self.close()
+        )
+        self._card = ft.Card(
+            content=ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Row(
+                            [self._title, self._btn_close],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        self._counter,
+                        self._body,
+                        ft.Row(
+                            [self._btn_back, self._btn_skip],
+                            alignment=ft.MainAxisAlignment.START,
+                        ),
+                        ft.Row(
+                            [self._btn_hide, self._btn_next],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                    ],
+                    spacing=8,
+                    tight=True,
+                ),
+                width=380,
+                padding=16,
+            ),
+            elevation=8,
+        )
+        self._wrap = ft.Container(
+            content=self._card,
+            alignment=ft.alignment.bottom_right,
+            padding=20,
+        )
 
     # ==================== API pública ====================
 
@@ -47,28 +92,45 @@ class GuideOverlay:
         )
         return True
 
-    def show_help(self, view_key: str) -> bool:
-        """Muestra la ayuda de una vista (una sola tarjeta)."""
+    def show_help(
+        self, view_key: str, on_flash: Callable[[list[str]], None] | None = None
+    ) -> bool:
+        """Muestra la ayuda de una vista (una sola tarjeta + focus)."""
         entry = guide_content.HELP_BY_VIEW.get(view_key or "")
         if not entry:
             return False
-        self.start([{"title": entry["title"], "body": entry["body"]}])
+        self.start(
+            [{"title": entry["title"], "body": entry["body"]}],
+            flash=list(entry.get("flash") or []),
+            on_flash=on_flash,
+        )
         return True
 
     def start(
-        self, steps: list[dict[str, str]], storage_key: str | None = None
+        self,
+        steps: list[dict[str, str]],
+        storage_key: str | None = None,
+        flash: list[str] | None = None,
+        on_flash: Callable[[list[str]], None] | None = None,
     ) -> None:
-        """Inicia un tour con los pasos dados (hilo principal)."""
+        """Muestra la guía (hilo principal). Si ya está visible, la reemplaza."""
         if not steps:
             return
+        self.close()
         self._steps = list(steps)
         self._index = 0
         self._storage_key = storage_key
+        self._on_flash = on_flash
+        self._flash = list(flash or [])
         self._render()
         try:
-            self.page.open(self._dialog)
+            if self._wrap not in self.page.overlay:
+                self.page.overlay.append(self._wrap)
+            self._visible = True
+            self.page.update()
         except Exception:
             pass
+        self._fire_flash()
 
     def next(self) -> None:
         """Avanza (o cierra y marca visto en el último paso)."""
@@ -87,17 +149,26 @@ class GuideOverlay:
             self._refresh()
 
     def close(self, mark_seen: bool = False) -> None:
-        """Cierra el tour; con mark_seen guarda "no volver a mostrar"."""
+        """Quita la guía del overlay. Con mark_seen guarda "no volver a mostrar"."""
         if mark_seen and self._storage_key:
             self._safe_set(self._storage_key, True)
-        try:
-            if self._dialog is not None:
-                self.page.close(self._dialog)
-        except Exception:
-            pass
-        self._dialog = None
         self._steps = []
         self._index = 0
+        self._storage_key = None
+        self._on_flash = None
+        self._flash = []
+        try:
+            if self._wrap in self.page.overlay:
+                self.page.overlay.remove(self._wrap)
+            self._visible = False
+            self.page.update()
+        except Exception:
+            pass
+
+    @property
+    def is_visible(self) -> bool:
+        """True si la tarjeta de guía está mostrándose."""
+        return self._visible
 
     # ==================== Internos ====================
 
@@ -113,43 +184,23 @@ class GuideOverlay:
         except Exception:
             pass
 
+    def _fire_flash(self) -> None:
+        if self._flash and self._on_flash is not None:
+            try:
+                self._on_flash(list(self._flash))
+            except Exception:
+                pass
+
     def _render(self) -> None:
         step = self._steps[self._index]
         total = len(self._steps)
         self._title.value = step.get("title", "")
-        self._counter.value = (
-            f"Paso {self._index + 1} de {total}" if total > 1 else ""
-        )
+        self._counter.value = f"Paso {self._index + 1} de {total}" if total > 1 else ""
         self._body.value = step.get("body", "")
         self._btn_back.disabled = self._index == 0
         self._btn_next.text = "Entendido" if self._index == total - 1 else "Siguiente"
-        actions = [self._btn_back, self._btn_skip]
-        if self._storage_key:
-            actions.append(
-                ft.TextButton(
-                    "No volver a mostrar",
-                    on_click=lambda e: self.close(mark_seen=True),
-                )
-            )
-        actions.append(self._btn_next)
-        content = ft.Column(
-            [self._counter, self._body],
-            spacing=8,
-            tight=True,
-            width=420,
-        )
-        try:
-            content.scroll = ft.ScrollMode.AUTO  # type: ignore[attr-defined]
-        except Exception:
-            pass
-        self._dialog = ft.AlertDialog(
-            modal=True,
-            title=self._title,
-            content=content,
-            actions=actions,
-            actions_alignment=ft.MainAxisAlignment.END,
-            shape=ft.RoundedRectangleBorder(radius=12),
-        )
+        self._btn_hide.visible = self._storage_key is not None
+        self._btn_skip.visible = total > 1
 
     def _refresh(self) -> None:
         try:

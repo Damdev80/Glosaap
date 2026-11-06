@@ -90,6 +90,8 @@ HELP_BY_VIEW: dict[str, dict[str, str]] = {
             "y queda un PREVISORA_DEBUG_*.txt en la salida. Si un "
             "homologador falta, se procesa igual conservando códigos."
         ),
+        # Controles que parpadean al abrir esta ayuda (focus guiado).
+        "flash": ["checklist", "process"],
     },
     "tools": {
         "title": "Herramientas",

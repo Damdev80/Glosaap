@@ -242,6 +242,10 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
   en Herramientas, Homologación, Homologador manual, Mix Excel,
   Descarga Web y EPS. Cinta de pasos Buscar → Descargar → Procesar →
   Revisar en la vista de correos, actualizada en cada etapa del flujo
+- Fix: el tour usaba un AlertDialog nuevo por paso y se apilaban sin
+  cerrarse; ahora es una sola tarjeta flotante no modal que siempre se
+  retira. La ayuda de Mensajes parpadea la cinta de pasos y el botón
+  Procesar como focus guiado
 
 ### 📦 Instalador (Fase B)
 - Instalador Inno Setup por usuario (`installer/glosaap.iss`,

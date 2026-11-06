@@ -2,6 +2,7 @@
 Vista del Dashboard principal con soporte de temas
 """
 import os
+import threading
 
 import flet as ft
 
@@ -137,6 +138,7 @@ class DashboardView:
             image_path=os.path.join(self.assets_dir, "img", "manejar_glosa.png"),
             featured=True,
         )
+        self._manejar_card = card_manejar
 
         card_responder = self._create_dashboard_card(
             icon=ft.Icons.REPLY_ALL_OUTLINED,
@@ -283,6 +285,38 @@ class DashboardView:
                 self.toast.warning(message)
             else:
                 self.toast.info(message)
+
+    def flash_manejar(self, duration=1.4):
+        """Resalta la tarjeta Manejar Glosa (focus de la guía)."""
+        card = getattr(self, "_manejar_card", None)
+        if card is None:
+            return
+        prev_color = getattr(card, "color", None)
+        prev_elevation = getattr(card, "elevation", None)
+
+        def apply():
+            card.color = ft.Colors.PRIMARY_CONTAINER
+            card.elevation = 8
+
+        def revert():
+            card.color = prev_color
+            card.elevation = prev_elevation
+
+        try:
+            apply()
+            self.page.update()
+        except Exception:
+            return
+        timer = threading.Timer(duration, self._end_manejar_flash, args=(revert,))
+        timer.daemon = True
+        timer.start()
+
+    def _end_manejar_flash(self, revert):
+        try:
+            revert()
+            self.page.update()
+        except Exception:
+            pass
 
     def _confirm_logout(self, e):
         """Antepone confirmación antes de cerrar sesión y limpiar datos."""

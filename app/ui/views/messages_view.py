@@ -642,6 +642,56 @@ class MessagesView:
             except Exception:
                 pass
 
+    def _pulse(self, apply, revert, duration=1.4):
+        """Parpadeo genérico de un control (focus de la guía).
+
+        Aplica el resaltado, actualiza y lo revierte con Timer demonio.
+        Mismo canal que el resto de la vista (page.update con try/except).
+        """
+        try:
+            apply()
+            self.page.update()
+        except Exception:
+            return
+        timer = threading.Timer(duration, self._end_pulse, args=(revert,))
+        timer.daemon = True
+        timer.start()
+
+    def _end_pulse(self, revert):
+        try:
+            revert()
+            self.page.update()
+        except Exception:
+            pass
+
+    def flash_checklist(self, duration=1.4):
+        """Resalta la cinta de pasos Buscar → Descargar → Procesar → Revisar."""
+        prev_bg = self.guide_banner.bgcolor
+        prev_border = self.guide_banner.border
+        self.guide_banner.visible = True
+        self._pulse(
+            lambda: (
+                setattr(self.guide_banner, "bgcolor", ft.Colors.PRIMARY_CONTAINER),
+                setattr(self.guide_banner, "border", ft.border.all(2, ft.Colors.PRIMARY)),
+            ),
+            lambda: (
+                setattr(self.guide_banner, "bgcolor", prev_bg),
+                setattr(self.guide_banner, "border", prev_border),
+            ),
+            duration,
+        )
+
+    def flash_process_button(self, duration=1.4):
+        """Resalta el botón Procesar EPS."""
+        prev_bg = self.process_eps_btn.bgcolor
+        self._pulse(
+            lambda: setattr(
+                self.process_eps_btn, "bgcolor", ft.Colors.PRIMARY_CONTAINER
+            ),
+            lambda: setattr(self.process_eps_btn, "bgcolor", prev_bg),
+            duration,
+        )
+
     def set_loading(self, is_loading, status_text=""):
         """Muestra/oculta el indicador de carga"""
         self.loading_bar.visible = is_loading
