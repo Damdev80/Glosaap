@@ -24,7 +24,8 @@ class NavigationHeader:
         back_text: str = "← Atrás",
         custom_back_action: Callable | None = None,
         breadcrumb: list | None = None,
-        actions: list | None = None
+        actions: list | None = None,
+        on_help: Callable | None = None,
     ) -> ft.Container:
         """
         Construye header con navegación
@@ -36,6 +37,8 @@ class NavigationHeader:
             custom_back_action: Acción personalizada (opcional)
             breadcrumb: Lista de breadcrumbs
             actions: Botones adicionales
+            on_help: Callback de ayuda contextual (opcional; si es None
+                no se muestra el botón ?)
         """
 
         content_items = []
@@ -72,6 +75,17 @@ class NavigationHeader:
         if actions:
             action_row = ft.Row(actions, spacing=SPACING["sm"])
             content_items.append(action_row)
+
+        # Ayuda contextual (opt-in por vista)
+        if on_help is not None:
+            content_items.append(
+                ft.IconButton(
+                    icon=ft.Icons.HELP_OUTLINE,
+                    tooltip="Ayuda de esta vista",
+                    icon_size=20,
+                    on_click=lambda e: on_help(),
+                )
+            )
 
         return ft.Container(
             content=ft.Row(

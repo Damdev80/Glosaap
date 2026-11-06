@@ -14,7 +14,7 @@ from app.ui.styles import SPACING
 class EpsScreen:
     """Pantalla para seleccionar EPS y rango de fechas"""
 
-    def __init__(self, page: ft.Page, on_eps_selected=None, on_logout=None, on_back=None, navigation_controller=None):
+    def __init__(self, page: ft.Page, on_eps_selected=None, on_logout=None, on_back=None, navigation_controller=None, on_guide=None):
         """
         Args:
             page: Página de Flet
@@ -28,6 +28,7 @@ class EpsScreen:
         self.on_logout = on_logout
         self.on_back = on_back
         self.navigation_controller = navigation_controller
+        self.on_guide = on_guide
 
         # Cargar lista de EPS desde configuración
         self.eps_list = get_eps_list()
@@ -177,6 +178,12 @@ class EpsScreen:
                     color=ft.Colors.ON_SURFACE
                 ),
                 ft.Container(expand=True),  # Espaciador
+                ft.IconButton(
+                        icon=ft.Icons.HELP_OUTLINE,
+                        tooltip="Ayuda de esta vista",
+                        icon_size=20,
+                        on_click=lambda e: self.on_guide() if self.on_guide else None
+                    ),
             ], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER),
             padding=ft.padding.symmetric(horizontal=20, vertical=10),
             bgcolor=ft.Colors.SURFACE,

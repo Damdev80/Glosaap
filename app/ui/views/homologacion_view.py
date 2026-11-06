@@ -17,10 +17,11 @@ class HomologacionView:
     # (normal + insumos) bajo una sola tarjeta SANITAS.
     SANITAS_GROUP_KEY = "__sanitas_group"
 
-    def __init__(self, page: ft.Page, navigation_controller=None, on_back=None):
+    def __init__(self, page: ft.Page, navigation_controller=None, on_back=None, on_guide=None):
         self.page = page
         self.navigation_controller = navigation_controller
         self.on_back = on_back
+        self.on_guide = on_guide
         self.nav_header = NavigationHeader(page, navigation_controller)
         self.service = None  # Se inicializa cuando se selecciona una EPS
         self.current_eps = None
@@ -57,6 +58,12 @@ class HomologacionView:
                         icon_size=18,
                         tooltip="Volver",
                         on_click=lambda e: self.on_back() if self.on_back else None
+                    ),
+                    ft.IconButton(
+                        icon=ft.Icons.HELP_OUTLINE,
+                        tooltip="Ayuda de esta vista",
+                        icon_size=20,
+                        on_click=lambda e: self.on_guide() if self.on_guide else None
                     ),
                     ft.Text("Homologación",
                            size=18,
@@ -619,7 +626,13 @@ class HomologacionView:
                            weight=ft.FontWeight.W_500,
                            color=ft.Colors.ON_SURFACE),
                     ft.Container(expand=True),
-                    self.stats_text
+                    self.stats_text,
+                    ft.IconButton(
+                        icon=ft.Icons.HELP_OUTLINE,
+                        tooltip="Ayuda de esta vista",
+                        icon_size=20,
+                        on_click=lambda e: self.on_guide() if self.on_guide else None
+                    ),
                 ], alignment=ft.MainAxisAlignment.START, spacing=8),
                 padding=ft.padding.symmetric(horizontal=24, vertical=16),
             ),

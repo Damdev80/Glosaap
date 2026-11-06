@@ -13,10 +13,11 @@ from app.ui.components.navigation_header import NavigationHeader
 class MixExcelView:
     """Vista para transferir columnas entre archivos Excel"""
 
-    def __init__(self, page: ft.Page, navigation_controller=None, on_back=None):
+    def __init__(self, page: ft.Page, navigation_controller=None, on_back=None, on_guide=None):
         self.page = page
         self.navigation_controller = navigation_controller
         self.on_back = on_back
+        self.on_guide = on_guide
         self.nav_header = NavigationHeader(page, navigation_controller)
         self.service = MixExcelService()
 
@@ -118,7 +119,13 @@ class MixExcelView:
                         ft.Container(expand=True),
                         ft.Text("Transferencia de datos",
                                size=12,
-                               color=ft.Colors.ON_SURFACE_VARIANT)
+                               color=ft.Colors.ON_SURFACE_VARIANT),
+                        ft.IconButton(
+                        icon=ft.Icons.HELP_OUTLINE,
+                        tooltip="Ayuda de esta vista",
+                        icon_size=20,
+                        on_click=lambda e: self.on_guide() if self.on_guide else None
+                    ),
                     ], alignment=ft.MainAxisAlignment.START, spacing=8),
                     padding=ft.padding.symmetric(horizontal=24, vertical=16),
                 ),

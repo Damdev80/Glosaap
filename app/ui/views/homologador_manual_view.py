@@ -30,9 +30,10 @@ class HomologadorManualView:
     # Assets directory
     ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "assets"))
 
-    def __init__(self, page: ft.Page, on_back=None):
+    def __init__(self, page: ft.Page, on_back=None, on_guide=None):
         self.page = page
         self.on_back = on_back
+        self.on_guide = on_guide
 
         # Estado
         self.selected_eps = None
@@ -196,7 +197,13 @@ class HomologadorManualView:
                             color=ft.Colors.ON_SURFACE
                         ),
                         ft.Container(expand=True),
-                        self.eps_logo
+                        self.eps_logo,
+                        ft.IconButton(
+                        icon=ft.Icons.HELP_OUTLINE,
+                        tooltip="Ayuda de esta vista",
+                        icon_size=20,
+                        on_click=lambda e: self.on_guide() if self.on_guide else None
+                    ),
                     ], alignment=ft.MainAxisAlignment.START),
                     padding=ft.padding.symmetric(horizontal=20, vertical=15),
                     bgcolor=ft.Colors.SURFACE,

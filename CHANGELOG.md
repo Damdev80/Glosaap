@@ -233,6 +233,15 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 - Nuevo `tests/test_installer.py` (Fase B): AppId estable del
   instalador, instalación por usuario sin admin, mutex compartido
   `main.py` ↔ `.iss`, archivos requeridos y preflight de disco
+- Nuevo `tests/test_guide.py` (Fase C): contenido del tour y ayudas por
+  vista, estados de la cinta de pasos y navegación del overlay
+
+### 🧭 Guías interactivas (Fase C)
+- Tour de primera vez al llegar al dashboard (una sola vez, con "no
+  volver a mostrar"), botón de guía en Dashboard y Mensajes, y botón ?
+  en Herramientas, Homologación, Homologador manual, Mix Excel,
+  Descarga Web y EPS. Cinta de pasos Buscar → Descargar → Procesar →
+  Revisar en la vista de correos, actualizada en cada etapa del flujo
 
 ### 📦 Instalador (Fase B)
 - Instalador Inno Setup por usuario (`installer/glosaap.iss`,

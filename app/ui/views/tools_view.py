@@ -12,7 +12,7 @@ from app.ui.components.navigation_header import NavigationHeader
 class ToolsView:
     """Vista del menú de herramientas"""
 
-    def __init__(self, page: ft.Page, assets_dir: str, navigation_controller=None, on_back=None, on_homologacion=None, on_mix_excel=None, on_homologador_manual=None):
+    def __init__(self, page: ft.Page, assets_dir: str, navigation_controller=None, on_back=None, on_homologacion=None, on_mix_excel=None, on_homologador_manual=None, on_guide=None):
         self.page = page
         self.assets_dir = assets_dir
         self.navigation_controller = navigation_controller
@@ -20,6 +20,7 @@ class ToolsView:
         self.on_homologacion = on_homologacion
         self.on_mix_excel = on_mix_excel
         self.on_homologador_manual = on_homologador_manual
+        self.on_guide = on_guide
         self.nav_header = NavigationHeader(page, navigation_controller)
 
         # Componentes de loading
@@ -70,7 +71,7 @@ class ToolsView:
             title="⚙️ Herramientas",
             back_text="← Volver al Dashboard",
             custom_back_action=lambda: self.navigation_controller.go_to_dashboard() if self.navigation_controller else None,
-
+            on_help=self.on_guide,
         )
 
         self.container = ft.Container(

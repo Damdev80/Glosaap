@@ -14,13 +14,14 @@ from app.ui.components.settings_dialog import show_settings_dialog
 class DashboardView:
     """Vista del dashboard con las 3 cards principales"""
 
-    def __init__(self, page: ft.Page, assets_dir: str, on_card_click=None, on_tools_click=None, on_logout=None, on_web_download=None):
+    def __init__(self, page: ft.Page, assets_dir: str, on_card_click=None, on_tools_click=None, on_logout=None, on_web_download=None, on_guide=None):
         self.page = page
         self.assets_dir = assets_dir
         self.on_card_click = on_card_click
         self.on_tools_click = on_tools_click
         self.on_logout = on_logout
         self.on_web_download = on_web_download
+        self.on_guide = on_guide
 
         # Componentes de loading
         self.loading_overlay = LoadingOverlay(page)
@@ -177,7 +178,15 @@ class DashboardView:
                     )
                 ], alignment=ft.MainAxisAlignment.CENTER),
                 padding=10
-            )
+            ),
+            ft.Container(
+                content=ft.TextButton(
+                    "¿Primera vez aquí? Ver guía rápida",
+                    icon=ft.Icons.HELP_OUTLINE,
+                    on_click=lambda e: self.on_guide() if self.on_guide else None,
+                ),
+                visible=self.on_guide is not None,
+            ),
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO)
 
         # Botones flotantes

@@ -14,10 +14,11 @@ from app.ui.components.alert_dialog import AlertDialog
 class WebDownloadView:
     """Vista de descarga automática desde portales EPS"""
 
-    def __init__(self, page, assets_dir, on_back=None):
+    def __init__(self, page, assets_dir, on_back=None, on_guide=None):
         self.page = page
         self.assets_dir = assets_dir
         self.on_back = on_back  # Callback para volver al dashboard
+        self.on_guide = on_guide
         self.familiar_scraper = None
         self.fomag_scraper = None
         self.selected_eps = None  # Para saber cuál EPS está activa
@@ -114,6 +115,12 @@ class WebDownloadView:
                     weight=ft.FontWeight.W_600,
                 ),
                 ft.Container(expand=True),
+                ft.IconButton(
+                        icon=ft.Icons.HELP_OUTLINE,
+                        tooltip="Ayuda de esta vista",
+                        icon_size=20,
+                        on_click=lambda e: self.on_guide() if self.on_guide else None
+                    ),
             ], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER),
             padding=ft.padding.symmetric(horizontal=20, vertical=10),
             bgcolor=ft.Colors.SURFACE,

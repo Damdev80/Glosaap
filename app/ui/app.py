@@ -29,9 +29,11 @@ from app.config.settings import (
     logger,
 )
 from app.service.email_service import EmailService
+from app.ui import guide_content
 from app.ui.app_state import AppState
 from app.ui.business_logic import MessageFilter
 from app.ui.components.alert_dialog import AlertDialog
+from app.ui.components.guide_overlay import GuideOverlay
 from app.ui.components.settings_dialog import show_settings_dialog
 from app.ui.components.update_dialog import UpdateChecker
 from app.ui.navigation import NavigationController
@@ -290,6 +292,19 @@ def main(page: ft.Page):
     # ==================== SERVICIOS ====================
     email_service = EmailService()
 
+    # Guía interactiva (tour primera vez + ayuda por vista + cinta de pasos).
+    guide_overlay = GuideOverlay(page)
+
+    def show_guide_for(view_key=None):
+        """Muestra la ayuda de la vista actual (hilo principal)."""
+        guide_overlay.show_help(view_key or ui_state.current_view)
+
+    def replay_tour():
+        """Relanza el tour completo a pedido (ignora el "no volver a mostrar")."""
+        guide_overlay.start(
+            list(guide_content.TOUR_STEPS), storage_key=guide_content.STORAGE_KEY
+        )
+
     # ==================== NAVEGACIÓN (canal único) ====================
     # El controlador se crea tras las vistas; los wrappers resuelven tarde
     # (late binding) para que los callbacks de las vistas siempre pasen por él.
@@ -326,6 +341,11 @@ def main(page: ft.Page):
             _chk = update_holder.get("checker")
             if _chk is not None and hasattr(_chk, "maybe_check"):
                 _chk.maybe_check()
+        except Exception:
+            pass
+        # Tour de primera vez (solo arranca una vez; el resto es no-op).
+        try:
+            guide_overlay.maybe_start_tour()
         except Exception:
             pass
 
@@ -501,6 +521,7 @@ def main(page: ft.Page):
                 except Exception as e:
                     logger.warning("Error limpiando temporales: %s", e)
 
+                messages_view.refresh_checklist(0, 0, False)
                 messages_view.set_loading(True, "🔍 Buscando correos...")
 
                 all_msgs = []
@@ -600,6 +621,7 @@ def main(page: ft.Page):
                 messages_view.show_download_controls(False)
 
                 excel_count = len(email_service.get_excel_files())
+                messages_view.refresh_checklist(len(msgs), excel_count, False)
                 if msgs:
                     messages_view.set_loading(False, f"✅ {len(msgs)} correo(s) | 📁 {excel_count} Excel listos para procesar")
 
@@ -777,6 +799,7 @@ def main(page: ft.Page):
                             output_files.append(resultado['objeciones_file'])
 
                         _mutualser_output = str(resultado['output_file'])
+                        messages_view.refresh_checklist(len(ui_state.found_messages), len(excel_files), True)
                         _objeciones_output = str(resultado.get('objeciones_file') or "")
                         try:
                             _total = int(resumen.get('total_registros', 0) or 0)
@@ -922,6 +945,7 @@ def main(page: ft.Page):
                                         output_files.append(path)
 
                         _coosalud_dir = str(output_dir)
+                        messages_view.refresh_checklist(len(ui_state.found_messages), len(excel_files), True)
                         _coosalud_no_hom = int(stats.get('no_homologados', 0) or 0)
 
                         def open_coosalud_folder():
@@ -1006,6 +1030,7 @@ def main(page: ft.Page):
                             output_files.append(resultado['objeciones_file'])
 
                         _sanitas_output = str(resultado['output_file'])
+                        messages_view.refresh_checklist(len(ui_state.found_messages), len(excel_files), True)
                         _objeciones_output = str(resultado.get('objeciones_file') or "")
                         try:
                             _total = int(resumen.get('total_registros', 0) or 0)
@@ -1109,6 +1134,7 @@ def main(page: ft.Page):
                         if resultado.get('objeciones_file'):
                             output_files.append(resultado['objeciones_file'])
                         _previsora_output = str(resultado.get('output_file') or "")
+                        messages_view.refresh_checklist(len(ui_state.found_messages), len(pdf_files), True)
                         _previsora_obj = str(resultado.get('objeciones_file') or "")
                         try:
                             _total = int(resumen.get('total_registros', 0) or 0)
@@ -1196,7 +1222,8 @@ def main(page: ft.Page):
         on_card_click=on_dashboard_action,
         on_tools_click=go_to_tools,
         on_logout=lambda: go_to_login(logout=True),
-        on_web_download=go_to_web_download
+        on_web_download=go_to_web_download,
+        on_guide=replay_tour
     )
 
     tools_view = ToolsView(
@@ -1206,7 +1233,8 @@ def main(page: ft.Page):
         on_back=go_to_dashboard,
         on_homologacion=go_to_homologacion,
         on_mix_excel=go_to_mix_excel,
-        on_homologador_manual=go_to_homologador_manual
+        on_homologador_manual=go_to_homologador_manual,
+        on_guide=lambda: show_guide_for("tools")
     )
 
     method_selection_view = MethodSelectionView(
@@ -1220,24 +1248,28 @@ def main(page: ft.Page):
     web_download_view = WebDownloadView(
         page=page,
         assets_dir=ASSETS_DIR,
-        on_back=go_to_method_selection  # Volver a selección de método
+        on_back=go_to_method_selection,  # Volver a selección de método
+        on_guide=lambda: show_guide_for("web_download")
     )
 
     homologacion_view = HomologacionView(
         page=page,
         navigation_controller=None,  # se inyecta tras crear el controlador
-        on_back=go_to_tools
+        on_back=go_to_tools,
+        on_guide=lambda: show_guide_for("homologacion")
     )
 
     mix_excel_view = MixExcelView(
         page=page,
         navigation_controller=None,  # se inyecta tras crear el controlador
-        on_back=go_to_tools
+        on_back=go_to_tools,
+        on_guide=lambda: show_guide_for("mix_excel")
     )
 
     homologador_manual_view = HomologadorManualView(
         page=page,
-        on_back=go_to_tools
+        on_back=go_to_tools,
+        on_guide=lambda: show_guide_for("homologador_manual")
     )
 
     messages_view = MessagesView(
@@ -1247,6 +1279,7 @@ def main(page: ft.Page):
         on_download_selected=download_selected_messages,
         on_process=process_eps_files,
         navigation_controller=None,  # se inyecta tras crear el controlador
+        on_guide=lambda: show_guide_for("messages")
     )
 
     eps_screen = EpsScreen(
@@ -1255,6 +1288,7 @@ def main(page: ft.Page):
         on_logout=go_to_dashboard,
         on_back=go_to_dashboard,
         navigation_controller=None,  # se inyecta tras crear el controlador
+        on_guide=lambda: show_guide_for("eps")
     )
 
     # Inicializar NavigationController con todas las vistas (canal único)

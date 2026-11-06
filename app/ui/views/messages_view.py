@@ -14,7 +14,7 @@ from app.ui.styles import FONT_SIZES, SPACING
 class MessagesView:
     """Vista para listar y gestionar mensajes de correo"""
 
-    def __init__(self, page: ft.Page, on_back, on_refresh, on_download_selected, on_process, navigation_controller=None):
+    def __init__(self, page: ft.Page, on_back, on_refresh, on_download_selected, on_process, navigation_controller=None, on_guide=None):
         """
         Inicializa la vista de mensajes
 
@@ -25,6 +25,8 @@ class MessagesView:
             on_download_selected: Callback para descargar mensajes seleccionados
             on_process: Callback para procesar mensajes con EPS
             navigation_controller: Canal único de navegación (breadcrumb a dashboard)
+            on_guide: Callback para abrir la guía de esta vista (opcional;
+                si es None no se muestra el botón Guía)
         """
         self.page = page
         self.on_back = on_back
@@ -32,6 +34,7 @@ class MessagesView:
         self.on_download_selected = on_download_selected
         self.on_process = on_process
         self.navigation_controller = navigation_controller
+        self.on_guide = on_guide
 
         # Estado
         self.selected_messages = set()
@@ -197,6 +200,16 @@ class MessagesView:
             color=ft.Colors.ON_SURFACE_VARIANT,
         )
 
+        # Cinta de guía del flujo Buscar → Descargar → Procesar → Revisar.
+        # Se actualiza vía refresh_checklist() (canal de la vista).
+        self._guide_steps_row = ft.Row(spacing=8, alignment=ft.MainAxisAlignment.CENTER)
+        self.guide_banner = ft.Container(
+            content=self._guide_steps_row,
+            padding=ft.padding.symmetric(horizontal=SPACING["md"], vertical=6),
+            visible=False,
+        )
+        self.refresh_checklist(0, 0, False, publish=False)
+
         # Crear vista
         self.container = self._create_view()
 
@@ -212,6 +225,13 @@ class MessagesView:
             icon=ft.Icons.REFRESH,
             tooltip="Actualizar (F5)",
             on_click=lambda e: self.on_refresh()
+        )
+
+        guide_btn = ft.IconButton(
+            icon=ft.Icons.HELP_OUTLINE,
+            tooltip="Guía de esta vista",
+            visible=self.on_guide is not None,
+            on_click=lambda e: self.on_guide() if self.on_guide else None,
         )
 
         # Breadcrumb navigation (usa NavigationController; sin page.data)
@@ -253,7 +273,7 @@ class MessagesView:
                                     ft.Text("Correos con 'glosa'", size=FONT_SIZES["heading"],
                                            weight=ft.FontWeight.W_400),
                                 ], spacing=0),
-                                refresh_btn
+                                ft.Row([guide_btn, refresh_btn], spacing=0),
                             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                             # Breadcrumb
                             ft.Container(
@@ -279,6 +299,8 @@ class MessagesView:
                     padding=ft.padding.symmetric(horizontal=SPACING["md"], vertical=6),
                 ),
                 self.loading_bar,
+                # Cinta de guía del flujo (Buscar → Descargar → Procesar → Revisar)
+                self.guide_banner,
                 # Filtro + paginación (50 por página): barra única compacta
                 ft.Container(
                     content=ft.Row([
@@ -573,6 +595,52 @@ class MessagesView:
         self._render_page()
         self.search_info_text.value = search_info
         self.page.update()
+
+    def refresh_checklist(self, found=0, excel=0, processed=False, publish=True):
+        """Actualiza la cinta de guía Buscar → Descargar → Procesar → Revisar.
+
+        Canal de la vista (hace page.update): los workers la llaman igual
+        que a set_loading/set_processing. Con todo en cero la cinta se
+        oculta para no meter ruido visual.
+        """
+        from app.ui.guide_content import checklist_state
+
+        states = checklist_state(found, excel, processed)
+        chips = []
+        for i, item in enumerate(states):
+            state = item["state"]
+            if state == "done":
+                icon, color = ft.Icons.CHECK_CIRCLE, ft.Colors.GREEN
+            elif state == "current":
+                icon, color = ft.Icons.RADIO_BUTTON_CHECKED, ft.Colors.PRIMARY
+            else:
+                icon, color = ft.Icons.RADIO_BUTTON_UNCHECKED, ft.Colors.OUTLINE
+            chips.append(
+                ft.Row(
+                    [
+                        ft.Icon(icon, size=14, color=color),
+                        ft.Text(
+                            item["label"],
+                            size=FONT_SIZES["caption"],
+                            color=color,
+                            weight=ft.FontWeight.W_600 if state == "current" else None,
+                        ),
+                    ],
+                    spacing=4,
+                    tight=True,
+                )
+            )
+            if i < len(states) - 1:
+                chips.append(
+                    ft.Text("→", size=11, color=ft.Colors.OUTLINE)
+                )
+        self._guide_steps_row.controls = chips
+        self.guide_banner.visible = bool(found or excel or processed)
+        if publish:
+            try:
+                self.page.update()
+            except Exception:
+                pass
 
     def set_loading(self, is_loading, status_text=""):
         """Muestra/oculta el indicador de carga"""
