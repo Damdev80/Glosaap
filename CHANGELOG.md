@@ -220,6 +220,16 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 - Creado `DEVELOPER_GUIDE.md` con guía completa para desarrolladores
 - Actualizado `README.md` con información actualizada del proyecto
 - Documentadas buenas prácticas para uso de colores y temas
+- Nuevas `docs/GUIA_ADMIN.md` (red, homologadores, updates, diagnóstico)
+  y `docs/GUIA_NUEVA_EPS.md` (procedimiento de integración con ejemplo
+  Previsora); ejemplo de procesador en `DEVELOPER_GUIDE` corregido a la
+  API real (Template Method) + rutina de release obligatoria
+
+### 🧪 Tests
+- Nuevo `tests/test_release_consistency.py`: verifica en CI que la
+  versión coincida en `settings.py`/`pyproject.toml`/docs, que el
+  CHANGELOG tenga la entrada completa y que cada EPS habilitada
+  resuelva su homologador desde `HOMOLOGADOR_FILES`
 
 ---
 

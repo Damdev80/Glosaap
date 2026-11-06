@@ -17,6 +17,7 @@ Esta guía está diseñada para que desarrolladores nuevos puedan entender rápi
 9. [Buenas Prácticas](#-buenas-prácticas)
 10. [Testing](#-testing)
 11. [Debugging](#-debugging)
+12. [Rutina de release](#-rutina-de-release-obligatoria)
 
 ---
 
@@ -484,148 +485,75 @@ class InfoCard(ft.UserControl):
 
 ---
 
-## 🏥 Crear un Procesador de EPS
+## \U0001f3e5 Crear un Procesador de EPS
 
-Los procesadores manejan la lógica específica de cada EPS.
-
-### Estructura Base
+Los procesadores heredan de `BaseProcessor` (`app/service/processors/`)
+y respetan su Template Method. El procedimiento completo paso a paso
+está en `docs/GUIA_NUEVA_EPS.md` (con Previsora como ejemplo real);
+aquí va el contrato mínimo que el código exige:
 
 ```python
 # app/service/processors/nueva_eps_processor.py
-"""
-Procesador para NUEVA_EPS.
-
-Este procesador maneja archivos de glosas de NUEVA_EPS y los transforma
-al formato requerido para la respuesta de objeciones.
-"""
 import pandas as pd
-from typing import Optional
-from pathlib import Path
+from typing import Any
 from .base_processor import BaseProcessor
 
 
 class NuevaEpsProcessor(BaseProcessor):
-    """
-    Procesador de archivos de glosas para NUEVA_EPS.
-    
-    Attributes:
-        EPS_NAME: Nombre de la EPS
-        COLUMN_MAPPING: Mapeo de columnas entrada → salida
-    """
-    
-    EPS_NAME = "NUEVA_EPS"
-    
-    # Mapeo de columnas del archivo de entrada a salida
-    COLUMN_MAPPING = {
-        'numero_factura': 'NRO_FACTURA',
-        'codigo_servicio': 'COD_SERVICIO',
-        'codigo_glosa': 'COD_GLOSA',
-        'valor_glosado': 'VALOR_GLOSADO',
-        'concepto_glosa': 'CONCEPTO',
-    }
-    
-    def __init__(self, homologacion_path: str, output_path: str):
-        """
-        Inicializa el procesador.
-        
-        Args:
-            homologacion_path: Ruta al archivo de homologación
-            output_path: Ruta de salida para archivos generados
-        """
-        super().__init__(homologacion_path, output_path)
-    
-    def process_file(self, filepath: str) -> Optional[pd.DataFrame]:
-        """
-        Procesa un archivo de glosas de NUEVA_EPS.
-        
-        Args:
-            filepath: Ruta al archivo Excel de entrada
-            
-        Returns:
-            DataFrame procesado o None si hay error
-        """
-        try:
-            # Leer archivo
-            df = pd.read_excel(filepath)
-            
-            # Validar columnas requeridas
-            required_cols = list(self.COLUMN_MAPPING.keys())
-            missing = set(required_cols) - set(df.columns)
-            if missing:
-                self.logger.error(f"Columnas faltantes: {missing}")
-                return None
-            
-            # Renombrar columnas
-            df = df.rename(columns=self.COLUMN_MAPPING)
-            
-            # Aplicar homologación
-            df = self._apply_homologation(df, 'COD_SERVICIO')
-            
-            return df
-            
-        except Exception as e:
-            self.logger.error(f"Error procesando {filepath}: {e}")
-            return None
-    
-    def _apply_homologation(
-        self, 
-        df: pd.DataFrame, 
-        column: str
-    ) -> pd.DataFrame:
-        """Aplica homologación a una columna."""
-        # Cargar archivo de homologación
-        homo_df = pd.read_excel(self.homologacion_path)
-        
-        # Merge para homologar
-        df = df.merge(
-            homo_df[['COD_ORIGINAL', 'COD_HOMOLOGADO']],
-            left_on=column,
-            right_on='COD_ORIGINAL',
-            how='left'
-        )
-        
-        # Usar código homologado si existe, sino mantener original
-        df[column] = df['COD_HOMOLOGADO'].fillna(df[column])
-        
-        return df.drop(columns=['COD_ORIGINAL', 'COD_HOMOLOGADO'], errors='ignore')
-    
-    def generate_objections_file(
-        self, 
-        df: pd.DataFrame, 
-        output_name: str
-    ) -> str:
-        """
-        Genera archivo de objeciones.
-        
-        Args:
-            df: DataFrame procesado
-            output_name: Nombre del archivo de salida
-            
-        Returns:
-            Ruta del archivo generado
-        """
-        output_path = Path(self.output_path) / f"{output_name}_objeciones.xlsx"
-        df.to_excel(output_path, index=False)
-        return str(output_path)
+    """Un xlsx por correo. Ver SanitasProcessor como referencia."""
+
+    def identify_files(self, file_paths: list[str]) -> list[str]:
+        # Retorna TODOS los válidos (nunca solo el primero).
+        return [f for f in (file_paths or []) if f.lower().endswith(".xlsx")]
+
+    def validate_files(self, identified_files) -> bool:
+        # Verifica que existan en disco; errores a self.errors.
+        ...
+
+    def extract_data(self, identified_files) -> dict[str, pd.DataFrame]:
+        # Lee y concatena TODAS las hojas si aplica; una entrada por archivo.
+        ...
+
+    def homologate(self, data: dict[str, pd.DataFrame]) -> pd.DataFrame:
+        # OBLIGATORIO: retorna DataFrame (no dict). Si el flujo necesita
+        # 2 salidas, el dict {"detalle", "glosa", ...} se compone en
+        # process_glosas, no aquí. Usa helpers de la base:
+        # _normalize_code, _formatear_crncxc, _formatear_fecha_dmy,
+        # _obtener_valor_numerico, y _drop_internal_columns al exportar.
+        ...
 ```
 
 ### Registrar en Configuración
 
 ```python
-# app/config/eps_config.py
-
-EPS_CONFIG = [
-    # ... otras EPS ...
-    {
-        "name": "NUEVA_EPS",
-        "filter": "nueva_eps",        # Para búsqueda en correos
-        "filter_type": "keyword",
-        "description": "Nueva EPS para pruebas",
-        "image_path": "assets/img/eps/nueva_eps.png",
-        "processor_class": "NuevaEpsProcessor"
-    }
-]
+# app/config/settings.py  (fuente única de rutas)
+NETWORK_PATHS["nuevaeps_output"] = os.path.join(
+    NETWORK_BASE, "REPOSITORIO DE RESULTADOS", "NUEVAEPS")
+HOMOLOGADOR_FILES["nuevaeps"] = os.path.join(
+    NETWORK_PATHS["homologador"], "nuevaeps_homologacion.xlsx")
 ```
+
+```python
+# app/config/eps_config.py
+class NuevaEps(EpsInfo):
+    def __init__(self):
+        super().__init__(
+            name="Nueva EPS",
+            filter_value="nuevaeps",
+            filter_type="subject_exact_pattern",  # match por substring
+            subject_pattern="Texto del asunto",
+            processor_class="NuevaEpsProcessor",
+            enabled=True,
+            sender_filter="remitente@ejemplo.com",
+            homologador_file="nuevaeps",  # clave de HOMOLOGADOR_FILES
+        )
+```
+
+Y cablear `EmailService.procesar_nuevaeps()` + botón y rama en
+`app/ui/app.py` (patrón idéntico al de Sanitas/Previsora), opción en
+`homologador_manual_view.py` y entradas en `HomologacionService`.
+El checklist completo —incluidos los tests mínimos exigidos— está en
+`docs/GUIA_NUEVA_EPS.md`.
 
 ---
 
@@ -823,28 +751,12 @@ from app.service.processors.nueva_eps_processor import NuevaEpsProcessor
 
 
 class TestNuevaEpsProcessor:
-    """Tests para NuevaEpsProcessor."""
-    
+    """Tests para NuevaEpsProcessor (sin red, sin IMAP, con tmp_path)."""
+
     @pytest.fixture
-    def processor(self, tmp_path):
+    def processor(self):
         """Fixture que crea un procesador para testing."""
-        return NuevaEpsProcessor(
-            homologacion_path=str(tmp_path / "homo.xlsx"),
-            output_path=str(tmp_path)
-        )
-    
-    def test_process_file_valid(self, processor, tmp_path):
-        """Test procesar archivo válido."""
-        # Crear archivo de prueba
-        # ...
-        result = processor.process_file(str(tmp_path / "test.xlsx"))
-        assert result is not None
-    
-    def test_process_file_missing_columns(self, processor, tmp_path):
-        """Test con columnas faltantes."""
-        # ...
-        result = processor.process_file(str(tmp_path / "invalid.xlsx"))
-        assert result is None
+        return NuevaEpsProcessor(homologador_path="")
 ```
 
 ---
@@ -896,6 +808,23 @@ python main.py
 - [Documentación de Flet](https://flet.dev/docs/)
 - [Flet Controls Gallery](https://flet.dev/docs/controls)
 - [Python Type Hints Cheatsheet](https://mypy.readthedocs.io/en/stable/cheat_sheet_py3.html)
+- [Guía del Administrador](./GUIA_ADMIN.md) (red, homologadores, updates)
+- [Guía: agregar una nueva EPS](./GUIA_NUEVA_EPS.md) (procedimiento con ejemplo real)
+
+---
+
+## 🚀 Rutina de release (obligatoria)
+
+1. `python bump.py X.Y.Z` (sincroniza `settings.py`, `pyproject.toml`,
+   `README.md`, `MANUAL_USUARIO.md`, `AUTO_UPDATE.md` + entrada en
+   `CHANGELOG.md`).
+2. Completar los bullets del CHANGELOG (prohibido dejar `(completar)`).
+3. `pytest` en verde + `ruff check` limpio. El test
+   `tests/test_release_consistency.py` verifica en CI que la versión
+   coincida en todos los archivos y que el CHANGELOG tenga la entrada.
+4. Commit + tag `vX.Y.Z` + push (el workflow auto-release compila y
+   publica ZIP + `.sha256`; nunca taguear `v0.0.0-test`: crea un
+   release real).
 
 ---
 
