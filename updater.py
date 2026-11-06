@@ -307,6 +307,32 @@ def _cleanup_temp_dir(temp_dir: Path, logger: logging.Logger | None = None):
             logger.warning(f"No se pudo limpiar temporal {temp_dir}: {e}")
 
 
+def check_disk_space(
+    path: Path, required_bytes: int, logger: logging.Logger | None = None
+) -> bool:
+    """Preflight de disco antes de tocar la app.
+
+    Retorna True si hay al menos `required_bytes` libres en el volumen de
+    `path`. Si no se puede medir (OSError), retorna True para no bloquear
+    (best-effort) y lo deja en el log.
+    """
+    try:
+        anchor = path if path.exists() else path.parent
+        free = shutil.disk_usage(anchor).free
+        ok = free >= required_bytes
+        if logger:
+            logger.info(
+                f"Disco libre: {free // (1024 * 1024)} MB, "
+                f"requerido: {required_bytes // (1024 * 1024)} MB -> "
+                f"{'OK' if ok else 'INSUFICIENTE'}"
+            )
+        return ok
+    except OSError as e:
+        if logger:
+            logger.warning(f"No se pudo medir espacio en disco ({e}); continuando")
+        return True
+
+
 def _app_looks_broken(app_dir: Path) -> bool:
     """
     Heurística rápida: la app está rota si no hay Glosaap.exe o está vacío.
@@ -776,6 +802,20 @@ def extract_update(
     if not update_file.exists():
         if logger:
             logger.error(f"Archivo de actualización no encontrado: {update_file}")
+        return False
+
+    # Preflight de disco ANTES de tocar la app: se necesita espacio para
+    # el ZIP + extracción + copia de backup. Aborta limpio si no alcanza.
+    try:
+        zip_size = update_file.stat().st_size
+    except OSError as e:
+        if logger:
+            logger.error(f"No se pudo leer el ZIP de actualización: {e}")
+        return False
+    required = zip_size * 3 + 50 * 1024 * 1024
+    if not check_disk_space(app_dir, required, logger=logger):
+        if logger:
+            logger.error("Espacio en disco insuficiente, abortando actualización")
         return False
 
     # Directorio temporal de staging (hermano de app_dir, no dentro)

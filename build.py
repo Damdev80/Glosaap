@@ -92,6 +92,12 @@ def parse_args(argv=None):
         action="store_true",
         help="No abrir la carpeta release/ en el explorer al finalizar.",
     )
+    parser.add_argument(
+        "--installer",
+        action="store_true",
+        help="Compilar además el instalador Inno Setup "
+             "(requiere ISCC instalado; en CI: choco install innosetup).",
+    )
     return parser.parse_args(argv)
 
 def print_step(message):
@@ -351,6 +357,76 @@ La aplicación verifica automáticamente las actualizaciones desde GitHub.
     
     return zip_path
 
+def find_iscc() -> str | None:
+    """Localiza el compilador Inno Setup (ISCC) o retorna None.
+
+    Busca en PATH y en las rutas de instalación por defecto.
+    Pensado para tests (inyectable vía monkeypatch de shutil.which).
+    """
+    for cand in (shutil.which("ISCC"), shutil.which("ISCC.exe")):
+        if cand and os.path.exists(cand):
+            return cand
+    for cand in (
+        r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+        r"C:\Program Files\Inno Setup 6\ISCC.exe",
+    ):
+        if os.path.exists(cand):
+            return cand
+    return None
+
+
+def build_installer(version: str) -> str | None:
+    """Compila installer/glosaap.iss con ISCC y genera su .sha256.
+
+    Requiere dist/Glosaap.exe y dist/updater.exe ya construidos.
+    Retorna la ruta del Setup o None si falló (fail-closed: el caller
+    debe abortar el build).
+    """
+    print_step("Compilando instalador Inno Setup")
+
+    for exe in ("Glosaap.exe", "updater.exe"):
+        if not os.path.exists(os.path.join(DIST_DIR, exe)):
+            print(f"❌ Falta {DIST_DIR}/{exe}: ejecuta el build de ejecutables primero")
+            return None
+
+    iss = Path("installer") / "glosaap.iss"
+    if not iss.exists():
+        print(f"❌ No se encontró el script Inno: {iss}")
+        return None
+
+    iscc = find_iscc()
+    if not iscc:
+        print("❌ ISCC no encontrado. Instala Inno Setup 6:")
+        print("   https://jrsoftware.org/isinfo.php")
+        print("   En CI: choco install innosetup --no-progress -y")
+        return None
+
+    print(f"▶️  Ejecutando: {iscc} /DMyAppVersion={version} {iss}")
+    result = subprocess.run(
+        [iscc, f"/DMyAppVersion={version}", str(iss)],
+        check=False, capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print("❌ ISCC falló:")
+        print(result.stdout[-2000:] if result.stdout else "")
+        print(result.stderr[-2000:] if result.stderr else "")
+        return None
+
+    candidatos = sorted(
+        Path(FINAL_DIR).glob(f"Glosaap_Setup_v{version}*.exe"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    if not candidatos:
+        print(f"❌ ISCC terminó OK pero no generó {FINAL_DIR}/Glosaap_Setup_v{version}*.exe")
+        return None
+    setup_path = str(candidatos[0])
+    write_sha256_file(Path(setup_path))
+    setup_size = os.path.getsize(setup_path) / (1024 * 1024)
+    print(f"📦 Instalador listo: {setup_path} ({setup_size:.1f} MB)")
+    return setup_path
+
+
 def main(args=None):
     """Función principal del build"""
     if args is None:
@@ -377,6 +453,12 @@ def main(args=None):
         zip_path = create_portable_package()
         if not zip_path:
             return False
+
+        # 3b. Instalador Inno Setup (opcional, fail-closed si se pidió)
+        if getattr(args, "installer", False):
+            setup_path = build_installer(get_version())
+            if not setup_path:
+                return False
 
         # 4. Éxito
         print_step("BUILD COMPLETADO")

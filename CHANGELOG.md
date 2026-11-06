@@ -230,6 +230,16 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
   versión coincida en `settings.py`/`pyproject.toml`/docs, que el
   CHANGELOG tenga la entrada completa y que cada EPS habilitada
   resuelva su homologador desde `HOMOLOGADOR_FILES`
+- Nuevo `tests/test_installer.py` (Fase B): AppId estable del
+  instalador, instalación por usuario sin admin, mutex compartido
+  `main.py` ↔ `.iss`, archivos requeridos y preflight de disco
+
+### 📦 Instalador (Fase B)
+- Instalador Inno Setup por usuario (`installer/glosaap.iss`,
+  `build.py --installer`, sin admin, AppMutex anti doble instancia y
+  anti-instalación-encima), CI que compila con Inno, verifica Setup +
+  `.sha256` y hace smoke test de instalación/desinstalación real antes
+  de publicar (fail-closed); `release.py` también sube el instalador
 
 ---
 

@@ -47,15 +47,33 @@ Notas:
   antes de cada guardado. Limpia backups de más de 30 días a mano si el
   disco se llena; nunca borres el `.xlsx` vigente.
 
-## 4. Puesta en marcha en un PC nuevo
+## 4. Instalación en un PC nuevo
+
+### Opción A (recomendada): instalador
+
+1. Descarga `Glosaap_Setup_vX.Y.Z.exe` desde
+   https://github.com/Damdev80/Glosaap/releases (el `.sha256` viaja
+   al lado; si tu navegador lo bloquea, desbloquéalo en Propiedades).
+2. Ejecuta sin admin: instala en `%LOCALAPPDATA%\Glosaap` con acceso
+   directo en el menú inicio (icono de escritorio opcional).
+3. Si Glosaap está corriendo, el instalador pide cerrarlo primero
+   (AppMutex): no instala encima de la app en uso.
+4. Verifica acceso a `\\MINERVA\Cartera\GLOSAAP` (sin red, la app usa
+   temporales locales y avisa en el log).
+
+### Opción B: ZIP portable
+
+Extrae `Glosaap_vX.Y.Z_<ts>.zip` en una carpeta permanente (no en
+Descargas) y ejecuta `Glosaap.exe`. El `updater.exe` debe quedar al
+lado para las actualizaciones automáticas.
+
+### Desarrollo (solo programadores)
 
 1. Instalar Python 3.11 y clonar el repo.
 2. `python -m venv .venv` y `pip install -r requirements.txt`.
-3. Verificar acceso a `\\MINERVA\Cartera\GLOSAAP` (si no hay red, la app
-   usa temporales locales y avisa en el log).
-4. Ejecutar con `py main.py` (redirige solo al `.venv`) o
+3. Ejecutar con `py main.py` (redirige solo al `.venv`) o
    `.venv\Scripts\python.exe main.py`.
-5. Iniciar sesión y procesar una EPS pequeña primero (Coosalud o un solo
+4. Iniciar sesión y procesar una EPS pequeña primero (Coosalud o un solo
    correo) para validar rutas de salida.
 
 ## 5. Actualizaciones: qué hacer si algo falla

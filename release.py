@@ -49,7 +49,7 @@ def require_token():
 def parse_args(argv=None):
     """Argumentos CLI (con --help; --dry-run no publica ni exige token)."""
     parser = argparse.ArgumentParser(
-        description="Publica la release de Glosaap en GitHub (ZIP + .sha256, fail-closed sin checksum)."
+        description="Publica la release de Glosaap en GitHub (ZIP + instalador + .sha256, fail-closed sin checksum)."
     )
     parser.add_argument(
         "--version",
@@ -92,6 +92,26 @@ def find_zip_for_version(version):
         for candidate in zip_files:
             print(f"     - {candidate.name}")
     return zip_files[0]
+
+
+def find_setup_for_version(version):
+    """Localiza release/Glosaap_Setup_v<version>*.exe (el más reciente).
+
+    El instalador es opcional en el flujo manual (requiere Inno Setup
+    local): retorna None si no existe, y CI lo exige aparte (fail-closed).
+    """
+    setup_files = sorted(
+        Path(".").glob(f"release/Glosaap_Setup_v{version}*.exe"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    if not setup_files:
+        return None
+    if len(setup_files) > 1:
+        print(f"⚠️  Hay {len(setup_files)} instaladores candidatos para v{version}; usando el más reciente:")
+        for candidate in setup_files:
+            print(f"     - {candidate.name}")
+    return setup_files[0]
 
 
 def ensure_sha256_file(zip_file):
@@ -197,6 +217,18 @@ def create_release(version=None, dry_run=False):
     print(f"   ZIP: {zip_file.name}")
     print(f"   SHA: {sha_file.name}")
 
+    # Instalador opcional en flujo manual (CI lo exige aparte).
+    setup_file = find_setup_for_version(version)
+    setup_sha_file = None
+    setup_sha_hash = None
+    if setup_file:
+        setup_sha_file, setup_sha_hash = ensure_sha256_file(setup_file)
+        print(f"   Setup: {setup_file.name}")
+        print(f"   SHA:   {setup_sha_file.name}")
+    else:
+        print("   Setup: (no encontrado; se publica solo el ZIP. "
+              "Para incluirlo: python build.py --yes --skip-open --installer)")
+
     # Headers con autenticación
     headers = {
         "Authorization": f"Bearer {token}",
@@ -204,9 +236,11 @@ def create_release(version=None, dry_run=False):
         "X-GitHub-Api-Version": "2022-11-28"
     }
 
-    # Generar notas de release (+ línea de checksum para verificación)
+    # Generar notas de release (+ líneas de checksum para verificación)
     release_notes = generate_release_notes(version)
     release_notes += f"\n\nSHA256: {sha_hash}"
+    if setup_sha_hash:
+        release_notes += f"\n\nSHA256 (Instalador): {setup_sha_hash}"
 
     if dry_run:
         print("📝 Notas del release (dry-run):")
@@ -216,6 +250,7 @@ def create_release(version=None, dry_run=False):
         print("✅ Dry-run OK: ZIP + .sha256 listos, nada publicado.")
         return {"version": version, "zip": str(zip_file),
                 "sha256_file": str(sha_file), "sha256": sha_hash,
+                "setup": str(setup_file) if setup_file else None,
                 "notes": release_notes}
     
     # Datos del release
@@ -239,8 +274,9 @@ def create_release(version=None, dry_run=False):
         print(f"\n✅ Release v{version} creado exitosamente")
         print(f"📎 URL: {release['html_url']}\n")
         
-        # Subir archivos ZIP + .sha256
-        upload_asset(release['upload_url'], zip_file, sha_file, headers)
+        # Subir archivos ZIP + .sha256 (+ instalador si existe)
+        upload_asset(release['upload_url'], zip_file, sha_file, headers,
+                     setup_file=setup_file, setup_sha_file=setup_sha_file)
         
         print(f"\n{'='*60}")
         print(f"✨ ¡RELEASE COMPLETADO CON ÉXITO!")
@@ -299,8 +335,12 @@ def upload_file(upload_url, file_path, content_type, headers):
     return False
 
 
-def upload_asset(upload_url, zip_file, sha_file, headers):
-    """Subir archivos ZIP + .sha256 al release (fail-closed sin checksum)."""
+def upload_asset(upload_url, zip_file, sha_file, headers,
+                   setup_file=None, setup_sha_file=None):
+    """Subir archivos ZIP + .sha256 (+ instalador si se generó).
+
+    El instalador es opcional en el flujo manual; CI lo exige aparte.
+    """
     zip_file = Path(zip_file)
     sha_file = Path(sha_file)
 
@@ -316,10 +356,19 @@ def upload_asset(upload_url, zip_file, sha_file, headers):
     ok_zip = upload_file(upload_url, zip_file, "application/zip", headers)
     ok_sha = upload_file(upload_url, sha_file, "text/plain", headers)
 
-    if not (ok_zip and ok_sha):
+    ok_setup = True
+    if setup_file:
+        setup_file = Path(setup_file)
+        if not setup_file.exists() or setup_sha_file is None:
+            print(f"❌ Instalador sin checksum, no se publica: {setup_file}")
+            sys.exit(1)
+        ok_setup = upload_file(upload_url, setup_file, "application/octet-stream", headers)
+        ok_setup = upload_file(upload_url, Path(setup_sha_file), "text/plain", headers) and ok_setup
+
+    if not (ok_zip and ok_sha and ok_setup):
         print("❌ Falló la subida de uno o más assets.")
         sys.exit(1)
-    print("✅ ZIP + .sha256 publicados.")
+    print("✅ ZIP + .sha256 publicados." + (" + instalador." if setup_file else ""))
 
 
 if __name__ == "__main__":

@@ -153,16 +153,31 @@ Para que el sistema funcione correctamente, las releases de GitHub deben seguir 
 
 ### Assets
 
-- Incluir un archivo ZIP con la distribución completa
-- Nombre sugerido: `Glosaap_v1.0.0.zip`
+- Incluir el ZIP portable con la distribución completa
+- Nombre: `Glosaap_vX.Y.Z_<timestamp>.zip` (lo genera `build.py`)
 - El ZIP debe contener:
   ```
-  Glosaap/
+  Glosaap_vX.Y.Z_<timestamp>/
   ├── Glosaap.exe
   ├── updater.exe
-  ├── _internal/
-  └── assets/
+  └── README.txt
   ```
+- Incluir el instalador Inno Setup: `Glosaap_Setup_vX.Y.Z.exe`
+  (lo genera `python build.py --yes --skip-open --installer`).
+- Cada asset viaja con su `.sha256` (fail-closed: sin checksum no se
+  publica ni se instala).
+
+### Instalador (nuevo: se publica junto al ZIP desde el próximo release)
+
+- Instalación por usuario, sin admin: `%LOCALAPPDATA%\Glosaap`.
+- `AppMutex=Local\GlosaapAppMutex` (igual que `APP_MUTEX_NAME` en
+  `main.py`): si la app está corriendo, el instalador pide cerrarla
+  en vez de pisar el `.exe` en uso.
+- Desinstalación limpia desde "Agregar o quitar programas"
+  (`unins000.exe /SILENT` en modo silencioso).
+- El CI compila el instalador y hace smoke test real: instalación
+  silenciosa en temporal, verifica `Glosaap.exe`+`updater.exe`, lanza
+  la app 20 s, la cierra y desinstala. Si algo falla, no hay release.
 
 ### Changelog
 
@@ -295,6 +310,16 @@ Antes de cada actualización se crea un backup en:
 ```
 <parent_dir>/Glosaap_backup_YYYYMMDD_HHMMSS/
 ```
+Se conservan los 2 más recientes (`cleanup_old_backups`).
+
+### Verificación SHA-256 (fail-closed) y preflight de disco
+
+1. La descarga se verifica contra el `.sha256` del release (asset
+   `<zip>.sha256`, fallback al hash del body). Sin checksum publicado
+   o con mismatch, el ZIP se borra y **no se instala nada**.
+2. Antes de lanzar el updater se re-verifica el hash del ZIP.
+3. El updater mide espacio libre antes de tocar la app (ZIP × 3 +
+   50 MB de margen); si no alcanza, aborta limpio sin modificar nada.
 
 ## Solución de Problemas
 

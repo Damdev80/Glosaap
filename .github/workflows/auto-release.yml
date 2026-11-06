@@ -1,14 +1,15 @@
 name: Auto Release
 
-# Publica la release con el ZIP portable + checksum (.sha256).
+# Publica la release con el ZIP portable + instalador Inno Setup + checksums.
 #
 # Flujo oficial (ver skill glosa-release):
 #   1. Bump APP_VERSION en app/config/settings.py (semver).
 #   2. Entrada "## [x.y.z] - YYYY-MM-DD" en CHANGELOG.md.
 #   3. Tag git coincidente:  git tag v<x.y.z> && git push origin v<x.y.z>
-#   4. Este workflow compila en Windows (~5-10 min, aceptable), genera
-#      release/Glosaap_v*.zip + .sha256 via build.py y los adjunta al release
-#      con el body extraido de CHANGELOG.md.
+#   4. Este workflow compila en Windows (~10-15 min, aceptable), genera
+#      release/Glosaap_v*.zip + instalador Glosaap_Setup_v*.exe + .sha256
+#      via build.py --installer, hace smoke test de instalación real y los
+#      adjunta al release con el body extraido de CHANGELOG.md.
 #
 # Triggers:
 #   - push de tag v*  -> version = nombre del tag sin la "v".
@@ -37,8 +38,9 @@ name: Auto Release
 #   - release.py manual sigue valido y no se toca.
 #
 # RIESGO CONOCIDO (supply-chain): el updater solo descarga por HTTPS y no
-# verifica firma. Mitigacion: el .sha256 viaja junto al ZIP y el body incluye
-# la linea "SHA256: <hash>" para verificacion (contrato update-system Fase 1).
+# verifica firma. Mitigacion: los .sha256 viajan junto a cada asset y el
+# body incluye las lineas "SHA256: <hash>" para verificacion (contrato
+# update-system Fase 1).
 
 on:
   push:
@@ -56,7 +58,7 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write # necesario para crear el release/tag con el token default
-    timeout-minutes: 30 # PyInstaller tarda ~5-10 min + instalacion de deps
+    timeout-minutes: 40 # PyInstaller + Inno tardan ~10-15 min + instalacion de deps
 
     steps:
       - name: Checkout code
@@ -102,8 +104,11 @@ jobs:
           echo "version=$version" >> $env:GITHUB_OUTPUT
           echo "Version resuelta: $version"
 
-      - name: Build portable ZIP
-        run: python build.py --yes --skip-open
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build portable ZIP + installer
+        run: python build.py --yes --skip-open --installer
 
       - name: Verify assets (fail-closed sin checksum)
         shell: pwsh
@@ -111,11 +116,40 @@ jobs:
           $zips = Get-ChildItem release/*.zip -ErrorAction SilentlyContinue
           if (-not $zips) { Write-Error 'Sin ZIP en release/: fallo el build'; exit 1 }
           $zips | ForEach-Object { echo "ZIP: $($_.Name) ($([math]::Round($_.Length / 1MB, 1)) MB)" }
-          foreach ($zip in $zips) {
-            $sha = "$($zip.FullName).sha256"
-            if (-not (Test-Path $sha)) { Write-Error "Falta checksum: $($zip.Name).sha256 (prohibido publicar sin checksum)"; exit 1 }
+          $setups = Get-ChildItem release/Glosaap_Setup_*.exe -ErrorAction SilentlyContinue
+          if (-not $setups) { Write-Error 'Sin instalador Glosaap_Setup_*.exe en release/: fallo ISCC'; exit 1 }
+          $setups | ForEach-Object { echo "Setup: $($_.Name) ($([math]::Round($_.Length / 1MB, 1)) MB)" }
+          foreach ($f in @($zips) + @($setups)) {
+            $sha = "$($f.FullName).sha256"
+            if (-not (Test-Path $sha)) { Write-Error "Falta checksum: $($f.Name).sha256 (prohibido publicar sin checksum)"; exit 1 }
             echo "SHA256 OK: $(Split-Path $sha -Leaf)"
           }
+
+      - name: Smoke test installer (instalacion real silenciosa)
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem release/Glosaap_Setup_*.exe | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          $dest = Join-Path $env:TEMP 'GlosaapSmoke'
+          if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+          echo "Instalando silencioso en: $dest"
+          Start-Process -FilePath $setup.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=`"$dest`"" -Wait
+          foreach ($f in @('Glosaap.exe', 'updater.exe')) {
+            if (-not (Test-Path (Join-Path $dest $f))) { Write-Error "Falta instalado: $f"; exit 1 }
+            echo "Instalado OK: $f"
+          }
+          echo "Lanzando Glosaap.exe (debe seguir vivo 20s)..."
+          $proc = Start-Process -FilePath (Join-Path $dest 'Glosaap.exe') -PassThru
+          Start-Sleep -Seconds 20
+          if ($proc.HasExited) {
+            Write-Error "Glosaap.exe termino antes de tiempo (exit $($proc.ExitCode)): instalacion rota"
+            exit 1
+          }
+          echo "App viva (PID $($proc.Id)), cerrando..."
+          Stop-Process -Id $proc.Id -Force
+          echo "Desinstalando silencioso..."
+          Start-Process -FilePath (Join-Path $dest 'unins000.exe') -ArgumentList '/SILENT' -Wait
+          if (Test-Path (Join-Path $dest 'Glosaap.exe')) { Write-Error 'Desinstalacion incompleta: Glosaap.exe sigue ahi'; exit 1 }
+          echo 'Smoke test instalador OK'
 
       - name: Extract release notes from CHANGELOG.md
         shell: python
@@ -139,19 +173,23 @@ jobs:
           if not body:
               print(f"WARNING: sin seccion '## [{version}]' en CHANGELOG.md; body generico")
               body = f"## Release {version}\n\nVer CHANGELOG.md del repositorio para detalles."
-          zips = sorted(glob.glob(f"release/Glosaap_v{version}_*.zip"),
-                        key=os.path.getmtime, reverse=True)
-          if zips:
-              sha_path = zips[0] + ".sha256"
+          for patron, etiqueta in (
+              (f"release/Glosaap_v{version}_*.zip", "ZIP"),
+              (f"release/Glosaap_Setup_v{version}*.exe", "Instalador"),
+          ):
+              cands = sorted(glob.glob(patron), key=os.path.getmtime, reverse=True)
+              if not cands:
+                  continue
+              sha_path = cands[0] + ".sha256"
               try:
                   digest = open(sha_path, encoding="utf-8").read().strip().split()[0]
-                  body += f"\n\nSHA256: {digest}"
+                  body += f"\n\nSHA256 ({etiqueta}): {digest}"
               except (FileNotFoundError, IndexError):
                   raise SystemExit(f"ERROR: falta {sha_path} (fail-closed)")
           open("release_body.md", "w", encoding="utf-8").write(body + "\n")
           print(f"Body listo ({len(body)} chars) para v{version}")
 
-      - name: Publish release with ZIP+sha256
+      - name: Publish release with ZIP+installer+sha256
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
@@ -159,6 +197,7 @@ jobs:
           body_path: release_body.md
           files: |
             release/*.zip
+            release/Glosaap_Setup_*.exe
             release/*.sha256
           fail_on_unmatched_files: true
           draft: false
