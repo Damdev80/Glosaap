@@ -35,6 +35,7 @@ Author: Glosaap Team
 Version: 1.1.0
 """
 import os
+import re
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
@@ -139,41 +140,55 @@ class BaseProcessor(ABC):
             return ""
 
     def _obtener_valor_numerico(self, valor) -> float:
-        """Convierte valor a float preservando decimales.
+        """Convierte un valor monetario a float preservando centavos.
 
-        Maneja formato colombiano (1.234,56) e internacional (1,234.56).
-        No usa replace('.','') que destruye decimales.
+        Soporta formato colombiano (1.234,56) e internacional (1,234.56),
+        símbolo de moneda, espacios Unicode (el Excel de Mutualser trae
+        ``"$\xa03.404"``) y negativos entre paréntesis o con guion final.
+
+        Regla clave: un separador seguido de exactamente 3 dígitos es
+        separador de miles, no decimal. Así ``3.404`` -> ``3404`` y
+        ``10.080`` -> ``10080``, mientras ``1500.50`` -> ``1500.5``.
+        Evita que Excel en español muestre ``3,404`` donde debía ir
+        ``3404``.
         """
         if pd.isna(valor) or valor == "":
             return 0.0
         try:
             if isinstance(valor, (int, float)):
                 return float(valor)
-            valor_str = str(valor).strip().replace("$", "").replace(" ", "")
-            if not valor_str:
+
+            texto = str(valor).strip()
+            if not texto:
                 return 0.0
-            if "," in valor_str and "." in valor_str:
-                pos_coma = valor_str.rfind(",")
-                pos_punto = valor_str.rfind(".")
-                if pos_coma > pos_punto:
-                    # Coma al final = decimal (colombiano): 1.234,56 -> 1234.56
-                    valor_str = valor_str.replace(".", "").replace(",", ".")
+
+            negativo = texto.startswith("(") and texto.endswith(")")
+            # Quitar moneda, letras y espacios (incluye NBSP y espacios
+            # finos); conservar solo dígitos y separadores.
+            limpio = re.sub(r"[^\d,.\-]", "", texto)
+            if not limpio or limpio in {"-", ",", "."}:
+                return 0.0
+
+            negativo = negativo or limpio.startswith("-") or limpio.endswith("-")
+            limpio = limpio.replace("-", "")
+            if not limpio:
+                return 0.0
+
+            ultimo = max(limpio.rfind(","), limpio.rfind("."))
+            if ultimo == -1:
+                numero = limpio
+            else:
+                # 1-2 dígitos finales = centavos; 3 = miles.
+                es_decimal = len(limpio) - ultimo - 1 in (1, 2)
+                if es_decimal:
+                    entero = re.sub(r"[,.]", "", limpio[:ultimo]) or "0"
+                    decimales = re.sub(r"[,.]", "", limpio[ultimo + 1:])
+                    numero = f"{entero}.{decimales}"
                 else:
-                    # Punto al final = decimal (internacional): 1,234.56 -> 1234.56
-                    valor_str = valor_str.replace(",", "")
-            elif "," in valor_str:
-                if valor_str.count(",") > 1:
-                    valor_str = valor_str.replace(",", "")
-                else:
-                    partes = valor_str.split(",")
-                    if len(partes) == 2 and len(partes[1]) <= 2:
-                        valor_str = valor_str.replace(",", ".")
-                    else:
-                        valor_str = valor_str.replace(",", "")
-            elif "." in valor_str:
-                if valor_str.count(".") > 1:
-                    valor_str = valor_str.replace(".", "")
-            return float(valor_str) if valor_str else 0.0
+                    numero = re.sub(r"[,.]", "", limpio)
+
+            resultado = float(numero) if numero else 0.0
+            return -resultado if negativo else resultado
         except Exception:
             return 0.0
 

@@ -206,6 +206,11 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 - **Navegación mejorada**: Botones de navegación en todas las vistas
 
 ### 🐛 Correcciones
+- Valores monetarios con separador de miles ya no se exportan como
+  decimales: en Mutualser `CROVALOBJ` salía `3,404` (float `3.404`) por
+  `"$ 3.404"`; ahora el parser compartido por todas las EPS reconoce el
+  grupo final de 3 dígitos como miles y `CROVALOBJ` sale `3404`. Cubre
+  también espacios duros (`\xa0`), moneda, `1.234,56` y `1,234.56`
 - Corregido bug donde el contenido del dashboard se veía detrás de otras vistas
 - Solucionado problema de pantalla negra al cambiar tema antes de iniciar sesión
 - Eliminada navegación por tecla ESC que causaba comportamientos inesperados
