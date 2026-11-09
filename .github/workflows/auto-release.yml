@@ -128,27 +128,57 @@ jobs:
       - name: Smoke test installer (instalacion real silenciosa)
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
+
+          function Wait-Exit {
+            param($Process, [int]$Seconds, [string]$Label)
+            if (-not $Process.WaitForExit($Seconds * 1000)) {
+              # No dejar el job colgado 40 min por un dialogo de Inno.
+              taskkill /PID $Process.Id /T /F 2>$null | Out-Null
+              throw "$Label no termino en $Seconds s (posible dialogo bloqueante)"
+            }
+            if ($Process.ExitCode -ne 0) {
+              throw "$Label fallo con exit code $($Process.ExitCode)"
+            }
+          }
+
           $setup = Get-ChildItem release/Glosaap_Setup_*.exe | Sort-Object LastWriteTime -Descending | Select-Object -First 1
           $dest = Join-Path $env:TEMP 'GlosaapSmoke'
           if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+          $installLog = Join-Path $env:TEMP 'glosaap_install.log'
+          if (Test-Path $installLog) { Remove-Item $installLog -Force }
           echo "Instalando silencioso en: $dest"
-          Start-Process -FilePath $setup.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=`"$dest`"" -Wait
+          $p = Start-Process -FilePath $setup.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=`"$dest`"", "/LOG=`"$installLog`"" -PassThru
+          Wait-Exit $p 300 'Instalador'
           foreach ($f in @('Glosaap.exe', 'updater.exe')) {
-            if (-not (Test-Path (Join-Path $dest $f))) { Write-Error "Falta instalado: $f"; exit 1 }
+            if (-not (Test-Path (Join-Path $dest $f))) { throw "Falta instalado: $f" }
             echo "Instalado OK: $f"
           }
           echo "Lanzando Glosaap.exe (debe seguir vivo 20s)..."
           $proc = Start-Process -FilePath (Join-Path $dest 'Glosaap.exe') -PassThru
           Start-Sleep -Seconds 20
           if ($proc.HasExited) {
-            Write-Error "Glosaap.exe termino antes de tiempo (exit $($proc.ExitCode)): instalacion rota"
-            exit 1
+            throw "Glosaap.exe termino antes de tiempo (exit $($proc.ExitCode)): instalacion rota"
           }
           echo "App viva (PID $($proc.Id)), cerrando..."
-          Stop-Process -Id $proc.Id -Force
+          # PyInstaller onefile crea un proceso hijo: Stop-Process solo mata
+          # el bootloader y el .exe real sigue vivo, bloqueando el uninstall.
+          taskkill /PID $proc.Id /T /F 2>$null | Out-Null
+          Start-Sleep -Seconds 2
+          if (Get-Process Glosaap -ErrorAction SilentlyContinue) {
+            throw 'Glosaap.exe sigue vivo tras taskkill /T /F'
+          }
           echo "Desinstalando silencioso..."
-          Start-Process -FilePath (Join-Path $dest 'unins000.exe') -ArgumentList '/SILENT' -Wait
-          if (Test-Path (Join-Path $dest 'Glosaap.exe')) { Write-Error 'Desinstalacion incompleta: Glosaap.exe sigue ahi'; exit 1 }
+          $unins = Join-Path $dest 'unins000.exe'
+          $p = Start-Process -FilePath $unins -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -PassThru
+          Wait-Exit $p 300 'Desinstalador'
+          for ($i = 0; $i -lt 30; $i++) {
+            if (-not (Test-Path (Join-Path $dest 'Glosaap.exe'))) { break }
+            Start-Sleep -Seconds 1
+          }
+          if (Test-Path (Join-Path $dest 'Glosaap.exe')) {
+            throw 'Desinstalacion incompleta: Glosaap.exe sigue ahi'
+          }
           echo 'Smoke test instalador OK'
 
       - name: Extract release notes from CHANGELOG.md
