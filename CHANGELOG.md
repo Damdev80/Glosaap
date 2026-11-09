@@ -6,6 +6,53 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.11.32] - 2026-11-09
+
+### ✨ Nuevas Características
+- **Instalador Windows (Fase B)**: instalador Inno Setup por usuario
+  (`installer/glosaap.iss`, `build.py --installer`) en
+  `%LOCALAPPDATA%\Glosaap`, sin admin, AppMutex anti doble instancia y
+  anti-instalación-encima. Se mantiene el ZIP portable. CI compila,
+  verifica Setup + `.sha256` y hace smoke test de instalación,
+  arranque y desinstalación real antes de publicar (fail-closed);
+  `updater.py` suma preflight de disco (ZIP × 3 + 50 MB)
+- **Guías interactivas (Fase C)**: tour de primera vez al llegar al
+  dashboard (una sola vez, con "no volver a mostrar"), botón de guía en
+  Dashboard y Mensajes, y botón `?` en Herramientas, Homologación,
+  Homologador manual, Mix Excel, Descarga Web y EPS. Cinta de pasos
+  Buscar → Descargar → Procesar → Revisar en la vista de correos,
+  actualizada en cada etapa del flujo
+
+### 🐛 Correcciones
+- `CROVALOBJ` en Mutualser y resto de EPS: el parser monetario
+  compartido ya no interpreta `"$ 3.404"` como el decimal `3.404`.
+  Reconoce el grupo final de 3 dígitos como separador de miles y
+  exporta `3404`. Cubre espacios duros (`\xa0`), símbolo de moneda,
+  formatos `1.234,56` / `1,234.56` y negativos
+- Guía interactiva: el tour creaba un `AlertDialog` nuevo por paso y se
+  apilaban sin cerrarse; ahora es una sola tarjeta flotante no modal
+  que siempre se retira al cerrar. La ayuda de Mensajes parpadea la
+  cinta de pasos y el botón Procesar como focus guiado
+
+### 📚 Documentación
+- Nuevas `docs/GUIA_ADMIN.md` (red, homologadores, updates, diagnóstico)
+  y `docs/GUIA_NUEVA_EPS.md` (integración de una EPS con ejemplo
+  Previsora); `DEVELOPER_GUIDE.md` corregido a la API real (Template
+  Method) y rutina de release obligatoria
+
+### 🧪 Tests
+- Nuevo `tests/test_release_consistency.py`: valida en CI la versión
+  sincronizada, la entrada completa del CHANGELOG y que cada EPS
+  resuelva su homologador desde `HOMOLOGADOR_FILES`
+- Nuevo `tests/test_installer.py`: AppId estable, instalación por
+  usuario, mutex compartido `main.py` ↔ `.iss`, archivos requeridos y
+  preflight de disco
+- Nuevo `tests/test_guide.py`: contenido del tour/ayudas, cinta de pasos
+  y navegación del overlay no modal
+- Nuevo `tests/test_valor_monetario.py`: 85 casos de valores monetarios
+  (incluye exportación real de objeciones) en las 4 EPS
+
+
 ## [0.11.31] - 2026-11-04
 
 ### ✨ Nuevas Características
@@ -206,11 +253,6 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 - **Navegación mejorada**: Botones de navegación en todas las vistas
 
 ### 🐛 Correcciones
-- Valores monetarios con separador de miles ya no se exportan como
-  decimales: en Mutualser `CROVALOBJ` salía `3,404` (float `3.404`) por
-  `"$ 3.404"`; ahora el parser compartido por todas las EPS reconoce el
-  grupo final de 3 dígitos como miles y `CROVALOBJ` sale `3404`. Cubre
-  también espacios duros (`\xa0`), moneda, `1.234,56` y `1,234.56`
 - Corregido bug donde el contenido del dashboard se veía detrás de otras vistas
 - Solucionado problema de pantalla negra al cambiar tema antes de iniciar sesión
 - Eliminada navegación por tecla ESC que causaba comportamientos inesperados
@@ -225,39 +267,6 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 - Creado `DEVELOPER_GUIDE.md` con guía completa para desarrolladores
 - Actualizado `README.md` con información actualizada del proyecto
 - Documentadas buenas prácticas para uso de colores y temas
-- Nuevas `docs/GUIA_ADMIN.md` (red, homologadores, updates, diagnóstico)
-  y `docs/GUIA_NUEVA_EPS.md` (procedimiento de integración con ejemplo
-  Previsora); ejemplo de procesador en `DEVELOPER_GUIDE` corregido a la
-  API real (Template Method) + rutina de release obligatoria
-
-### 🧪 Tests
-- Nuevo `tests/test_release_consistency.py`: verifica en CI que la
-  versión coincida en `settings.py`/`pyproject.toml`/docs, que el
-  CHANGELOG tenga la entrada completa y que cada EPS habilitada
-  resuelva su homologador desde `HOMOLOGADOR_FILES`
-- Nuevo `tests/test_installer.py` (Fase B): AppId estable del
-  instalador, instalación por usuario sin admin, mutex compartido
-  `main.py` ↔ `.iss`, archivos requeridos y preflight de disco
-- Nuevo `tests/test_guide.py` (Fase C): contenido del tour y ayudas por
-  vista, estados de la cinta de pasos y navegación del overlay
-
-### 🧭 Guías interactivas (Fase C)
-- Tour de primera vez al llegar al dashboard (una sola vez, con "no
-  volver a mostrar"), botón de guía en Dashboard y Mensajes, y botón ?
-  en Herramientas, Homologación, Homologador manual, Mix Excel,
-  Descarga Web y EPS. Cinta de pasos Buscar → Descargar → Procesar →
-  Revisar en la vista de correos, actualizada en cada etapa del flujo
-- Fix: el tour usaba un AlertDialog nuevo por paso y se apilaban sin
-  cerrarse; ahora es una sola tarjeta flotante no modal que siempre se
-  retira. La ayuda de Mensajes parpadea la cinta de pasos y el botón
-  Procesar como focus guiado
-
-### 📦 Instalador (Fase B)
-- Instalador Inno Setup por usuario (`installer/glosaap.iss`,
-  `build.py --installer`, sin admin, AppMutex anti doble instancia y
-  anti-instalación-encima), CI que compila con Inno, verifica Setup +
-  `.sha256` y hace smoke test de instalación/desinstalación real antes
-  de publicar (fail-closed); `release.py` también sube el instalador
 
 ---
 
