@@ -300,6 +300,11 @@ def main(page: ft.Page):
         key = view_key or ui_state.current_view
         guide_overlay.show_help(key, on_flash=flash_guide_targets)
 
+    def show_eps_guide_for(eps_key_or_info=None):
+        """Muestra las reglas de procesamiento de una EPS (hilo principal)."""
+        target = eps_key_or_info or ui_state.selected_eps
+        guide_overlay.show_eps_help(target)
+
     def flash_guide_targets(names):
         """Parpadea los controles mencionados por la ayuda (focus guiado)."""
         try:
@@ -1291,7 +1296,8 @@ def main(page: ft.Page):
         on_download_selected=download_selected_messages,
         on_process=process_eps_files,
         navigation_controller=None,  # se inyecta tras crear el controlador
-        on_guide=lambda: show_guide_for("messages")
+        on_guide=lambda: show_guide_for("messages"),
+        on_eps_guide=show_eps_guide_for,
     )
 
     eps_screen = EpsScreen(
@@ -1300,7 +1306,8 @@ def main(page: ft.Page):
         on_logout=go_to_dashboard,
         on_back=go_to_dashboard,
         navigation_controller=None,  # se inyecta tras crear el controlador
-        on_guide=lambda: show_guide_for("eps")
+        on_guide=lambda: show_guide_for("eps"),
+        on_eps_help=show_eps_guide_for,
     )
 
     # Inicializar NavigationController con todas las vistas (canal único)

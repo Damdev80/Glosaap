@@ -14,7 +14,7 @@ from app.ui.styles import SPACING
 class EpsScreen:
     """Pantalla para seleccionar EPS y rango de fechas"""
 
-    def __init__(self, page: ft.Page, on_eps_selected=None, on_logout=None, on_back=None, navigation_controller=None, on_guide=None):
+    def __init__(self, page: ft.Page, on_eps_selected=None, on_logout=None, on_back=None, navigation_controller=None, on_guide=None, on_eps_help=None):
         """
         Args:
             page: Página de Flet
@@ -22,6 +22,8 @@ class EpsScreen:
             on_logout: Callback al cerrar sesión
             on_back: Callback para navegar atrás
             navigation_controller: NavigationController (canal único de navegación)
+            on_guide: Callback para la ayuda general de esta vista
+            on_eps_help: Callback(eps_info) para mostrar las reglas de procesamiento de una EPS
         """
         self.page = page
         self.on_eps_selected = on_eps_selected
@@ -29,6 +31,7 @@ class EpsScreen:
         self.on_back = on_back
         self.navigation_controller = navigation_controller
         self.on_guide = on_guide
+        self.on_eps_help = on_eps_help
 
         # Cargar lista de EPS desde configuración
         self.eps_list = get_eps_list()
@@ -89,6 +92,11 @@ class EpsScreen:
         # Llamar callback con la info
         if self.on_eps_selected:
             self.on_eps_selected(eps_info, date_from, date_to)
+
+    def _on_eps_help(self, eps_info):
+        """Muestra las reglas de procesamiento de la EPS seleccionada."""
+        if self.on_eps_help:
+            self.on_eps_help(eps_info)
 
     def _show_dates_required_dialog(self):
         """Muestra un diálogo indicando que las fechas son obligatorias"""
@@ -153,8 +161,16 @@ class EpsScreen:
         """Crea la vista de la pantalla"""
 
         # Grid de tarjetas de EPS (usa la lista cargada desde config)
+        self.eps_cards = [
+            EpsCard(
+                eps,
+                on_click=self._on_eps_click,
+                on_help=self._on_eps_help if self.on_eps_help is not None else None,
+            )
+            for eps in self.eps_list
+        ]
         eps_cards = ft.Row(
-            controls=[EpsCard(eps, on_click=self._on_eps_click).build() for eps in self.eps_list],
+            controls=[card.build() for card in self.eps_cards],
             wrap=True,
             spacing=SPACING["md"],
             run_spacing=SPACING["md"],

@@ -6,6 +6,17 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.11.33] - 2026-11-12
+
+### ✨ Nuevas Características
+- **Reglas de procesamiento por EPS (`?`)**: cada tarjeta de EPS en la pantalla de selección (`EpsCard`/`EpsScreen`) y el botón de procesamiento en la vista de correos (`MessagesView`) cuentan ahora con un botón `?` que muestra en la tarjeta flotante de ayuda las reglas específicas de **Mutualser**, **Coosalud**, **Sanitas** y **Previsora** (filtro de correo, archivos de entrada, homologación, reglas de objeciones y salidas).
+- **Fomag (Horus) — Informe Prestador por tramos**: nuevo flujo de descarga en `FomagScraper` y `WebDownloadView` que navega por **Cuentas médicas → Informe prestador** (`/cuentasMedicas/informePrestador`), aplica filtros de fecha (`Desde` / `Hasta`), selecciona **Tipo = Trazabilidad** y descarga en formato **Excel** (con resolución manual del CAPTCHA). Si el rango supera el tope de 14 días del portal, lo divide automáticamente en tramos consecutivos de hasta 14 días y descarga un Excel por tramo (`fomag_trazabilidad_AAAAMMDD_AAAAMMDD.xlsx`).
+
+### 🧪 Tests
+- Nuevos casos en `tests/test_guide.py` validando la cobertura de reglas para todas las EPS habilitadas y el botón `?` en tarjetas y vista de mensajes.
+- Nuevos casos en `tests/test_fomag_scraper.py` para parseo de fechas, partición en tramos de 14 días, descarga multi-tramo y manejo de errores.
+
+
 ## [0.11.32] - 2026-11-09
 
 ### ✨ Nuevas Características

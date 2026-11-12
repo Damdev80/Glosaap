@@ -14,7 +14,7 @@ from app.ui.styles import FONT_SIZES, SPACING
 class MessagesView:
     """Vista para listar y gestionar mensajes de correo"""
 
-    def __init__(self, page: ft.Page, on_back, on_refresh, on_download_selected, on_process, navigation_controller=None, on_guide=None):
+    def __init__(self, page: ft.Page, on_back, on_refresh, on_download_selected, on_process, navigation_controller=None, on_guide=None, on_eps_guide=None):
         """
         Inicializa la vista de mensajes
 
@@ -27,6 +27,7 @@ class MessagesView:
             navigation_controller: Canal único de navegación (breadcrumb a dashboard)
             on_guide: Callback para abrir la guía de esta vista (opcional;
                 si es None no se muestra el botón Guía)
+            on_eps_guide: Callback(eps_key) para mostrar las reglas de procesamiento de la EPS actual
         """
         self.page = page
         self.on_back = on_back
@@ -35,6 +36,7 @@ class MessagesView:
         self.on_process = on_process
         self.navigation_controller = navigation_controller
         self.on_guide = on_guide
+        self.on_eps_guide = on_eps_guide
 
         # Estado
         self.selected_messages = set()
@@ -134,6 +136,14 @@ class MessagesView:
                 padding=ft.padding.symmetric(horizontal=16, vertical=8),
                 text_style=ft.TextStyle(size=13),
             ),
+        )
+        self.process_eps_help_btn = ft.IconButton(
+            icon=ft.Icons.HELP_OUTLINE,
+            icon_color=ft.Colors.PRIMARY,
+            icon_size=20,
+            tooltip="Reglas de procesamiento de esta EPS",
+            visible=False,
+            on_click=lambda e: self.on_eps_guide(self.process_eps_btn.data) if self.on_eps_guide else None,
         )
 
         self.download_selected_btn = ft.TextButton(
@@ -335,7 +345,7 @@ class MessagesView:
                 ft.Card(
                     content=ft.Container(
                         content=ft.Column([
-                            ft.Row([self.process_eps_btn], spacing=SPACING["md"],
+                            ft.Row([self.process_eps_btn, self.process_eps_help_btn], spacing=SPACING["sm"],
                                   alignment=ft.MainAxisAlignment.CENTER),
                             # Indicador de progreso mejorado
                             self.processing_container,
@@ -728,6 +738,7 @@ class MessagesView:
     def show_process_button(self, visible=True):
         """Muestra/oculta el botón de procesar EPS"""
         self.process_eps_btn.visible = visible
+        self.process_eps_help_btn.visible = bool(visible and self.on_eps_guide is not None)
         self.page.update()
 
     @property

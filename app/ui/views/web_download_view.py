@@ -358,6 +358,32 @@ class WebDownloadView:
             text_size=14
         )
 
+        # Rango de fechas del Informe Prestador (el portal permite máx. 14 días
+        # por consulta; rangos mayores se dividen automáticamente en tramos).
+        self.fomag_fecha_inicio = ft.TextField(
+            label="Desde",
+            hint_text="AAAA-MM-DD",
+            border_color=ft.Colors.OUTLINE,
+            focused_border_color="#4CAF50",
+            color=ft.Colors.ON_SURFACE,
+            label_style=ft.TextStyle(color=ft.Colors.ON_SURFACE),
+            height=50,
+            text_size=14,
+            width=280
+        )
+
+        self.fomag_fecha_fin = ft.TextField(
+            label="Hasta",
+            hint_text="AAAA-MM-DD",
+            border_color=ft.Colors.OUTLINE,
+            focused_border_color="#4CAF50",
+            color=ft.Colors.ON_SURFACE,
+            label_style=ft.TextStyle(color=ft.Colors.ON_SURFACE),
+            height=50,
+            text_size=14,
+            width=280
+        )
+
         # Checkbox para recordar credenciales
         self.fomag_remember = ft.Checkbox(
             label="Recordar credenciales",
@@ -453,6 +479,24 @@ class WebDownloadView:
                 ft.Container(height=10),
                 self.fomag_usuario,
                 self.fomag_password,
+                ft.Container(height=5),
+                ft.Text(
+                    "Informe prestador · Trazabilidad · Excel",
+                    size=13,
+                    color=ft.Colors.ON_SURFACE_VARIANT
+                ),
+                ft.Text(
+                    "Máx. 14 días por consulta: si el rango es mayor, se descarga "
+                    "en varios tramos automáticamente. Vacío = últimos 14 días.",
+                    size=11,
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                    text_align=ft.TextAlign.CENTER
+                ),
+                ft.Row([
+                    self.fomag_fecha_inicio,
+                    ft.Container(width=10),
+                    self.fomag_fecha_fin
+                ], alignment=ft.MainAxisAlignment.CENTER),
                 ft.Container(height=5),
                 self.fomag_remember,
                 self.fomag_forget_btn,
@@ -680,6 +724,24 @@ class WebDownloadView:
             self.update_fomag_status("❌ Completa todos los campos")
             return
 
+        # Validar fechas antes de abrir el navegador (ambas o ninguna)
+        fecha_desde = (self.fomag_fecha_inicio.value or "").strip() or None
+        fecha_hasta = (self.fomag_fecha_fin.value or "").strip() or None
+        if bool(fecha_desde) != bool(fecha_hasta):
+            self.update_fomag_status("❌ Indica ambas fechas (Desde y Hasta) o ninguna")
+            return
+        if fecha_desde and fecha_hasta:
+            try:
+                from app.service.web_scraper.fomag_scraper import (
+                    dividir_rango_fechas,
+                    parse_fecha,
+                )
+                _d, _h = parse_fecha(fecha_desde), parse_fecha(fecha_hasta)
+                dividir_rango_fechas(_d, _h)  # valida orden del rango
+            except ValueError as ve:
+                self.update_fomag_status(f"❌ {ve}")
+                return
+
         # Guardar credenciales si está marcado
         if self.fomag_remember.value:
             self.credential_manager.save_credentials(
@@ -714,7 +776,9 @@ class WebDownloadView:
 
                 result = scraper.login_and_download(
                     usuario=self.fomag_usuario.value,
-                    contraseña=self.fomag_password.value
+                    contraseña=self.fomag_password.value,
+                    fecha_desde=fecha_desde,
+                    fecha_hasta=fecha_hasta,
                 )
 
                 if result["success"]:

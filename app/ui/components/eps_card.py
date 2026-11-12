@@ -12,20 +12,29 @@ from app.ui.styles import FONT_SIZES
 class EpsCard:
     """Tarjeta visual para seleccionar una EPS"""
 
-    def __init__(self, eps_info: dict, on_click=None):
+    def __init__(self, eps_info: dict, on_click=None, on_help=None):
         """
         Args:
             eps_info: Dict con name, icon, description, filter, filter_type, subject_pattern, image_path
-            on_click: Callback al hacer click
+            on_click: Callback al hacer click en la tarjeta
+            on_help: Callback(eps_info) al pulsar el botón ? de reglas de la EPS
         """
         self.eps_info = eps_info
         self.on_click_callback = on_click
+        self.on_help_callback = on_help
         self.container = None
+        self.body_container = None
+        self.help_btn = None
 
     def _handle_click(self, e):
         """Maneja el click en la tarjeta"""
         if self.on_click_callback:
             self.on_click_callback(self.eps_info)
+
+    def _handle_help(self, e):
+        """Muestra las reglas de procesamiento de esta EPS"""
+        if self.on_help_callback:
+            self.on_help_callback(self.eps_info)
 
     def _on_hover(self, e):
         """Efecto hover suave"""
@@ -67,11 +76,22 @@ class EpsCard:
                 padding=4,
             )
 
-        self.container = ft.Container(
+        eps_name = self.eps_info.get("name", "EPS")
+        self.help_btn = ft.IconButton(
+            icon=ft.Icons.HELP_OUTLINE,
+            icon_size=16,
+            icon_color=ft.Colors.PRIMARY,
+            tooltip=f"Reglas de procesamiento de {eps_name}",
+            visible=self.on_help_callback is not None,
+            on_click=self._handle_help,
+            style=ft.ButtonStyle(padding=2),
+        )
+
+        self.body_container = ft.Container(
             content=ft.Column([
                 visual_element,
                 ft.Text(
-                    self.eps_info["name"],
+                    eps_name,
                     size=FONT_SIZES["body"],
                     weight=ft.FontWeight.W_600,
                     color=ft.Colors.ON_SURFACE,
@@ -85,14 +105,31 @@ class EpsCard:
                     weight=ft.FontWeight.W_400
                 )
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=6, tight=True),
-            bgcolor=ft.Colors.SURFACE,
             border_radius=14,
             padding=ft.padding.symmetric(horizontal=16, vertical=14),
-            width=150,
-            height=135,
+            alignment=ft.alignment.center,
+            expand=True,
             ink=True,
             ink_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
             on_click=self._handle_click,
+        )
+
+        self.container = ft.Container(
+            content=ft.Stack(
+                [
+                    self.body_container,
+                    ft.Container(
+                        content=self.help_btn,
+                        right=2,
+                        top=2,
+                    ),
+                ],
+                expand=True,
+            ),
+            bgcolor=ft.Colors.SURFACE,
+            border_radius=14,
+            width=150,
+            height=135,
             on_hover=self._on_hover,
             shadow=ft.BoxShadow(
                 spread_radius=0,

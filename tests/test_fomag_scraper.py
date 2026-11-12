@@ -8,25 +8,23 @@ Este módulo contiene tests unitarios para verificar:
 - Manejo de errores y timeouts
 - Configuración de perfiles de navegador
 """
-import pytest
 import os
-import sys
-import tempfile
-from unittest.mock import Mock, patch, MagicMock, call
-from pathlib import Path
+from unittest.mock import MagicMock, call, patch
 
-from app.service.web_scraper.fomag_scraper import FomagScraper
+import pytest
+
 from app.service.web_scraper.base_scraper import BaseScraper
+from app.service.web_scraper.fomag_scraper import FomagScraper
 
 
 class TestFomagScraperImport:
     """Tests para importación del módulo."""
-    
+
     def test_module_import(self):
         """Puede importar el módulo"""
         from app.service.web_scraper import fomag_scraper
         assert fomag_scraper is not None
-    
+
     def test_fomag_scraper_class(self):
         """FomagScraper está definido"""
         assert FomagScraper is not None
@@ -34,7 +32,7 @@ class TestFomagScraperImport:
 
 class TestFomagScraperInheritance:
     """Tests para herencia de clase."""
-    
+
     def test_inherits_from_base_scraper(self):
         """FomagScraper hereda de BaseScraper"""
         assert issubclass(FomagScraper, BaseScraper)
@@ -42,7 +40,7 @@ class TestFomagScraperInheritance:
 
 class TestFomagScraperInit:
     """Tests para inicialización del scraper."""
-    
+
     @patch.object(FomagScraper, '_ensure_playwright_browsers')
     @patch('os.makedirs')
     def test_scraper_creation(self, mock_makedirs, mock_ensure):
@@ -50,7 +48,7 @@ class TestFomagScraperInit:
         scraper = FomagScraper(download_dir="/tmp/test")
         assert scraper is not None
         assert scraper.url is not None
-    
+
     @patch.object(FomagScraper, '_ensure_playwright_browsers')
     @patch('os.makedirs')
     def test_scraper_has_horus_url(self, mock_makedirs, mock_ensure):
@@ -58,7 +56,7 @@ class TestFomagScraperInit:
         scraper = FomagScraper(download_dir="/tmp/test")
         assert "horus" in scraper.url.lower()
         assert scraper.url.startswith("https://")
-    
+
     @patch.object(FomagScraper, '_ensure_playwright_browsers')
     @patch('os.makedirs')
     def test_scraper_profile_directory_creation(self, mock_makedirs, mock_ensure):
@@ -66,7 +64,7 @@ class TestFomagScraperInit:
         scraper = FomagScraper(download_dir="/tmp/test")
         assert scraper.perfil_dir is not None
         mock_makedirs.assert_called()
-    
+
     @patch.object(FomagScraper, '_ensure_playwright_browsers')
     @patch('os.makedirs')
     def test_scraper_custom_profile_dir(self, mock_makedirs, mock_ensure):
@@ -75,7 +73,7 @@ class TestFomagScraperInit:
         scraper = FomagScraper(download_dir="/tmp/test", perfil_dir=custom_profile)
         # En Windows, os.path.abspath convierte /custom/profile a C:\custom\profile
         assert "custom" in scraper.perfil_dir and "profile" in scraper.perfil_dir
-    
+
     @patch.object(FomagScraper, '_ensure_playwright_browsers')
     @patch('os.makedirs')
     @patch('sys.platform', 'win32')
@@ -88,7 +86,7 @@ class TestFomagScraperInit:
 
 class TestFomagScraperBrowserSetup:
     """Tests para configuración de navegadores."""
-    
+
     @patch('os.path.exists')
     @patch('os.listdir')
     @patch('os.makedirs')
@@ -98,33 +96,33 @@ class TestFomagScraperBrowserSetup:
         # Mock browser path exists
         mock_exists.return_value = True
         mock_listdir.return_value = ['chromium-12345', 'firefox-67890']
-        
+
         scraper = FomagScraper.__new__(FomagScraper)
         scraper.download_dir = "/tmp"
         scraper.progress_callback = print
         scraper.perfil_dir = "/tmp/profile"
-        
+
         # Should not raise exception
         scraper._ensure_playwright_browsers()
 
     @patch('os.path.exists')
-    @patch('os.listdir') 
+    @patch('os.listdir')
     @patch('os.makedirs')
     @patch('app.service.web_scraper.fomag_scraper.sync_playwright')
     def test_ensure_browsers_fallback_to_direct_launch(self, mock_playwright, mock_makedirs, mock_listdir, mock_exists):
         """Test fallback cuando no encuentra navegadores en path"""
         # Mock no browsers found in path
         mock_exists.return_value = False
-        
+
         # Mock successful playwright launch
         mock_browser = MagicMock()
         mock_playwright.return_value.__enter__.return_value.chromium.launch.return_value = mock_browser
-        
+
         scraper = FomagScraper.__new__(FomagScraper)
         scraper.download_dir = "/tmp"
         scraper.progress_callback = print
         scraper.perfil_dir = "/tmp/profile"
-        
+
         # Should not raise exception
         scraper._ensure_playwright_browsers()
 
@@ -136,16 +134,16 @@ class TestFomagScraperBrowserSetup:
         """Test error cuando Playwright no está instalado"""
         # Mock no browsers found
         mock_exists.return_value = False
-        
+
         # Mock playwright failure
         mock_playwright.return_value.__enter__.return_value.chromium.launch.side_effect = Exception("Browser not found")
-        
+
         scraper = FomagScraper.__new__(FomagScraper)
         scraper.download_dir = "/tmp"
         scraper.progress_callback = print
         scraper.perfil_dir = "/tmp/profile"
-        
-        with pytest.raises(Exception):
+
+        with pytest.raises(Exception, match="Navegadores no instalados"):
             scraper._ensure_playwright_browsers()
 
     @patch.dict('os.environ', {}, clear=True)
@@ -158,359 +156,222 @@ class TestFomagScraperBrowserSetup:
         # Mock environment
         mock_exists.return_value = True
         mock_listdir.return_value = ['chromium-12345']
-        
+
         scraper = FomagScraper.__new__(FomagScraper)
         scraper.download_dir = "/tmp"
         scraper.progress_callback = print
         scraper.perfil_dir = "/tmp/profile"
-        
+
         scraper._ensure_playwright_browsers()
-        
+
         # Should set environment variable
         assert 'PLAYWRIGHT_BROWSERS_PATH' in os.environ
 
 
-class TestFomagScraperLoginDownload:
-    """Tests para función login_and_download."""
-    
-    @patch.object(FomagScraper, '_ensure_playwright_browsers')
-    @patch('os.makedirs')
-    @patch('app.service.web_scraper.fomag_scraper.sync_playwright')
-    def test_login_and_download_basic_flow(self, mock_playwright, mock_makedirs, mock_ensure):
-        """Test flujo básico de login y descarga"""
-        # Setup mocks
-        mock_context = MagicMock()
-        mock_page = MagicMock()
-        
-        mock_playwright.return_value.__enter__.return_value.chromium.launch_persistent_context.return_value = mock_context
-        mock_context.pages = [mock_page]
-        
-        # Mock login form detection
-        mock_page.query_selector.return_value = MagicMock()  # Login form found
-        
-        # Mock Excel icons (empty page)
-        mock_page.query_selector_all.return_value = []
-        
-        scraper = FomagScraper(download_dir="/tmp/test")
-        
-        result = scraper.login_and_download("test_user", "test_pass")
-        
-        assert isinstance(result, dict)
-        assert 'success' in result
-        assert 'files' in result
-        assert 'message' in result
+class TestFechasInformePrestador:
+    """Validación y división de rangos (el portal limita a 14 días)."""
 
-    @patch.object(FomagScraper, '_ensure_playwright_browsers')
-    @patch('os.makedirs')
-    @patch('app.service.web_scraper.fomag_scraper.sync_playwright')
-    def test_login_with_active_session(self, mock_playwright, mock_makedirs, mock_ensure):
-        """Test cuando ya hay sesión activa"""
-        mock_context = MagicMock()
-        mock_page = MagicMock()
-        
-        mock_playwright.return_value.__enter__.return_value.chromium.launch_persistent_context.return_value = mock_context
-        mock_context.pages = [mock_page]
-        
-        # Mock no login form (session active)
-        mock_page.query_selector.return_value = None
-        mock_page.query_selector_all.return_value = []
-        
-        scraper = FomagScraper(download_dir="/tmp/test")
-        
-        result = scraper.login_and_download("test_user", "test_pass")
-        
-        # Should not try to fill login form
-        mock_page.fill.assert_not_called()
-        assert isinstance(result, dict)
+    def test_parse_fecha_formatos(self):
+        from datetime import date
 
-    @patch.object(FomagScraper, '_ensure_playwright_browsers')
-    @patch('os.makedirs')
-    @patch('app.service.web_scraper.fomag_scraper.sync_playwright')
-    def test_download_excel_files(self, mock_playwright, mock_makedirs, mock_ensure):
-        """Test descarga de archivos Excel"""
-        mock_context = MagicMock()
-        mock_page = MagicMock()
-        mock_download = MagicMock()
-        
-        mock_playwright.return_value.__enter__.return_value.chromium.launch_persistent_context.return_value = mock_context
-        mock_context.pages = [mock_page]
-        
-        # Mock login form and Excel icons
-        mock_page.query_selector.return_value = None  # No login needed
-        
-        # Mock 2 Excel files found
-        mock_icon1 = MagicMock()
-        mock_icon2 = MagicMock()
-        mock_page.query_selector_all.return_value = [mock_icon1, mock_icon2]
-        
-        # Mock button elements
-        mock_button = MagicMock()
-        mock_page.evaluate_handle.return_value.as_element.return_value = mock_button
-        
-        # Mock download process
-        mock_page.expect_download.return_value.__enter__.return_value.value = mock_download
-        mock_download.suggested_filename = "fomag_file.xlsx"
-        
-        scraper = FomagScraper(download_dir="/tmp/test")
-        
-        result = scraper.login_and_download("test_user", "test_pass")
-        
-        assert result['success'] is True
-        assert result['files'] >= 0
+        from app.service.web_scraper.fomag_scraper import parse_fecha
 
-    @patch.object(FomagScraper, '_ensure_playwright_browsers')
-    @patch('os.makedirs')
-    @patch('app.service.web_scraper.fomag_scraper.sync_playwright')
-    def test_navigation_error_handling(self, mock_playwright, mock_makedirs, mock_ensure):
-        """Test manejo de errores de navegación"""
-        mock_playwright.return_value.__enter__.return_value.chromium.launch_persistent_context.side_effect = Exception("Navigation failed")
-        
-        scraper = FomagScraper(download_dir="/tmp/test")
-        
-        result = scraper.login_and_download("test_user", "test_pass")
-        
-        assert result['success'] is False
-        assert 'error' in result['message'].lower() or 'failed' in result['message'].lower()
+        esperado = date(2026, 3, 5)
+        assert parse_fecha("2026-03-05") == esperado
+        assert parse_fecha("2026/03/05") == esperado
+        assert parse_fecha("05/03/2026") == esperado
+        assert parse_fecha(esperado) == esperado
 
-    @patch.object(FomagScraper, '_ensure_playwright_browsers')
-    @patch('os.makedirs')
-    @patch('app.service.web_scraper.fomag_scraper.sync_playwright')
-    def test_no_excel_files_found(self, mock_playwright, mock_makedirs, mock_ensure):
-        """Test cuando no se encuentran archivos Excel"""
-        mock_context = MagicMock()
-        mock_page = MagicMock()
-        
-        mock_playwright.return_value.__enter__.return_value.chromium.launch_persistent_context.return_value = mock_context
-        mock_context.pages = [mock_page]
-        
-        # Mock no login needed, no Excel files
-        mock_page.query_selector.return_value = None
-        mock_page.query_selector_all.return_value = []
-        
-        scraper = FomagScraper(download_dir="/tmp/test")
-        
-        result = scraper.login_and_download("test_user", "test_pass")
-        
-        assert result['success'] is False
-        assert result['files'] == 0
-        assert 'no se encontraron' in result['message'].lower()
+    def test_parse_fecha_invalida(self):
+        from app.service.web_scraper.fomag_scraper import parse_fecha
 
+        with pytest.raises(ValueError):
+            parse_fecha("no-es-fecha")
+        with pytest.raises(ValueError):
+            parse_fecha("")
 
-class TestFomagScraperPagination:
-    """Tests para funcionalidad de paginación."""
-    
-    @patch.object(FomagScraper, '_ensure_playwright_browsers')
-    @patch('os.makedirs')
-    @patch('app.service.web_scraper.fomag_scraper.sync_playwright')
-    def test_pagination_configuration(self, mock_playwright, mock_makedirs, mock_ensure):
-        """Test configuración de paginación a 100 registros"""
-        mock_context = MagicMock()
-        mock_page = MagicMock()
-        
-        mock_playwright.return_value.__enter__.return_value.chromium.launch_persistent_context.return_value = mock_context
-        mock_context.pages = [mock_page]
-        
-        # Mock pagination elements
-        mock_footer = MagicMock()
-        mock_select = MagicMock()
-        mock_option_100 = MagicMock()
-        
-        mock_page.query_selector.side_effect = [
-            None,  # No login form
-            mock_footer,  # Footer found
-            mock_option_100  # Option 100 found
+    def test_rango_corto_un_solo_tramo(self):
+        from datetime import date
+
+        from app.service.web_scraper.fomag_scraper import dividir_rango_fechas
+
+        assert dividir_rango_fechas(date(2026, 1, 1), date(2026, 1, 14)) == [
+            (date(2026, 1, 1), date(2026, 1, 14))
         ]
-        mock_footer.query_selector.return_value = mock_select
-        
-        # Mock no Excel files for quick exit
-        mock_page.query_selector_all.return_value = []
-        
-        scraper = FomagScraper(download_dir="/tmp/test")
-        
-        result = scraper.login_and_download("test_user", "test_pass")
-        
-        # Should attempt pagination configuration
-        mock_select.click.assert_called()
-        mock_option_100.click.assert_called()
+        assert dividir_rango_fechas(date(2026, 1, 5), date(2026, 1, 5)) == [
+            (date(2026, 1, 5), date(2026, 1, 5))
+        ]
 
-    @patch.object(FomagScraper, '_ensure_playwright_browsers')
-    @patch('os.makedirs')
-    @patch('app.service.web_scraper.fomag_scraper.sync_playwright')
-    def test_pagination_fallback(self, mock_playwright, mock_makedirs, mock_ensure):
-        """Test fallback cuando paginación falla"""
-        mock_context = MagicMock()
-        mock_page = MagicMock()
-        
-        mock_playwright.return_value.__enter__.return_value.chromium.launch_persistent_context.return_value = mock_context
-        mock_context.pages = [mock_page]
-        
-        # Mock pagination failure
-        mock_page.query_selector.return_value = None  # No footer found
-        mock_page.query_selector_all.return_value = []
-        
-        scraper = FomagScraper(download_dir="/tmp/test")
-        
-        result = scraper.login_and_download("test_user", "test_pass")
-        
-        # Should continue without pagination
-        assert isinstance(result, dict)
+    def test_rango_largo_se_divide_en_tramos_de_14_dias(self):
+        from datetime import date, timedelta
+
+        from app.service.web_scraper.fomag_scraper import (
+            MAX_DIAS_RANGO,
+            dividir_rango_fechas,
+        )
+
+        desde, hasta = date(2026, 1, 1), date(2026, 3, 1)  # 60 días
+        tramos = dividir_rango_fechas(desde, hasta)
+        assert len(tramos) == 5
+        assert tramos[0][0] == desde and tramos[-1][1] == hasta
+        for ini, fin in tramos:
+            assert (fin - ini).days + 1 <= MAX_DIAS_RANGO
+        # Consecutivos, sin huecos ni solapes
+        for (_, fin), (ini_sig, _) in zip(tramos, tramos[1:], strict=False):
+            assert ini_sig == fin + timedelta(days=1)
+
+    def test_rango_invertido_falla(self):
+        from datetime import date
+
+        from app.service.web_scraper.fomag_scraper import dividir_rango_fechas
+
+        with pytest.raises(ValueError):
+            dividir_rango_fechas(date(2026, 2, 1), date(2026, 1, 1))
 
 
-class TestFomagScraperDownloadDetails:
-    """Tests para detalles del proceso de descarga."""
-    
-    @patch.object(FomagScraper, '_ensure_playwright_browsers')
-    @patch('os.makedirs')
-    @patch('app.service.web_scraper.fomag_scraper.sync_playwright')
-    @patch('os.path.exists')
-    def test_duplicate_filename_handling(self, mock_exists, mock_playwright, mock_makedirs, mock_ensure):
-        """Test manejo de nombres duplicados"""
-        mock_context = MagicMock()
-        mock_page = MagicMock()
-        mock_download = MagicMock()
-        
-        mock_playwright.return_value.__enter__.return_value.chromium.launch_persistent_context.return_value = mock_context
-        mock_context.pages = [mock_page]
-        
-        # Mock: archivo existe solo las primeras 2 veces, luego no existe
-        mock_exists.side_effect = [True, True, False]
-        
-        # Mock Excel file found
-        mock_icon = MagicMock()
-        mock_page.query_selector.return_value = None  # No login
-        mock_page.query_selector_all.return_value = [mock_icon]
-        
-        # Mock button and download
-        mock_button = MagicMock()
-        mock_page.evaluate_handle.return_value.as_element.return_value = mock_button
-        mock_page.expect_download.return_value.__enter__.return_value.value = mock_download
-        mock_download.suggested_filename = "existing_file.xlsx"
-        
-        scraper = FomagScraper(download_dir="/tmp/test")
-        
-        result = scraper.login_and_download("test_user", "test_pass")
-        
-        # Should handle duplicate filenames
-        assert isinstance(result, dict)
-
-    @patch.object(FomagScraper, '_ensure_playwright_browsers')
-    @patch('os.makedirs')
-    @patch('app.service.web_scraper.fomag_scraper.sync_playwright')
-    def test_download_timeout_error(self, mock_playwright, mock_makedirs, mock_ensure):
-        """Test manejo de timeouts en descarga"""
-        mock_context = MagicMock()
-        mock_page = MagicMock()
-        
-        mock_playwright.return_value.__enter__.return_value.chromium.launch_persistent_context.return_value = mock_context
-        mock_context.pages = [mock_page]
-        
-        # Mock Excel file but download timeout
-        mock_icon = MagicMock()
-        mock_page.query_selector.return_value = None
-        mock_page.query_selector_all.return_value = [mock_icon]
-        
-        mock_button = MagicMock()
-        mock_page.evaluate_handle.return_value.as_element.return_value = mock_button
-        
-        # Mock download timeout
-        from playwright.sync_api import TimeoutError
-        mock_page.expect_download.return_value.__enter__.side_effect = TimeoutError("Download timeout")
-        
-        scraper = FomagScraper(download_dir="/tmp/test")
-        
-        result = scraper.login_and_download("test_user", "test_pass")
-        
-        # Should handle timeout gracefully
-        assert isinstance(result, dict)
-        assert result['files'] == 0  # No successful downloads
+def _scraper(tmp_path):
+    with patch.object(FomagScraper, '_ensure_playwright_browsers'):
+        return FomagScraper(
+            download_dir=str(tmp_path / "out"), perfil_dir=str(tmp_path / "perfil")
+        )
 
 
-class TestFomagScraperErrorHandling:
-    """Tests para manejo de errores específicos."""
-    
-    @patch.object(FomagScraper, '_ensure_playwright_browsers')
-    @patch('os.makedirs')
-    def test_utf8_configuration_windows(self, mock_makedirs, mock_ensure):
-        """Test configuración UTF-8 en Windows"""
-        with patch('sys.platform', 'win32'):
-            with patch('sys.stdout') as mock_stdout:
-                # Should not raise exception even if reconfigure fails
-                scraper = FomagScraper(download_dir="/tmp/test")
-                assert scraper is not None
-
-    @patch.object(FomagScraper, '_ensure_playwright_browsers')
-    @patch('os.makedirs')
-    @patch('app.service.web_scraper.fomag_scraper.sync_playwright')
-    def test_missing_context_pages(self, mock_playwright, mock_makedirs, mock_ensure):
-        """Test cuando context.pages está vacío"""
-        mock_context = MagicMock()
-        mock_page = MagicMock()
-        
-        mock_playwright.return_value.__enter__.return_value.chromium.launch_persistent_context.return_value = mock_context
-        mock_context.pages = []  # Empty pages
-        mock_context.new_page.return_value = mock_page
-        
-        mock_page.query_selector.return_value = None
-        mock_page.query_selector_all.return_value = []
-        
-        scraper = FomagScraper(download_dir="/tmp/test")
-        
-        result = scraper.login_and_download("test_user", "test_pass")
-        
-        # Should create new page and continue
-        mock_context.new_page.assert_called_once()
-        assert isinstance(result, dict)
+def _mock_playwright(mock_playwright, page, descarga_nombre="informe.xlsx"):
+    context = MagicMock()
+    context.pages = [page]
+    mock_playwright.return_value.__enter__.return_value.chromium.launch_persistent_context.return_value = context
+    download = MagicMock()
+    download.suggested_filename = descarga_nombre
+    page.expect_download.return_value.__enter__.return_value.value = download
+    return context, download
 
 
-class TestFomagScraperIntegration:
-    """Tests de integración."""
-    
-    @patch.object(FomagScraper, '_ensure_playwright_browsers')
-    @patch('os.makedirs')
-    def test_complete_workflow_structure(self, mock_makedirs, mock_ensure):
-        """Test estructura completa del workflow"""
-        with patch('app.service.web_scraper.fomag_scraper.sync_playwright') as mock_pw:
-            mock_context = MagicMock()
-            mock_page = MagicMock()
-            
-            mock_pw.return_value.__enter__.return_value.chromium.launch_persistent_context.return_value = mock_context
-            mock_context.pages = [mock_page]
-            
-            # Mock complete workflow
-            mock_page.query_selector.return_value = MagicMock()  # Login form found
-            mock_page.query_selector_all.return_value = []  # No Excel files
-            
-            scraper = FomagScraper(download_dir="/tmp/test")
-            result = scraper.login_and_download("user", "pass")
-            
-            # Verify main workflow steps
-            mock_page.goto.assert_called_once()  # Navigate to URL
-            mock_page.fill.assert_called()  # Fill credentials
-            mock_page.click.assert_called()  # Click buttons for navigation
-            
-            assert isinstance(result, dict)
-            assert all(key in result for key in ['success', 'files', 'message'])
+@patch('app.service.web_scraper.fomag_scraper.time.sleep')
+@patch('app.service.web_scraper.fomag_scraper.sync_playwright')
+class TestFomagInformePrestador:
+    """Flujo Cuentas médicas -> Informe prestador con filtros y tramos."""
 
+    def test_rango_largo_descarga_un_excel_por_tramo(self, mock_playwright, _sleep, tmp_path):
+        page = MagicMock()
+        page.query_selector.return_value = None  # sesión activa
+        context, _ = _mock_playwright(mock_playwright, page)
+        scraper = _scraper(tmp_path)
+
+        result = scraper.login_and_download("u", "p", "2026-01-01", "2026-03-01")
+
+        assert result["success"] is True
+        assert result["tramos"] == 5
+        assert result["files"] == 5
+        assert result["fallidos"] == []
+        assert page.expect_download.call_count == 5
+        page.fill.assert_not_called()  # sesión activa: no se llena login
+        page.click.assert_any_call('a[href="/cuentasMedicas/informePrestador"]')
+        page.wait_for_selector.assert_any_call(
+            ".v-list-group__header:has(.mdi-bank)", timeout=180_000
+        )
+        context.close.assert_called_once()
+
+    def test_nombre_de_archivo_por_tramo(self, mock_playwright, _sleep, tmp_path):
+        page = MagicMock()
+        page.query_selector.return_value = None
+        _, download = _mock_playwright(mock_playwright, page)
+        scraper = _scraper(tmp_path)
+
+        scraper.login_and_download("u", "p", "2026-01-01", "2026-01-10")
+
+        ruta = download.save_as.call_args[0][0]
+        assert os.path.basename(ruta) == "fomag_trazabilidad_20260101_20260110.xlsx"
+
+    def test_tramo_sin_descarga_no_aborta_los_demas(self, mock_playwright, _sleep, tmp_path):
+        from playwright.sync_api import TimeoutError as PWTimeout
+
+        page = MagicMock()
+        page.query_selector.return_value = None
+        _mock_playwright(mock_playwright, page)
+        ok = page.expect_download.return_value
+        # El 2.º tramo no genera descarga (timeout); el resto sí.
+        page.expect_download.side_effect = [ok, PWTimeout("timeout"), ok]
+        scraper = _scraper(tmp_path)
+
+        result = scraper.login_and_download("u", "p", "2026-01-01", "2026-02-02")  # 33 días -> 3 tramos
+
+        assert result["success"] is True
+        assert result["files"] == 2
+        assert len(result["fallidos"]) == 1
+        assert "Sin descarga" in result["message"]
+
+    def test_sin_ninguna_descarga_falla(self, mock_playwright, _sleep, tmp_path):
+        from playwright.sync_api import TimeoutError as PWTimeout
+
+        page = MagicMock()
+        page.query_selector.return_value = None
+        _mock_playwright(mock_playwright, page)
+        page.expect_download.side_effect = PWTimeout("timeout")
+        scraper = _scraper(tmp_path)
+
+        result = scraper.login_and_download("u", "p", "2026-01-01", "2026-01-05")
+
+        assert result["success"] is False
+        assert result["files"] == 0
+
+    def test_login_llena_credenciales_y_espera_captcha_manual(self, mock_playwright, _sleep, tmp_path):
+        page = MagicMock()
+        page.query_selector.return_value = MagicMock()  # formulario de login
+        _mock_playwright(mock_playwright, page)
+        scraper = _scraper(tmp_path)
+
+        scraper.login_and_download("usuario", "clave", "2026-01-01", "2026-01-05")
+
+        page.fill.assert_any_call('input[id="input-15"]', "usuario")
+        page.fill.assert_any_call('input[id="input-19"]', "clave")
+        # El submit lo hace el usuario tras el CAPTCHA: no se hace click automático
+        assert call('button[type="submit"]') not in page.click.call_args_list
+
+    def test_rango_invalido_no_abre_navegador(self, mock_playwright, _sleep, tmp_path):
+        scraper = _scraper(tmp_path)
+
+        invertido = scraper.login_and_download("u", "p", "2026-02-01", "2026-01-01")
+        incompleto = scraper.login_and_download("u", "p", "2026-02-01", None)
+        texto = scraper.login_and_download("u", "p", "xx", "yy")
+
+        for r in (invertido, incompleto, texto):
+            assert r["success"] is False
+            assert "error" in r["message"].lower()
+        mock_playwright.assert_not_called()
+
+    def test_sin_fechas_usa_ultimos_14_dias(self, mock_playwright, _sleep, tmp_path):
+        page = MagicMock()
+        page.query_selector.return_value = None
+        _mock_playwright(mock_playwright, page)
+        scraper = _scraper(tmp_path)
+
+        result = scraper.login_and_download("u", "p")
+
+        assert result["tramos"] == 1
+        assert result["files"] == 1
+
+    def test_error_de_navegador_retorna_error(self, mock_playwright, _sleep, tmp_path):
+        mock_playwright.return_value.__enter__.return_value.chromium.launch_persistent_context.side_effect = Exception("Navigation failed")
+        scraper = _scraper(tmp_path)
+
+        result = scraper.login_and_download("u", "p", "2026-01-01", "2026-01-05")
+
+        assert result["success"] is False
+        assert "error" in result["message"].lower()
+
+
+class TestFomagScraperMetadata:
     def test_method_signatures(self):
-        """Test que los métodos tienen las firmas correctas"""
         import inspect
-        
-        # Test login_and_download signature
-        sig = inspect.signature(FomagScraper.login_and_download)
-        params = list(sig.parameters.keys())
-        
-        assert 'usuario' in params
-        assert 'contraseña' in params
-        
-        # Test constructor
-        init_sig = inspect.signature(FomagScraper.__init__)
-        init_params = list(init_sig.parameters.keys())
-        
-        assert 'download_dir' in init_params
-        assert 'progress_callback' in init_params
-        assert 'perfil_dir' in init_params
 
-    def test_class_attributes(self):
-        """Test atributos de clase importantes"""
-        assert hasattr(FomagScraper, '__doc__')
-        assert FomagScraper.__doc__ is not None and ('Fomag' in FomagScraper.__doc__ or 'Horus' in FomagScraper.__doc__)
+        params = list(inspect.signature(FomagScraper.login_and_download).parameters)
+        for nombre in ("usuario", "contraseña", "fecha_desde", "fecha_hasta"):
+            assert nombre in params
+
+        init_params = list(inspect.signature(FomagScraper.__init__).parameters)
+        for nombre in ("download_dir", "progress_callback", "perfil_dir"):
+            assert nombre in init_params
+
+    def test_class_doc_menciona_fomag(self):
+        assert FomagScraper.__doc__ is not None
+        assert 'Fomag' in FomagScraper.__doc__ or 'Horus' in FomagScraper.__doc__

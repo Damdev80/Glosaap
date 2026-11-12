@@ -1,9 +1,11 @@
 """
-Scraper para portal de Fomag (Horus)
+Scraper para portal de Fomag (Horus) - Informe Prestador (Cuentas médicas)
 """
 import os
+import re
 import sys
 import time
+from datetime import date, datetime, timedelta
 
 from playwright.sync_api import sync_playwright
 
@@ -14,12 +16,56 @@ if sys.platform == 'win32':
     try:
         sys.stdout.reconfigure(encoding='utf-8')
         sys.stderr.reconfigure(encoding='utf-8')
-    except:
+    except Exception:
         pass
+
+# El portal no admite consultas de más de 14 días (calendario, inclusivos).
+MAX_DIAS_RANGO = 14
+TIPO_INFORME = "Trazabilidad"
+SESION_TIMEOUT_MS = 180_000     # tiempo para resolver el CAPTCHA a mano
+DESCARGA_TIMEOUT_MS = 120_000   # generación del Excel en el portal
+
+# Menú lateral: grupo "Cuentas medicas" (icono mdi-bank) y su enlace.
+SELECTOR_MENU_CUENTAS = ".v-list-group__header:has(.mdi-bank)"
+SELECTOR_LINK_INFORME = 'a[href="/cuentasMedicas/informePrestador"]'
+
+_FORMATOS_FECHA = ("%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y", "%d-%m-%Y")
+
+
+def parse_fecha(valor) -> date:
+    """Convierte date/datetime/str (YYYY-MM-DD, YYYY/MM/DD, DD/MM/YYYY) a date."""
+    if isinstance(valor, datetime):
+        return valor.date()
+    if isinstance(valor, date):
+        return valor
+    texto = str(valor or "").strip()
+    for fmt in _FORMATOS_FECHA:
+        try:
+            return datetime.strptime(texto, fmt).date()
+        except ValueError:
+            continue
+    raise ValueError(f"Fecha inválida: '{texto}' (usa AAAA-MM-DD o DD/MM/AAAA)")
+
+
+def dividir_rango_fechas(
+    desde: date, hasta: date, max_dias: int = MAX_DIAS_RANGO
+) -> list[tuple[date, date]]:
+    """Divide [desde, hasta] en tramos consecutivos de máximo `max_dias` días."""
+    if max_dias < 1:
+        raise ValueError("max_dias debe ser >= 1")
+    if hasta < desde:
+        raise ValueError("La fecha 'Desde' no puede ser mayor que 'Hasta'")
+    tramos: list[tuple[date, date]] = []
+    actual = desde
+    while actual <= hasta:
+        fin = min(actual + timedelta(days=max_dias - 1), hasta)
+        tramos.append((actual, fin))
+        actual = fin + timedelta(days=1)
+    return tramos
 
 
 class FomagScraper(BaseScraper):
-    """Automatización para portal de Fomag (Horus)"""
+    """Automatización para portal de Fomag (Horus): Informe Prestador"""
 
     def __init__(self, download_dir: str = None, progress_callback=None, perfil_dir: str = None):
         super().__init__(download_dir, progress_callback)
@@ -109,17 +155,123 @@ class FomagScraper(BaseScraper):
 
             raise Exception(f"Navegadores no instalados: {e}")
 
-    def login_and_download(self, usuario: str, contraseña: str) -> dict:
+
+    # ==================== NAVEGACIÓN / INFORME PRESTADOR ====================
+
+    def _esperar_sesion(self, page, timeout_ms: int = SESION_TIMEOUT_MS):
+        """Espera a que el menú principal exista (login + CAPTCHA manual resueltos)."""
+        page.wait_for_selector(SELECTOR_MENU_CUENTAS, timeout=timeout_ms)
+
+    def _abrir_informe_prestador(self, page):
+        """Cuentas médicas -> Informe prestador (el grupo solo se abre si está cerrado)."""
+        header = page.locator(SELECTOR_MENU_CUENTAS).first
+        if (header.get_attribute("aria-expanded") or "").lower() != "true":
+            header.click()
+            time.sleep(0.3)
+        page.click(SELECTOR_LINK_INFORME)
+        page.wait_for_selector("text=Informe Cuentas Médicas", timeout=15000)
+
+    @staticmethod
+    def _campo(page, etiqueta: str):
+        """Input de Vuetify ubicado por su etiqueta (los id input-NNN son dinámicos)."""
+        return page.locator(f'.v-input:has(label:text-is("{etiqueta}")) input').first
+
+    def _llenar_fecha(self, page, etiqueta: str, valor: date):
+        self._campo(page, etiqueta).fill(valor.isoformat())
+
+    def _seleccionar_tipo(self, page, tipo: str = TIPO_INFORME):
+        """Abre el combo Tipo y elige la opción (por defecto Trazabilidad)."""
+        self._campo(page, "Tipo").click()
+        opcion = page.locator(".menuable__content__active .v-list-item").filter(
+            has_text=re.compile(tipo, re.IGNORECASE)
+        ).first
+        opcion.wait_for(timeout=8000)
+        opcion.click()
+
+    def _limpiar_busqueda(self, page):
+        try:
+            page.click('button:has-text("Limpiar Busqueda")', timeout=5000)
+            time.sleep(0.3)
+        except Exception:
+            pass
+
+    def _nombre_libre(self, nombre: str) -> str:
+        ruta = os.path.join(self.download_dir, nombre)
+        base, ext = os.path.splitext(nombre)
+        contador = 1
+        while os.path.exists(ruta):
+            ruta = os.path.join(self.download_dir, f"{base}_{contador}{ext}")
+            contador += 1
+        return ruta
+
+    def _descargar_tramo(self, page, desde: date, hasta: date) -> str:
+        """Aplica filtros de UN tramo (<=14 días) y descarga el Excel. Retorna la ruta."""
+        self._limpiar_busqueda(page)
+        self._llenar_fecha(page, "Desde", desde)
+        self._llenar_fecha(page, "Hasta", hasta)
+        self._seleccionar_tipo(page)
+
+        boton = page.locator('button:has-text("Descargar en Excel")').first
+        boton.wait_for(state="visible", timeout=10000)
+        # El botón nace deshabilitado; se habilita al completar los filtros.
+        for _ in range(20):
+            if boton.is_enabled():
+                break
+            time.sleep(0.25)
+        else:
+            raise RuntimeError("El botón 'Descargar en Excel' sigue deshabilitado")
+
+        with page.expect_download(timeout=DESCARGA_TIMEOUT_MS) as info:
+            boton.click()
+        descarga = info.value
+        sufijo = os.path.splitext(descarga.suggested_filename or "")[1] or ".xlsx"
+        nombre = f"fomag_trazabilidad_{desde:%Y%m%d}_{hasta:%Y%m%d}{sufijo}"
+        ruta = self._nombre_libre(nombre)
+        descarga.save_as(ruta)
+        return ruta
+
+    # ==================== FLUJO PRINCIPAL ====================
+
+    def login_and_download(
+        self,
+        usuario: str,
+        contraseña: str,
+        fecha_desde=None,
+        fecha_hasta=None,
+    ) -> dict:
         """
-        Login y descarga de archivos de Fomag (OPTIMIZADO)
+        Login (CAPTCHA manual) y descarga del Informe Prestador de Horus.
+
+        Flujo: Cuentas médicas -> Informe prestador -> Desde/Hasta + Tipo
+        Trazabilidad -> Descargar en Excel. El portal limita cada consulta a
+        14 días: un rango mayor se divide en varios tramos consecutivos.
 
         Args:
-            usuario: Usuario
-            contraseña: Contraseña
+            usuario: Usuario de Horus
+            contraseña: Contraseña de Horus
+            fecha_desde: Inicio del rango (date o 'YYYY-MM-DD'/'DD/MM/YYYY').
+            fecha_hasta: Fin del rango. Sin ninguna de las dos: últimos 14 días.
 
         Returns:
-            dict con resultado
+            dict con success, files, message, tramos y fallidos
         """
+        try:
+            if bool(fecha_desde) != bool(fecha_hasta):
+                raise ValueError("Indica ambas fechas (Desde y Hasta) o ninguna")
+            if fecha_desde and fecha_hasta:
+                desde = parse_fecha(fecha_desde)
+                hasta = parse_fecha(fecha_hasta)
+            else:
+                hasta = date.today()
+                desde = hasta - timedelta(days=MAX_DIAS_RANGO - 1)
+            tramos = dividir_rango_fechas(desde, hasta)
+        except ValueError as ve:
+            return {"success": False, "files": 0, "message": f"Error: {ve}",
+                    "tramos": 0, "fallidos": []}
+
+        archivos: list[str] = []
+        fallidos: list[str] = []
+
         try:
             with sync_playwright() as p:
                 context = p.chromium.launch_persistent_context(
@@ -135,237 +287,73 @@ class FomagScraper(BaseScraper):
                         '--disable-dev-shm-usage',
                     ]
                 )
-
-                page = context.pages[0] if context.pages else context.new_page()
-
-                # Optimizar timeouts
-                page.set_default_timeout(15000)
-                page.set_default_navigation_timeout(30000)
-
-                print("\n" + "="*80)
-                print(">>> INICIANDO SCRAPER DE FOMAG (HORUS) - MODO TURBO")
-                print(f">>> Destino: {self.download_dir}")
-                print("="*80 + "\n")
-                self.log("[SCRAPER] Iniciando sesion en Fomag...")
-
-                page.goto(self.url, wait_until='domcontentloaded')
-                time.sleep(1.5)
-
-                # Verificar si hay formulario de login
-                campo_usuario = page.query_selector('input[id="input-15"]')
-
-                if campo_usuario:
-                    self.log("[LOGIN] Formulario de login detectado, llenando credenciales...")
-                    page.fill('input[id="input-15"]', usuario)
-                    page.fill('input[id="input-19"]', contraseña)
-
-                    self.log("[IMPORTANTE] Si aparece CAPTCHA, resolvelo manualmente")
-
-                    page.click('button[type="submit"]')
-                    time.sleep(2)
-
-                    try:
-                        page.wait_for_load_state('networkidle', timeout=45000)
-                        self.log("[OK] Login completado")
-                    except:
-                        pass
-
-                    time.sleep(1)
-                else:
-                    self.log("[OK] Sesion activa - No se requiere CAPTCHA")
-
-                # Navegar al menú RAPIDO
-                self.log("[NAVEGACION] Navegando a Facturas objetadas...")
-                page.click('.mdi-bank')
-                time.sleep(0.3)
-
-                page.click('text=Auditoria')
-                page.wait_for_load_state('networkidle', timeout=10000)
-
-                page.click('text=Facturas objetadas prestador')
-                page.wait_for_load_state('networkidle', timeout=10000)
-
-                # Clic en PENDIENTES
-                page.click('text=PENDIENTES')
-                page.wait_for_load_state('networkidle', timeout=10000)
-                time.sleep(1)
-
-                # Configurar paginación a 100 (máximo) - Solo si hay muchos registros
-                self.log("[PAGINACION] Configurando registros por página...")
-                paginacion_ok = False
                 try:
-                    # Buscar el selector de paginación en el footer de la tabla
-                    page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-                    time.sleep(0.3)
+                    page = context.pages[0] if context.pages else context.new_page()
+                    page.set_default_timeout(15000)
+                    page.set_default_navigation_timeout(30000)
 
-                    # Buscar dentro del data-footer
-                    footer = page.query_selector('div.v-data-footer')
-                    if footer:
-                        select_paginas = footer.query_selector('div.v-select')
-                        if select_paginas:
-                            select_paginas.scroll_into_view_if_needed()
-                            select_paginas.click(force=True)
-                            time.sleep(0.5)
+                    self.log("[SCRAPER] Iniciando sesion en Fomag (Horus)...")
+                    page.goto(self.url, wait_until='domcontentloaded')
+                    time.sleep(1.5)
 
-                            # Buscar opción 100 en el menú desplegable
-                            opcion_100 = page.query_selector('div.v-list-item:has-text("100")')
-                            if opcion_100:
-                                opcion_100.click()
-                                page.wait_for_load_state('networkidle', timeout=8000)
-                                self.log("[OK] Paginacion: 100 registros")
-                                paginacion_ok = True
-                            else:
-                                # Si no hay 100, buscar el máximo disponible
-                                page.keyboard.press('Escape')
-                except Exception as e:
-                    print(f"    [!] Paginacion: {str(e)[:50]}")
+                    # Login (si ya hay sesión persistente no aparece el formulario)
+                    campo_usuario = page.query_selector('input[id="input-15"]')
+                    if campo_usuario:
+                        self.log("[LOGIN] Llenando credenciales...")
+                        page.fill('input[id="input-15"]', usuario)
+                        page.fill('input[id="input-19"]', contraseña)
+                        self.log("[IMPORTANTE] Resuelve el CAPTCHA manualmente en el navegador "
+                                 "y pulsa Ingresar; la descarga continúa sola al entrar")
+                    else:
+                        self.log("[OK] Sesion activa - No se requiere CAPTCHA")
 
-                if not paginacion_ok:
-                    self.log("[INFO] Usando paginacion por defecto")
+                    # Espera (hasta 3 min) a que el usuario complete CAPTCHA/login.
+                    self._esperar_sesion(page)
+                    self.log("[OK] Sesion iniciada")
 
-                # Volver arriba
-                page.evaluate('window.scrollTo(0, 0)')
-                time.sleep(0.3)
+                    self.log("[NAVEGACION] Cuentas medicas -> Informe prestador")
+                    self._abrir_informe_prestador(page)
 
-                # Contar archivos Excel
-                iconos_excel = page.query_selector_all('.mdi-file-excel')
-                total = len(iconos_excel)
+                    total = len(tramos)
+                    self.log(f"[INFO] Rango {desde:%d/%m/%Y} - {hasta:%d/%m/%Y}: "
+                             f"{total} consulta(s) de máx. {MAX_DIAS_RANGO} días")
 
-                print(f"[INFO] Archivos Excel encontrados en página actual: {total}")
-                self.log(f"[INFO] Archivos encontrados: {total}")
-
-                if total == 0:
-                    self.log("[ADVERTENCIA] No se encontraron archivos para descargar")
-                    context.close()
-                    return {"success": False, "files": 0, "message": "No se encontraron archivos Excel"}
-
-                descargas_exitosas = 0
-                descargas_fallidas = 0
-                pagina_actual = 1
-
-                # SIN LIMITE DE PAGINAS - Descargar TODO
-                while True:
-                    self.log(f"[PAGINA {pagina_actual}] Procesando...")
-
-                    # Re-obtener iconos después de cada cambio de página
-                    time.sleep(0.3)
-                    iconos_pagina = page.query_selector_all('.mdi-file-excel')
-                    cantidad_pagina = len(iconos_pagina)
-
-                    if cantidad_pagina == 0:
-                        self.log("[OK] No hay más archivos")
-                        break
-
-                    # Descargar TODOS los archivos de esta página
-                    for i in range(cantidad_pagina):
+                    for i, (t_desde, t_hasta) in enumerate(tramos, start=1):
+                        etiqueta = f"{t_desde:%d/%m/%Y} - {t_hasta:%d/%m/%Y}"
+                        self.log(f"[TRAMO {i}/{total}] Descargando {etiqueta}...")
                         try:
-                            iconos = page.query_selector_all('.mdi-file-excel')
-
-                            if i >= len(iconos):
-                                continue
-
-                            icono_actual = iconos[i]
-                            boton = page.evaluate_handle('(icono) => icono.closest("button")', icono_actual).as_element()
-
-                            if not boton:
-                                continue
-
-                            boton.scroll_into_view_if_needed()
-
-                            with page.expect_download(timeout=15000) as download_info:
-                                boton.click()
-
-                            download = download_info.value
-                            nombre = download.suggested_filename or f"fomag_p{pagina_actual}_{i+1}.xlsx"
-                            ruta_final = os.path.join(self.download_dir, nombre)
-
-                            # Evitar duplicados
-                            contador = 1
-                            nombre_base, extension = os.path.splitext(nombre)
-                            while os.path.exists(ruta_final):
-                                ruta_final = os.path.join(self.download_dir, f"{nombre_base}_{contador}{extension}")
-                                contador += 1
-
-                            download.save_as(ruta_final)
-                            descargas_exitosas += 1
-
-                            # Reportar progreso cada 10 archivos
-                            if descargas_exitosas % 10 == 0:
-                                self.log(f"[PROGRESO] {descargas_exitosas} archivos descargados...")
-
-                            time.sleep(0.15)
-
-                        except Exception:
-                            descargas_fallidas += 1
+                            ruta = self._descargar_tramo(page, t_desde, t_hasta)
+                            archivos.append(ruta)
+                            self.log(f"[OK] TRAMO {i}/{total}: {os.path.basename(ruta)}")
+                        except Exception as tramo_error:
+                            fallidos.append(etiqueta)
+                            self.log(f"[ADVERTENCIA] TRAMO {i}/{total} ({etiqueta}) sin descarga: "
+                                     f"{str(tramo_error)[:80]}")
                             continue
-
-                    self.log(f"[PAGINA {pagina_actual}] {descargas_exitosas} descargados hasta ahora")
-
-                    # Ir a la siguiente página
-                    try:
-                        time.sleep(0.3)
-
-                        # Buscar botón siguiente
-                        btn_siguiente = page.query_selector('button.v-pagination__navigation:has(i.mdi-chevron-right)')
-
-                        if not btn_siguiente:
-                            btns_nav = page.query_selector_all('button.v-pagination__navigation')
-                            if len(btns_nav) >= 2:
-                                btn_siguiente = btns_nav[-1]
-
-                        if btn_siguiente:
-                            disabled_attr = btn_siguiente.get_attribute('disabled')
-                            clase = btn_siguiente.get_attribute('class') or ''
-
-                            es_disabled = disabled_attr is not None or 'disabled' in clase.lower()
-
-                            if es_disabled:
-                                self.log("[OK] Última página alcanzada")
-                                break
-
-                            # Click en siguiente
-                            btn_siguiente.scroll_into_view_if_needed()
-                            time.sleep(0.2)
-                            btn_siguiente.click()
-
-                            # Esperar carga de nueva página
-                            try:
-                                page.wait_for_load_state('networkidle', timeout=10000)
-                            except:
-                                pass
-
-                            time.sleep(0.5)
-                            pagina_actual += 1
-                            self.log(f"[>>] Avanzando a página {pagina_actual}")
-                        else:
-                            self.log("[OK] No hay más páginas")
-                            break
-                            break
-
-                    except Exception as nav_error:
-                        print(f"    [ERROR] Navegación: {str(nav_error)[:80]}")
-                        self.log(f"[ERROR NAV] {str(nav_error)[:60]}")
-                        # No hacer break inmediato, intentar una vez más
-                        time.sleep(1)
-                        continue
-
-                # Resumen final
-                print("\n" + "="*80)
-                print(">>> DESCARGA COMPLETADA")
-                print(f">>> Exitosas: {descargas_exitosas} | Fallidas: {descargas_fallidas}")
-                print(f">>> Ubicacion: {self.download_dir}")
-                print("="*80 + "\n")
-
-                self.log(f"[COMPLETADO] {descargas_exitosas} archivos descargados en: {self.download_dir}")
-                time.sleep(2)
-                context.close()
-
-                return {
-                    "success": True,
-                    "files": descargas_exitosas,
-                    "message": f"Descargados {descargas_exitosas} archivos en {self.download_dir}"
-                }
-
+                finally:
+                    time.sleep(1)
+                    context.close()
         except Exception as e:
-            print(f"\n[ERROR GENERAL] {str(e)}\n")
-            return {"success": False, "files": 0, "message": f"Error: {str(e)}"}
+            return {"success": False, "files": len(archivos), "message": f"Error: {str(e)}",
+                    "tramos": len(tramos), "fallidos": fallidos}
+
+        if not archivos:
+            return {
+                "success": False,
+                "files": 0,
+                "message": "No se descargó ningún archivo (sin datos en el rango o filtros no aplicados)",
+                "tramos": len(tramos),
+                "fallidos": fallidos,
+            }
+
+        mensaje = f"Descargados {len(archivos)} de {len(tramos)} archivo(s) en {self.download_dir}"
+        if fallidos:
+            mensaje += f" | Sin descarga: {', '.join(fallidos)}"
+        self.log(f"[COMPLETADO] {mensaje}")
+        return {
+            "success": True,
+            "files": len(archivos),
+            "message": mensaje,
+            "tramos": len(tramos),
+            "fallidos": fallidos,
+        }

@@ -70,7 +70,7 @@ class GuideOverlay:
                     spacing=8,
                     tight=True,
                 ),
-                width=380,
+                width=420,
                 padding=16,
             ),
             elevation=8,
@@ -104,6 +104,14 @@ class GuideOverlay:
             flash=list(entry.get("flash") or []),
             on_flash=on_flash,
         )
+        return True
+
+    def show_eps_help(self, eps_key_or_info: str | dict | None) -> bool:
+        """Muestra las reglas de procesamiento de una EPS en la tarjeta flotante."""
+        entry = guide_content.get_eps_help(eps_key_or_info)
+        if not entry:
+            return False
+        self.start([{"title": entry["title"], "body": entry["body"]}])
         return True
 
     def start(

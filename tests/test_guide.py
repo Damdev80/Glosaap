@@ -53,6 +53,26 @@ class TestGuideContent:
             assert entry["title"].strip()
             assert entry["body"].strip()
 
+    def test_ayuda_cubre_todas_las_eps_habilitadas(self):
+        from app.config.eps_config import get_enabled_eps
+
+        for eps in get_enabled_eps():
+            entry = guide_content.get_eps_help(eps.to_dict())
+            assert entry is not None, f"sin reglas de procesamiento: {eps.name}"
+            assert eps.name.lower() in entry["title"].lower()
+            assert entry["body"].strip()
+            assert "Homologación" in entry["body"]
+            assert "Salida:" in entry["body"]
+
+    def test_get_eps_help_variantes(self):
+        assert guide_content.get_eps_help("Mutualser") is not None
+        assert guide_content.get_eps_help("COOSALUD") is not None
+        assert guide_content.get_eps_help("sanitas_insumos") == guide_content.get_eps_help("sanitas")
+        assert guide_content.get_eps_help({"name": "Previsora"}) is not None
+        assert guide_content.get_eps_help(None) is None
+        assert guide_content.get_eps_help("") is None
+        assert guide_content.get_eps_help("eps_inexistente") is None
+
     def test_checklist_vacio_todo_pendiente_menos_primero(self):
         states = guide_content.checklist_state(0, 0, False)
         assert [s["label"] for s in states] == ["Buscar", "Descargar", "Procesar", "Revisar"]
@@ -153,6 +173,17 @@ class TestGuideOverlay:
         assert btn is not None
         assert btn.tooltip == "Ayuda de esta vista"
 
+    def test_show_eps_help(self, overlay):
+        ov, page, storage = overlay
+        assert ov.show_eps_help("mutualser") is True
+        assert ov.is_visible is True
+        assert len(page.overlay) == 1
+        assert "Mutualser" in ov._title.value
+        assert "SO4801" in ov._body.value
+        ov.close()
+        assert ov.show_eps_help("inexistente") is False
+        assert page.overlay == []
+
 
 class FakeViewPage:
     """Page mínima para instanciar vistas (sin Flet real corriendo)."""
@@ -202,3 +233,50 @@ class TestGuideFlash:
         view.flash_manejar(duration=0.05)
         time.sleep(0.2)
         assert view._manejar_card.color is None
+
+    def test_eps_card_y_screen_boton_interrogacion(self):
+        from app.ui.components.eps_card import EpsCard
+        from app.ui.screens.eps_screen import EpsScreen
+
+        clicked = []
+        helped = []
+        info = {"name": "Mutualser", "filter": "mutualser", "description": "Mutualser EPS"}
+
+        card_sin_help = EpsCard(info, on_click=clicked.append)
+        card_sin_help.build()
+        assert card_sin_help.help_btn is not None
+        assert card_sin_help.help_btn.visible is False
+
+        card_con_help = EpsCard(info, on_click=clicked.append, on_help=helped.append)
+        card_con_help.build()
+        assert card_con_help.help_btn is not None
+        assert card_con_help.help_btn.visible is True
+        card_con_help._handle_help(None)
+        assert helped == [info]
+        assert clicked == []
+
+        eps_helped = []
+        screen = EpsScreen(FakeViewPage(), on_eps_help=eps_helped.append)
+        assert len(screen.eps_cards) >= 4
+        assert all(c.help_btn.visible is True for c in screen.eps_cards)
+        screen.eps_cards[0]._handle_help(None)
+        assert len(eps_helped) == 1
+
+    def test_messages_view_boton_reglas_eps(self):
+        from app.ui.views.messages_view import MessagesView
+
+        seen_eps = []
+        view = MessagesView(
+            FakeViewPage(),
+            on_back=None,
+            on_refresh=None,
+            on_download_selected=None,
+            on_process=None,
+            on_eps_guide=seen_eps.append,
+        )
+        assert view.process_eps_help_btn.visible is False
+        view.process_eps_btn.data = "sanitas"
+        view.show_process_button(True)
+        assert view.process_eps_help_btn.visible is True
+        view.process_eps_help_btn.on_click(None)
+        assert seen_eps == ["sanitas"]
