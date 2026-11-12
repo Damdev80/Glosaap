@@ -167,6 +167,21 @@ class TestFomagScraperBrowserSetup:
         # Should set environment variable
         assert 'PLAYWRIGHT_BROWSERS_PATH' in os.environ
 
+    @patch('app.service.web_scraper.fomag_scraper.find_system_browser')
+    @patch('os.path.exists', return_value=False)
+    def test_ensure_browsers_uses_system_chrome_or_edge(self, mock_exists, mock_sys_browser):
+        """Usa Chrome o Edge del sistema si no hay Chromium descargado en AppData"""
+        mock_sys_browser.return_value = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+
+        scraper = FomagScraper.__new__(FomagScraper)
+        scraper.download_dir = "/tmp"
+        scraper.progress_callback = print
+        scraper.perfil_dir = "/tmp/profile"
+
+        scraper._ensure_playwright_browsers()
+
+        assert scraper.executable_path == r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+
 
 class TestFechasInformePrestador:
     """Validación y división de rangos (el portal limita a 14 días)."""

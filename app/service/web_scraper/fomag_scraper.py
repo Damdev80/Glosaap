@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta
 
 from playwright.sync_api import sync_playwright
 
-from .base_scraper import BaseScraper
+from .base_scraper import BaseScraper, auto_install_chromium, find_system_browser
 
 # Configurar stdout para UTF-8 en Windows
 if sys.platform == 'win32':
@@ -83,6 +83,7 @@ class FomagScraper(BaseScraper):
 
         self.perfil_dir = os.path.abspath(perfil_dir)
         os.makedirs(self.perfil_dir, exist_ok=True)
+        self.executable_path: str | None = None
 
         # Asegurar que los navegadores de Playwright estén instalados
         self._ensure_playwright_browsers()
@@ -117,7 +118,21 @@ class FomagScraper(BaseScraper):
                 print(f"[ADVERTENCIA] Ruta de browsers no existe: {browsers_path}")
 
             if chromium_found:
+                self.executable_path = None
                 return  # Todo OK
+
+            # Si no hay Chromium de Playwright descargado, usar Chrome o Edge del sistema
+            system_browser = find_system_browser()
+            if system_browser:
+                self.executable_path = system_browser
+                print(f"[OK] Usando navegador del sistema: {system_browser}")
+                return
+
+            # Intentar descarga automática de Chromium con el driver interno
+            if auto_install_chromium(getattr(self, "log", None)):
+                self.executable_path = None
+                print("[OK] Navegador Chromium instalado automáticamente")
+                return
 
             # Fallback: intentar lanzar el navegador directamente
             print("[INFO] Intentando verificar Playwright directamente...")
@@ -274,18 +289,23 @@ class FomagScraper(BaseScraper):
 
         try:
             with sync_playwright() as p:
-                context = p.chromium.launch_persistent_context(
-                    self.perfil_dir,
-                    headless=False,
-                    accept_downloads=True,
-                    viewport={'width': 1920, 'height': 1080},
-                    args=[
+                launch_kwargs = {
+                    "headless": False,
+                    "accept_downloads": True,
+                    "viewport": {'width': 1920, 'height': 1080},
+                    "args": [
                         '--disable-blink-features=AutomationControlled',
                         '--no-sandbox',
                         '--start-maximized',
                         '--disable-gpu',
                         '--disable-dev-shm-usage',
-                    ]
+                    ],
+                }
+                if getattr(self, "executable_path", None):
+                    launch_kwargs["executable_path"] = self.executable_path
+                context = p.chromium.launch_persistent_context(
+                    self.perfil_dir,
+                    **launch_kwargs,
                 )
                 try:
                     page = context.pages[0] if context.pages else context.new_page()

@@ -6,6 +6,12 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.11.34] - 2026-11-12
+
+### 🐛 Correcciones
+- **Descarga Web (Fomag y Familiar) en equipos sin Chromium de Playwright**: cuando un PC de usuario no tiene el navegador propio de Playwright descargado en `%APPDATA%\Glosaap\browsers`, los scrapers detectan y utilizan automáticamente el **Google Chrome** o **Microsoft Edge** ya instalado en Windows (`executable_path`), o en su defecto autoinstalan Chromium mediante el driver interno embebido, evitando el error `chrome-headless-shell.exe doesn't exist`.
+
+
 ## [0.11.33] - 2026-11-12
 
 ### ✨ Nuevas Características

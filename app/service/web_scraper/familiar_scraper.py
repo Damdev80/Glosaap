@@ -6,7 +6,7 @@ import time
 
 from playwright.sync_api import sync_playwright
 
-from .base_scraper import BaseScraper
+from .base_scraper import BaseScraper, auto_install_chromium, find_system_browser
 
 
 class FamiliarScraper(BaseScraper):
@@ -15,6 +15,7 @@ class FamiliarScraper(BaseScraper):
     def __init__(self, download_dir: str = None, progress_callback=None):
         super().__init__(download_dir, progress_callback)
         self.url = "https://eps.familiardecolombia.com/sie/loginIps.xhtml"
+        self.executable_path: str | None = None
         self._ensure_playwright_browsers()
 
     def _ensure_playwright_browsers(self):
@@ -31,8 +32,21 @@ class FamiliarScraper(BaseScraper):
         if browsers_path and os.path.exists(browsers_path):
             for item in os.listdir(browsers_path):
                 if item.startswith('chromium') and not item.startswith('chromium_headless'):
+                    self.executable_path = None
                     print("[OK] Navegador Chromium encontrado")
                     return
+
+        # Usar Chrome o Edge del sistema si están instalados
+        system_browser = find_system_browser()
+        if system_browser:
+            self.executable_path = system_browser
+            print(f"[OK] Usando navegador del sistema: {system_browser}")
+            return
+
+        # Intentar descarga automática de Chromium con el driver interno
+        if auto_install_chromium(getattr(self, "log", None)):
+            self.executable_path = None
+            return
 
         # Fallback: intentar lanzar
         try:
@@ -63,9 +77,9 @@ class FamiliarScraper(BaseScraper):
         try:
             with sync_playwright() as p:
                 # Navegador optimizado
-                browser = p.chromium.launch(
-                    headless=False,
-                    args=[
+                launch_kwargs = {
+                    "headless": False,
+                    "args": [
                         '--disable-blink-features=AutomationControlled',
                         '--no-sandbox',
                         '--disable-dev-shm-usage',
@@ -74,8 +88,11 @@ class FamiliarScraper(BaseScraper):
                         '--disable-infobars',
                         '--disable-notifications',
                         '--blink-settings=imagesEnabled=false'
-                    ]
-                )
+                    ],
+                }
+                if getattr(self, "executable_path", None):
+                    launch_kwargs["executable_path"] = self.executable_path
+                browser = p.chromium.launch(**launch_kwargs)
 
                 context = browser.new_context(
                     accept_downloads=True,
