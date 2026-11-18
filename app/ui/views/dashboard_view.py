@@ -15,7 +15,7 @@ from app.ui.components.settings_dialog import show_settings_dialog
 class DashboardView:
     """Vista del dashboard con las 3 cards principales"""
 
-    def __init__(self, page: ft.Page, assets_dir: str, on_card_click=None, on_tools_click=None, on_logout=None, on_web_download=None, on_guide=None):
+    def __init__(self, page: ft.Page, assets_dir: str, on_card_click=None, on_tools_click=None, on_logout=None, on_web_download=None, on_guide=None, on_analytics_click=None):
         self.page = page
         self.assets_dir = assets_dir
         self.on_card_click = on_card_click
@@ -23,6 +23,7 @@ class DashboardView:
         self.on_logout = on_logout
         self.on_web_download = on_web_download
         self.on_guide = on_guide
+        self.on_analytics_click = on_analytics_click
 
         # Componentes de loading
         self.loading_overlay = LoadingOverlay(page)
@@ -221,6 +222,18 @@ class DashboardView:
             top=70,
         )
 
+        analytics_btn = ft.Container(
+            content=ft.ElevatedButton(
+                content=ft.Row([
+                    ft.Icon(ft.Icons.INSIGHTS, size=20, color=ft.Colors.PRIMARY),
+                    ft.Text("Métricas / Dashboard", size=13, weight=ft.FontWeight.W_500)
+                ], spacing=6),
+                on_click=lambda e: self.on_analytics_click() if self.on_analytics_click else None
+            ),
+            right=20,
+            top=125,
+        )
+
         version_btn = ft.Container(
             content=ft.TextButton(
                 content=ft.Row([
@@ -254,6 +267,7 @@ class DashboardView:
                 ),
                 tools_btn,
                 web_btn,
+                analytics_btn,
                 version_btn,
                 settings_btn,
             ], expand=True),

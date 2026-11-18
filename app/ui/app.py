@@ -46,6 +46,7 @@ from app.ui.styles import (
     update_colors,
 )
 from app.ui.views import DashboardView, LoginView, MessagesView, ToolsView
+from app.ui.views.analytics_dashboard_view import AnalyticsDashboardView
 from app.ui.views.homologacion_view import HomologacionView
 from app.ui.views.homologador_manual_view import HomologadorManualView
 from app.ui.views.method_selection_view import MethodSelectionView
@@ -400,6 +401,13 @@ def main(page: ft.Page):
         if ctl is None:
             return
         ctl.go_to_web_download()
+
+    def go_to_analytics():
+        """Navega al dashboard analítico vía NavigationController."""
+        ctl = _nav()
+        if ctl is None:
+            return
+        ctl.go_to_analytics()
 
     def go_to_eps_selection():
         """Navega a selección de EPS vía NavigationController."""
@@ -1240,7 +1248,8 @@ def main(page: ft.Page):
         on_tools_click=go_to_tools,
         on_logout=lambda: go_to_login(logout=True),
         on_web_download=go_to_web_download,
-        on_guide=replay_tour
+        on_guide=replay_tour,
+        on_analytics_click=go_to_analytics,
     )
 
     tools_view = ToolsView(
@@ -1310,6 +1319,11 @@ def main(page: ft.Page):
         on_eps_help=show_eps_guide_for,
     )
 
+    analytics_view = AnalyticsDashboardView(
+        page=page,
+        on_back=go_to_dashboard,
+    )
+
     # Inicializar NavigationController con todas las vistas (canal único)
     views_dict = {
         "login": login_view,
@@ -1321,7 +1335,8 @@ def main(page: ft.Page):
         "homologador_manual": homologador_manual_view,
         "web_download": web_download_view,
         "eps": eps_screen,
-        "messages": messages_view
+        "messages": messages_view,
+        "analytics": analytics_view,
     }
     navigation_controller = NavigationController(page, views_dict, ui_state)
     nav_holder["controller"] = navigation_controller
@@ -1332,6 +1347,7 @@ def main(page: ft.Page):
     mix_excel_view.navigation_controller = navigation_controller
     messages_view.navigation_controller = navigation_controller
     eps_screen.navigation_controller = navigation_controller
+    analytics_view.navigation_controller = navigation_controller
     # Sincronizar headers que capturaron None al construirse
     for _v in (tools_view, homologacion_view, mix_excel_view):
         try:
@@ -1481,6 +1497,7 @@ def main(page: ft.Page):
                 web_download_view.container,
                 eps_screen.container,
                 messages_view.container,
+                analytics_view.container,
             ] if control is not None
         ] + [global_settings_btn], expand=True)  # Agregar el botón de config al final del Stack
     )

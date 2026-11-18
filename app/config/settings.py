@@ -136,7 +136,10 @@ def setup_playwright_browsers():
         appdata = os.environ.get('APPDATA', os.path.expanduser('~'))
         browsers_path = os.path.join(appdata, 'Glosaap', 'browsers')
         os.environ['PLAYWRIGHT_BROWSERS_PATH'] = browsers_path
-        os.makedirs(browsers_path, exist_ok=True)
+        try:
+            os.makedirs(browsers_path, exist_ok=True)
+        except OSError:
+            pass
         return browsers_path
     return None
 
@@ -174,6 +177,17 @@ def ensure_dir(path: str) -> bool:
         return True
     except Exception:
         return False
+
+
+# ==================== CONFIGURACIÓN DE LA API REST (GLOSAPP) ====================
+
+# URL base por defecto del servidor API (red interna mercurio)
+DEFAULT_GLOSAPP_API_URL = os.environ.get(
+    "GLOSAPP_API_URL", "http://10.10.10.18:8081/glosapp/api/v1"
+)
+
+# API Key por defecto (normalmente configurada desde la UI o variable de entorno)
+DEFAULT_GLOSAPP_API_KEY = os.environ.get("GLOSAPP_API_KEY", "")
 
 
 # ==================== INICIALIZACIÓN ====================

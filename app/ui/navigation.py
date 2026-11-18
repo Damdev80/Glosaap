@@ -32,6 +32,7 @@ class NavigationController:
         "homologador_manual": "tools",
         "homologacion": "tools",
         "web_download": "dashboard",
+        "analytics": "dashboard",
         "dashboard": "login",
         "method_selection": "login",
     }
@@ -143,6 +144,10 @@ class NavigationController:
     def go_to_web_download(self):
         """Navega a descarga web"""
         self.go_to("web_download")
+
+    def go_to_analytics(self):
+        """Navega al dashboard analítico y de trazabilidad"""
+        self.go_to("analytics")
 
     def go_to_eps_selection(self):
         """Navega a selección de EPS"""
