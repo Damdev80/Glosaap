@@ -323,11 +323,11 @@ class MixExcelView:
             # Guardar
             save_success, save_message = self.service.guardar_destino()
             if save_success:
-                self._show_status(f"✅ {message}", ft.Colors.GREEN)
+                self._show_status(str(message), ft.Colors.GREEN)
             else:
-                self._show_status(f"⚠️ {save_message}", ft.Colors.RED)
+                self._show_status(str(save_message), ft.Colors.RED)
         else:
-            self._show_status(f"❌ {message}", ft.Colors.RED)
+            self._show_status(str(message), ft.Colors.RED)
 
         self.page.update()
 

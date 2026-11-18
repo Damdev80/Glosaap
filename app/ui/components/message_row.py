@@ -85,7 +85,7 @@ class MessageRow:
             self.status_icon.name = ft.Icons.ERROR_OUTLINE
             self.status_icon.color = ft.Colors.RED
             self.status_text.color = ft.Colors.RED
-        elif "✅" in text or "descargado" in text.lower() or "archivo" in text.lower():
+        elif "descargado" in text.lower() or "archivo" in text.lower():
             self.status_icon.name = ft.Icons.CHECK_CIRCLE
             self.status_icon.color = ft.Colors.GREEN
             self.status_text.color = ft.Colors.GREEN

@@ -35,6 +35,7 @@ from app.ui.business_logic import MessageFilter
 from app.ui.components.alert_dialog import AlertDialog
 from app.ui.components.guide_overlay import GuideOverlay
 from app.ui.components.settings_dialog import show_settings_dialog
+from app.ui.components.sidebar import AppSidebar
 from app.ui.components.update_dialog import UpdateChecker
 from app.ui.navigation import NavigationController
 from app.ui.screens.eps_screen import EpsScreen
@@ -461,7 +462,7 @@ def main(page: ft.Page):
             # Mostrar alerta usando overlay (Flet moderno)
             dialog = ft.AlertDialog(
                 modal=True,
-                title=ft.Text("🚧 En Desarrollo"),
+                title=ft.Text("En desarrollo"),
                 content=ft.Text(f"'{nombre_funcion}' estará disponible próximamente."),
                 actions=[ft.TextButton("OK", on_click=_cerrar_dialogo)]
             )
@@ -547,7 +548,7 @@ def main(page: ft.Page):
                     logger.warning("Error limpiando temporales: %s", e)
 
                 messages_view.refresh_checklist(0, 0, False)
-                messages_view.set_loading(True, "🔍 Buscando correos...")
+                messages_view.set_loading(True, "Buscando correos...")
 
                 all_msgs = []
                 # Dedupe por ID de mensaje dentro de esta búsqueda.
@@ -561,7 +562,7 @@ def main(page: ft.Page):
                     filtered = filter_messages_by_eps(all_msgs)
                     # Mostrar mensajes en tiempo real
                     messages_view.show_messages(filtered, search_info)
-                    messages_view.set_loading(True, f"🔍 Encontrados {len(all_msgs)} correo(s), mostrando {len(filtered)} filtrados...")
+                    messages_view.set_loading(True, f"Encontrados {len(all_msgs)} correo(s), mostrando {len(filtered)} filtrados...")
 
                     # Descargar adjuntos solo si matchea la EPS y no es duplicado.
                     if msg in filtered and not messages_view.is_cancelled(load_seq):
@@ -581,7 +582,7 @@ def main(page: ft.Page):
                             return
                         msg_id = msg.get("id")
                         if msg_id:
-                            messages_view.update_message_status(msg_id, "📥 Descargando...")
+                            messages_view.update_message_status(msg_id, "Descargando...")
                             try:
                                 email_date_str = None
                                 parsed = _parse_email_date(msg.get('date'))
@@ -592,18 +593,18 @@ def main(page: ft.Page):
                                 files = email_service.download_message_attachments(msg_id, email_date=email_date_str)
 
                                 if files:
-                                    messages_view.update_message_status(msg_id, f"✅ {len(files)} archivo(s)")
+                                    messages_view.update_message_status(msg_id, f"{len(files)} archivo(s)")
                                 else:
-                                    messages_view.update_message_status(msg_id, "⚠️ Sin adjuntos")
+                                    messages_view.update_message_status(msg_id, "Sin adjuntos")
                             except Exception as e:
                                 error_msg = str(e)
                                 # Mostrar mensaje corto en UI, detalle en logs
                                 if "No se pudo descargar" in error_msg or "timeout" in error_msg.lower():
-                                    messages_view.update_message_status(msg_id, "❌ Error descarga", is_error=True)
+                                    messages_view.update_message_status(msg_id, "Error de descarga", is_error=True)
                                 elif "No tiene adjuntos" in error_msg:
-                                    messages_view.update_message_status(msg_id, "⚠️ Sin adjuntos")
+                                    messages_view.update_message_status(msg_id, "Sin adjuntos")
                                 else:
-                                    messages_view.update_message_status(msg_id, "❌ Error", is_error=True)
+                                    messages_view.update_message_status(msg_id, "Error", is_error=True)
                                 logger.warning("Error procesando correo %s: %s", msg_id, error_msg)
 
                 # Palabra clave de búsqueda según EPS (centralizada en MessageFilter)
@@ -631,7 +632,7 @@ def main(page: ft.Page):
 
                 # Cancelado entre pasos: abortar limpio sin aplicar resultados tardíos
                 if messages_view.is_cancelled(load_seq):
-                    messages_view.set_loading(False, "⚠️ Procesado cancelado")
+                    messages_view.set_loading(False, "Procesado cancelado")
                     messages_view.show_toast("Procesado cancelado", is_success=False)
                     return
 
@@ -648,7 +649,7 @@ def main(page: ft.Page):
                 excel_count = len(email_service.get_excel_files())
                 messages_view.refresh_checklist(len(msgs), excel_count, False)
                 if msgs:
-                    messages_view.set_loading(False, f"✅ {len(msgs)} correo(s) | 📁 {excel_count} Excel listos para procesar")
+                    messages_view.set_loading(False, f"{len(msgs)} correo(s) | {excel_count} Excel listos para procesar")
 
                     # Mostrar diálogo de búsqueda completada
                     eps_name = (ui_state.selected_eps or {}).get("name", "")
@@ -675,9 +676,9 @@ def main(page: ft.Page):
 
             except Exception as ex:
                 if messages_view.is_cancelled(load_seq):
-                    messages_view.set_loading(False, "⚠️ Procesado cancelado")
+                    messages_view.set_loading(False, "Procesado cancelado")
                     return
-                messages_view.set_loading(False, f"❌ Error: {str(ex)}")
+                messages_view.set_loading(False, f"Error: {str(ex)}")
                 AlertDialog.show_error(
                     page=page,
                     title="Error en la búsqueda",
@@ -697,7 +698,7 @@ def main(page: ft.Page):
 
                 messages_view.download_selected_btn.disabled = True
                 # El refresh lo hace set_loading/update_message_status (sin page.update directo)
-                messages_view.set_loading(True, f"📥 Descargando adjuntos de {len(selected_ids)} correo(s)...")
+                messages_view.set_loading(True, f"Descargando adjuntos de {len(selected_ids)} correo(s)...")
 
                 downloaded = 0
                 total_files = 0
@@ -736,26 +737,26 @@ def main(page: ft.Page):
                                 total_files += len(files)
                                 messages_view.update_message_status(
                                     msg["id"],
-                                    f"✅ {len(files)} archivo(s)"
+                                    f"{len(files)} archivo(s)"
                                 )
                             else:
                                 messages_view.update_message_status(msg["id"], "Sin adjuntos")
                         except Exception:
-                            messages_view.update_message_status(msg["id"], "❌ Error", is_error=True)
+                            messages_view.update_message_status(msg["id"], "Error", is_error=True)
 
                 messages_view.download_selected_btn.disabled = False
                 if messages_view.is_cancelled(dl_seq):
-                    messages_view.set_loading(False, "⚠️ Procesado cancelado")
+                    messages_view.set_loading(False, "Procesado cancelado")
                     messages_view.show_toast("Procesado cancelado", is_success=False)
                     return
-                messages_view.set_loading(False, f"✅ Descargados {total_files} archivo(s) de {downloaded} correo(s)")
+                messages_view.set_loading(False, f"Descargados {total_files} archivo(s) de {downloaded} correo(s)")
 
             except Exception as ex:
                 messages_view.download_selected_btn.disabled = False
                 if messages_view.is_cancelled(dl_seq):
-                    messages_view.set_loading(False, "⚠️ Procesado cancelado")
+                    messages_view.set_loading(False, "Procesado cancelado")
                     return
-                messages_view.set_loading(False, f"❌ Error: {str(ex)}")
+                messages_view.set_loading(False, f"Error: {str(ex)}")
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -775,7 +776,7 @@ def main(page: ft.Page):
                     messages_view.show_process_button(True)
                     return
 
-                messages_view.set_processing(True, f"🔄 Procesando {eps_type.upper()}...")
+                messages_view.set_processing(True, f"Procesando {eps_type.upper()}...")
 
                 if eps_type == "mutualser":
                     # Usar session_only=True para procesar solo archivos de esta búsqueda
@@ -784,7 +785,7 @@ def main(page: ft.Page):
                     # Verificación simple - solo verificar si hay archivos
                     if not excel_files:
                         messages_view.process_eps_btn.disabled = False
-                        messages_view.set_processing(False, "❌ No hay archivos Excel para procesar")
+                        messages_view.set_processing(False, "No hay archivos Excel para procesar")
 
                         # Mostrar diálogo informativo
                         AlertDialog.show_warning(
@@ -796,25 +797,25 @@ def main(page: ft.Page):
 
                     # Procesar TODOS los archivos Excel encontrados sin confirmación
                     logger.info("Procesando %s archivos Excel automaticamente", len(excel_files))
-                    messages_view.set_processing(True, f"📊 Procesando {len(excel_files)} archivo(s) Excel...")
+                    messages_view.set_processing(True, f"Procesando {len(excel_files)} archivo(s) Excel...")
 
                     resultado = email_service.procesar_mutualser()
 
                     # Cancelado durante el procesado (no divisible): no aplicar tardíos
                     if messages_view.is_cancelled(proc_seq):
                         messages_view.process_eps_btn.disabled = False
-                        messages_view.set_processing(False, "⚠️ Procesado cancelado")
+                        messages_view.set_processing(False, "Procesado cancelado")
                         messages_view.show_toast("Procesado cancelado", is_success=False)
                         messages_view.show_process_button(True)
                         return
 
                     if resultado['success']:
                         resumen = resultado['resumen']
-                        msg = "✅ ¡Archivos generados!\n"
-                        msg += f"📄 {resultado['output_file']}\n"
+                        msg = "¡Archivos generados!\n"
+                        msg += f"Archivo: {resultado['output_file']}\n"
                         if resultado.get('objeciones_file'):
-                            msg += f"📋 {resultado['objeciones_file']}\n"
-                        msg += f"📊 {resumen['total_registros']} registros | {resumen['codigos_homologados']} homologados"
+                            msg += f"Objeciones: {resultado['objeciones_file']}\n"
+                        msg += f"Resumen: {resumen['total_registros']} registros | {resumen['codigos_homologados']} homologados"
                         messages_view.set_processing(False, msg)
                         messages_view.processing_status.color = ft.Colors.GREEN
 
@@ -865,7 +866,7 @@ def main(page: ft.Page):
                             on_view_non_homologated=open_non_homologated if resumen_summary['no_homologados'] > 0 else None
                         )
                     else:
-                        messages_view.set_processing(False, f"❌ Error: {resultado['message']}")
+                        messages_view.set_processing(False, f"Error: {resultado['message']}")
                         messages_view.processing_status.color = ft.Colors.RED
 
                         AlertDialog.show_error(
@@ -885,7 +886,7 @@ def main(page: ft.Page):
                     excel_files = email_service.get_excel_files(exclude_devoluciones=True, session_only=True)
                     if not excel_files:
                         messages_view.process_eps_btn.disabled = False
-                        messages_view.set_processing(False, "❌ No hay archivos Excel para procesar")
+                        messages_view.set_processing(False, "No hay archivos Excel para procesar")
 
                         AlertDialog.show_warning(
                             page=page,
@@ -895,7 +896,7 @@ def main(page: ft.Page):
                         return
 
                     logger.info("COOSALUD procesando %s archivos Excel (devoluciones excluidas)", len(excel_files))
-                    messages_view.set_processing(True, f"📊 Procesando {len(excel_files)} archivo(s) Excel...")
+                    messages_view.set_processing(True, f"Procesando {len(excel_files)} archivo(s) Excel...")
 
                     # Configurar procesador con homologador de Coosalud
                     homologador_path = get_homologador_path("coosalud")
@@ -926,7 +927,7 @@ def main(page: ft.Page):
                     # Cancelado durante el procesado (no divisible): no aplicar tardíos
                     if messages_view.is_cancelled(proc_seq):
                         messages_view.process_eps_btn.disabled = False
-                        messages_view.set_processing(False, "⚠️ Procesado cancelado")
+                        messages_view.set_processing(False, "Procesado cancelado")
                         messages_view.show_toast("Procesado cancelado", is_success=False)
                         messages_view.show_process_button(True)
                         return
@@ -935,7 +936,7 @@ def main(page: ft.Page):
                     messages_view.process_eps_btn.disabled = False
 
                     if result_data:
-                        messages_view.set_processing(False, f"✅ {message}")
+                        messages_view.set_processing(False, str(message))
                         messages_view.processing_status.color = ft.Colors.GREEN
 
                         # Preparar estadísticas desde los DataFrames (resumen post-procesado)
@@ -987,12 +988,12 @@ def main(page: ft.Page):
                             page=page,
                             eps_name="COOSALUD",
                             stats=stats,
-                            output_files=output_files if output_files else [f"📁 {output_dir}"],
+                            output_files=output_files if output_files else [f"{output_dir}"],
                             on_open_folder=open_coosalud_folder,
                             on_view_non_homologated=open_coosalud_non_homologated if _coosalud_no_hom > 0 else None
                         )
                     else:
-                        messages_view.set_processing(False, f"❌ {message}")
+                        messages_view.set_processing(False, f"Error: {message}")
                         messages_view.processing_status.color = ft.Colors.RED
 
                         AlertDialog.show_error(
@@ -1011,7 +1012,7 @@ def main(page: ft.Page):
                     # Verificación simple - solo verificar si hay archivos
                     if not excel_files:
                         messages_view.process_eps_btn.disabled = False
-                        messages_view.set_processing(False, "❌ No hay archivos Excel para procesar")
+                        messages_view.set_processing(False, "No hay archivos Excel para procesar")
 
                         # Mostrar diálogo informativo
                         AlertDialog.show_warning(
@@ -1022,7 +1023,7 @@ def main(page: ft.Page):
                         return
 
                     logger.info("SANITAS procesando %s archivos Excel (devoluciones excluidas)", len(excel_files))
-                    messages_view.set_processing(True, f"📊 Procesando {len(excel_files)} archivo(s) Excel...")
+                    messages_view.set_processing(True, f"Procesando {len(excel_files)} archivo(s) Excel...")
 
                     # Fecha del correo más reciente (helper centralizado)
                     email_date = _latest_email_date_str(ui_state.found_messages)
@@ -1031,7 +1032,7 @@ def main(page: ft.Page):
                     # Cancelado durante el procesado (no divisible): no aplicar tardíos
                     if messages_view.is_cancelled(proc_seq):
                         messages_view.process_eps_btn.disabled = False
-                        messages_view.set_processing(False, "⚠️ Procesado cancelado")
+                        messages_view.set_processing(False, "Procesado cancelado")
                         messages_view.show_toast("Procesado cancelado", is_success=False)
                         messages_view.show_process_button(True)
                         return
@@ -1041,11 +1042,11 @@ def main(page: ft.Page):
 
                     if resultado['success']:
                         resumen = resultado['resumen']
-                        msg = "✅ ¡Archivos generados!\n"
-                        msg += f"📄 {resultado['output_file']}\n"
+                        msg = "¡Archivos generados!\n"
+                        msg += f"Archivo: {resultado['output_file']}\n"
                         if resultado.get('objeciones_file'):
-                            msg += f"📋 {resultado['objeciones_file']}\n"
-                        msg += f"📊 {resumen['total_registros']} registros | {resumen['codigos_homologados']} homologados"
+                            msg += f"Objeciones: {resultado['objeciones_file']}\n"
+                        msg += f"Resumen: {resumen['total_registros']} registros | {resumen['codigos_homologados']} homologados"
                         messages_view.set_processing(False, msg)
                         messages_view.processing_status.color = ft.Colors.GREEN
 
@@ -1096,7 +1097,7 @@ def main(page: ft.Page):
                             on_view_non_homologated=open_sanitas_non_homologated if resumen_summary['no_homologados'] > 0 else None
                         )
                     else:
-                        messages_view.set_processing(False, f"❌ Error: {resultado['message']}")
+                        messages_view.set_processing(False, f"Error: {resultado['message']}")
                         messages_view.processing_status.color = ft.Colors.RED
 
                         AlertDialog.show_error(
@@ -1121,7 +1122,7 @@ def main(page: ft.Page):
 
                     if not pdf_files:
                         messages_view.process_eps_btn.disabled = False
-                        messages_view.set_processing(False, "❌ No hay archivos PDF para procesar")
+                        messages_view.set_processing(False, "No hay archivos PDF para procesar")
 
                         AlertDialog.show_warning(
                             page=page,
@@ -1131,14 +1132,14 @@ def main(page: ft.Page):
                         return
 
                     logger.info("PREVISORA procesando %s archivos PDF", len(pdf_files))
-                    messages_view.set_processing(True, f"📊 Procesando {len(pdf_files)} archivo(s) PDF...")
+                    messages_view.set_processing(True, f"Procesando {len(pdf_files)} archivo(s) PDF...")
 
                     email_date = _latest_email_date_str(ui_state.found_messages)
                     resultado = email_service.procesar_previsora(email_date=email_date)
 
                     if messages_view.is_cancelled(proc_seq):
                         messages_view.process_eps_btn.disabled = False
-                        messages_view.set_processing(False, "⚠️ Procesado cancelado")
+                        messages_view.set_processing(False, "Procesado cancelado")
                         messages_view.show_toast("Procesado cancelado", is_success=False)
                         messages_view.show_process_button(True)
                         return
@@ -1147,11 +1148,11 @@ def main(page: ft.Page):
 
                     if resultado['success']:
                         resumen = resultado['resumen']
-                        msg = "✅ ¡Archivos generados!\n"
-                        msg += f"📄 {resultado['output_file']}\n"
+                        msg = "¡Archivos generados!\n"
+                        msg += f"Archivo: {resultado['output_file']}\n"
                         if resultado.get('objeciones_file'):
-                            msg += f"📋 {resultado['objeciones_file']}\n"
-                        msg += f"📊 {resumen['total_registros']} filas | {resumen['facturas_unicas']} facturas | {resumen['codigos_homologados']} homologados"
+                            msg += f"Objeciones: {resultado['objeciones_file']}\n"
+                        msg += f"Resumen: {resumen['total_registros']} filas | {resumen['facturas_unicas']} facturas | {resumen['codigos_homologados']} homologados"
                         messages_view.set_processing(False, msg)
                         messages_view.processing_status.color = ft.Colors.GREEN
 
@@ -1195,12 +1196,12 @@ def main(page: ft.Page):
                             page=page,
                             eps_name="PREVISORA",
                             stats=resumen_summary,
-                            output_files=output_files if output_files else [f"📁 {resumen_summary.get('output_dir', '')}"],
+                            output_files=output_files if output_files else [f"{resumen_summary.get('output_dir', '')}"],
                             on_open_folder=open_previsora_folder,
                             on_view_non_homologated=open_previsora_non_homologated if resumen_summary['no_homologados'] > 0 else None,
                         )
                     else:
-                        messages_view.set_processing(False, f"❌ Error: {resultado['message']}")
+                        messages_view.set_processing(False, f"Error: {resultado['message']}")
                         messages_view.processing_status.color = ft.Colors.RED
 
                         AlertDialog.show_error(
@@ -1215,10 +1216,10 @@ def main(page: ft.Page):
             except Exception as ex:
                 if messages_view.is_cancelled(proc_seq):
                     messages_view.process_eps_btn.disabled = False
-                    messages_view.set_processing(False, "⚠️ Procesado cancelado")
+                    messages_view.set_processing(False, "Procesado cancelado")
                     messages_view.show_process_button(True)
                     return
-                messages_view.set_processing(False, f"❌ Error: {str(ex)}")
+                messages_view.set_processing(False, f"Error: {str(ex)}")
                 messages_view.processing_status.color = ft.Colors.RED
                 messages_view.process_eps_btn.disabled = False
                 # Refresca vía canal de la vista
@@ -1241,6 +1242,26 @@ def main(page: ft.Page):
         assets_dir=ASSETS_DIR
     )
 
+    def _trigger_update_check():
+        chk = update_holder.get("checker")
+        if chk is not None:
+            try:
+                chk.check_updates(manual=True)
+            except Exception:
+                pass
+
+    sidebar = AppSidebar(
+        page=page,
+        on_dashboard_click=go_to_dashboard,
+        on_glosas_click=lambda: on_dashboard_action("manejar"),
+        on_web_download_click=go_to_web_download,
+        on_tools_click=go_to_tools,
+        on_settings_click=lambda: show_settings_dialog(page),
+        on_guide_click=replay_tour,
+        on_logout_click=lambda: go_to_login(logout=True),
+        on_check_updates_click=_trigger_update_check,
+    )
+
     dashboard_view = DashboardView(
         page=page,
         assets_dir=ASSETS_DIR,
@@ -1250,6 +1271,7 @@ def main(page: ft.Page):
         on_web_download=go_to_web_download,
         on_guide=replay_tour,
         on_analytics_click=go_to_analytics,
+        sidebar=sidebar,
     )
 
     tools_view = ToolsView(
@@ -1274,7 +1296,7 @@ def main(page: ft.Page):
     web_download_view = WebDownloadView(
         page=page,
         assets_dir=ASSETS_DIR,
-        on_back=go_to_method_selection,  # Volver a selección de método
+        on_back=go_to_dashboard,  # Volver al dashboard analítico
         on_guide=lambda: show_guide_for("web_download")
     )
 
@@ -1324,6 +1346,30 @@ def main(page: ft.Page):
         on_back=go_to_dashboard,
     )
 
+    # Contenedor Stack interno para las vistas de contenido
+    main_content_stack = ft.Stack([
+        dashboard_view.container,
+        tools_view.container,
+        homologacion_view.container,
+        mix_excel_view.container,
+        homologador_manual_view.container,
+        web_download_view.container,
+        eps_screen.container,
+        messages_view.container,
+        analytics_view.container,
+        method_selection_view.container,
+    ], expand=True)
+
+    # Shell persistente con Sidebar que nunca desaparece
+    main_shell = ft.Row([
+        sidebar.container,
+        ft.Container(
+            content=main_content_stack,
+            expand=True,
+            bgcolor=ft.Colors.SURFACE,
+        ),
+    ], expand=True, spacing=0, visible=False)
+
     # Inicializar NavigationController con todas las vistas (canal único)
     views_dict = {
         "login": login_view,
@@ -1338,7 +1384,13 @@ def main(page: ft.Page):
         "messages": messages_view,
         "analytics": analytics_view,
     }
-    navigation_controller = NavigationController(page, views_dict, ui_state)
+    navigation_controller = NavigationController(
+        page=page,
+        views=views_dict,
+        app_state=ui_state,
+        sidebar=sidebar,
+        main_shell=main_shell,
+    )
     nav_holder["controller"] = navigation_controller
 
     # Inyectar controlador en las vistas que lo usan (sin tercer canal page.data)
@@ -1486,20 +1538,10 @@ def main(page: ft.Page):
 
     page.add(
         ft.Stack([
-            control for control in [
-                login_view.container,
-                method_selection_view.container,
-                dashboard_view.container,
-                tools_view.container,
-                homologacion_view.container,
-                mix_excel_view.container,
-                homologador_manual_view.container,
-                web_download_view.container,
-                eps_screen.container,
-                messages_view.container,
-                analytics_view.container,
-            ] if control is not None
-        ] + [global_settings_btn], expand=True)  # Agregar el botón de config al final del Stack
+            login_view.container,
+            main_shell,
+            global_settings_btn,
+        ], expand=True)
     )
 
     # ==================== VERIFICADOR DE ACTUALIZACIONES ====================

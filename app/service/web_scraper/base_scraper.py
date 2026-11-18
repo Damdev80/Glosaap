@@ -39,7 +39,7 @@ def auto_install_chromium(log_fn: Callable[[str], None] | None = None) -> bool:
         if not os.path.exists(str(driver_exe)):
             return False
         if log_fn:
-            log_fn("📥 Instalando navegador Chromium por primera vez (1-2 min)...")
+            log_fn("Instalando navegador Chromium por primera vez (1-2 min)...")
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
         res = subprocess.run(
             [str(driver_exe), str(driver_cli), "install", "chromium"],

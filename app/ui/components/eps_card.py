@@ -70,9 +70,9 @@ class EpsCard:
                 padding=4,
             )
         else:
-            # Usar emoji/icono
+            # Fallback a icono Material
             visual_element = ft.Container(
-                content=ft.Text(self.eps_info.get("icon", "📋"), size=38),
+                content=ft.Icon(ft.Icons.LOCAL_HOSPITAL, size=38, color=ft.Colors.PRIMARY),
                 padding=4,
             )
 

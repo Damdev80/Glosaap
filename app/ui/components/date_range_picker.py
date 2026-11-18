@@ -107,7 +107,7 @@ class DateRangePicker:
         if self.date_from and self.date_to:
             if self.date_from > self.date_to:
                 self.is_valid = False
-                self.validation_error = "⚠️ La fecha 'Desde' no puede ser mayor que la fecha 'Hasta'"
+                self.validation_error = "La fecha 'Desde' no puede ser mayor que la fecha 'Hasta'"
                 self.error_text.value = self.validation_error
                 self.error_text.visible = True
 

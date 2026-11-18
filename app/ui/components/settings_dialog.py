@@ -5,6 +5,7 @@ Fuente única del panel de settings (tema, versión y conexión API Glosapp). Lo
 ``page.open``/``page.close`` (sin ``overlay.clear()`` destructivo) y
 ``ft.Colors.*`` (sin hex fijo).
 """
+import re
 import threading
 
 import flet as ft
@@ -91,16 +92,29 @@ def show_settings_dialog(page: ft.Page, on_theme_change=None, on_api_change=None
         hint_text="Pega la clave entregada por Sistemas",
         prefix_icon=ft.Icons.KEY,
     )
+    status_icon = ft.Icon(
+        ft.Icons.CHECK_CIRCLE if current_key else ft.Icons.INFO_OUTLINE,
+        size=14,
+        color=ft.Colors.PRIMARY if current_key else ft.Colors.AMBER_700,
+    )
     status_text = ft.Text(
         "Ingresa tu clave para conectar con el servidor" if not current_key else "Clave configurada",
         size=11,
         color=ft.Colors.PRIMARY if current_key else ft.Colors.AMBER_700,
+        expand=True,
+    )
+    status_row = ft.Row(
+        [status_icon, status_text],
+        spacing=6,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
     )
     test_btn = ft.OutlinedButton("Probar conexión", icon=ft.Icons.NETWORK_CHECK)
     save_btn = ft.ElevatedButton("Guardar clave", icon=ft.Icons.SAVE)
 
     def on_test_click(e):
         test_btn.disabled = True
+        status_icon.name = ft.Icons.SYNC
+        status_icon.color = ft.Colors.ON_SURFACE_VARIANT
         status_text.value = "Verificando con el servidor..."
         status_text.color = ft.Colors.ON_SURFACE_VARIANT
         try:
@@ -113,11 +127,20 @@ def show_settings_dialog(page: ft.Page, on_theme_change=None, on_api_change=None
             target_key = api_key_input.value.strip()
             res = api_client.validate_key(api_key=target_key, base_url=target_url)
             if res.get("valid"):
-                status_text.value = "Conexión y clave válidas"
+                status_icon.name = ft.Icons.CHECK_CIRCLE
+                status_icon.color = ft.Colors.GREEN_700
+                status_text.value = "Conexión y clave válidas con el servidor mercurio"
                 status_text.color = ft.Colors.GREEN_700
             else:
                 msg = res.get("message", "Error de conexión")
-                status_text.value = str(msg)
+                msg_str = re.sub(r'[\U00010000-\U0010ffff\u2600-\u27bf]', '', str(msg)).strip()
+                if ":8001" in target_url or ":8000" in target_url:
+                    msg_str = "Error de puerto: el servidor mercurio atiende en el puerto 8081 (http://10.10.10.18:8081/glosapp/api/v1)"
+                elif "Timeout" in msg_str or "ConnectTimeout" in msg_str:
+                    msg_str = "Tiempo agotado al conectar. Verifica usar el puerto 8081 (http://10.10.10.18:8081/glosapp/api/v1)."
+                status_icon.name = ft.Icons.ERROR_OUTLINE
+                status_icon.color = ft.Colors.ERROR
+                status_text.value = msg_str
                 status_text.color = ft.Colors.ERROR
             test_btn.disabled = False
             try:
@@ -131,6 +154,8 @@ def show_settings_dialog(page: ft.Page, on_theme_change=None, on_api_change=None
         target_url = api_url_input.value.strip()
         target_key = api_key_input.value.strip()
         save_stored_api_credentials(page, target_url, target_key)
+        status_icon.name = ft.Icons.CHECK_CIRCLE
+        status_icon.color = ft.Colors.GREEN_700
         status_text.value = "Configuración guardada correctamente"
         status_text.color = ft.Colors.GREEN_700
         try:
@@ -181,7 +206,7 @@ def show_settings_dialog(page: ft.Page, on_theme_change=None, on_api_change=None
                 ft.Container(height=6),
                 api_url_input,
                 api_key_input,
-                status_text,
+                status_row,
                 ft.Row([
                     test_btn,
                     save_btn,

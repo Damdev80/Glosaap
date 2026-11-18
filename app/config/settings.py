@@ -186,8 +186,10 @@ DEFAULT_GLOSAPP_API_URL = os.environ.get(
     "GLOSAPP_API_URL", "http://10.10.10.18:8081/glosapp/api/v1"
 )
 
-# API Key por defecto (normalmente configurada desde la UI o variable de entorno)
-DEFAULT_GLOSAPP_API_KEY = os.environ.get("GLOSAPP_API_KEY", "")
+# API Key por defecto (red interna mercurio)
+DEFAULT_GLOSAPP_API_KEY = os.environ.get(
+    "GLOSAPP_API_KEY", "Tjdw3yHRZtQ60JfzwVmabvvY8w5_PHOH9E8mPjtv1iM"
+)
 
 
 # ==================== INICIALIZACIÓN ====================

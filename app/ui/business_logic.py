@@ -158,7 +158,7 @@ class EmailLoader:
                 self._load_messages_sync(search_info)
             except Exception as ex:
                 logger.error(f"Error cargando mensajes: {ex}")
-                self.messages_view.set_loading(False, f"❌ Error: {str(ex)}")
+                self.messages_view.set_loading(False, f"Error: {str(ex)}")
                 self.alert_dialog.show_error(
                     page=self.page,
                     title="Error en la búsqueda",
@@ -169,7 +169,7 @@ class EmailLoader:
 
     def _load_messages_sync(self, search_info: str):
         """Carga mensajes de forma síncrona"""
-        self.messages_view.set_loading(True, "🔍 Buscando correos...")
+        self.messages_view.set_loading(True, "Buscando correos...")
 
         all_msgs = []
         downloaded_count = 0
@@ -186,7 +186,7 @@ class EmailLoader:
             self.messages_view.show_messages(filtered, search_info)
             self.messages_view.set_loading(
                 True,
-                f"🔍 Encontrados {len(all_msgs)} correo(s), mostrando {len(filtered)} filtrados..."
+                f"Encontrados {len(all_msgs)} correo(s), mostrando {len(filtered)} filtrados..."
             )
 
             # No descargar lo que no matchea el filtro de la EPS.
@@ -237,7 +237,7 @@ class EmailLoader:
 
     def _download_attachment(self, msg_id: str, msg_date=None):
         """Descarga adjuntos de un mensaje preservando fecha para CROFECOBJ"""
-        self.messages_view.update_message_status(msg_id, "📥 Descargando...")
+        self.messages_view.update_message_status(msg_id, "Descargando...")
         try:
             email_date = None
             try:
@@ -265,12 +265,12 @@ class EmailLoader:
                 email_date = None
             files = self.email_service.download_message_attachments(msg_id, email_date=email_date)
             if files:
-                self.messages_view.update_message_status(msg_id, f"✅ {len(files)} archivo(s)")
+                self.messages_view.update_message_status(msg_id, f"{len(files)} archivo(s)")
             else:
                 self.messages_view.update_message_status(msg_id, "Sin adjuntos Excel")
         except Exception as e:
             logger.error(f"Error descargando adjuntos: {e}")
-            self.messages_view.update_message_status(msg_id, "❌ Error", is_error=True)
+            self.messages_view.update_message_status(msg_id, "Error", is_error=True)
 
     def _show_results(self, msgs: list[dict], all_msgs: list[dict], search_info: str):
         """Muestra los resultados de la búsqueda"""
@@ -282,7 +282,7 @@ class EmailLoader:
         if msgs:
             self.messages_view.set_loading(
                 False,
-                f"✅ {len(msgs)} correo(s) | 📁 {excel_count} Excel listos para procesar"
+                f"{len(msgs)} correo(s) | {excel_count} Excel listos para procesar"
             )
 
             # Mostrar diálogo de completado
@@ -333,7 +333,7 @@ class EPSProcessor:
                     self._process_coosalud()
             except Exception as ex:
                 logger.error(f"Error procesando {eps_type}: {ex}")
-                self.messages_view.set_processing(False, f"❌ Error: {str(ex)}")
+                self.messages_view.set_processing(False, f"Error: {str(ex)}")
                 self.messages_view.processing_status.color = ft.Colors.RED
                 self.messages_view.process_eps_btn.disabled = False
 
@@ -347,7 +347,7 @@ class EPSProcessor:
 
     def _process_mutualser(self):
         """Procesa archivos de MUTUALSER"""
-        self.messages_view.set_processing(True, "🔄 Procesando MUTUALSER...")
+        self.messages_view.set_processing(True, "Procesando MUTUALSER...")
         self.messages_view.process_eps_btn.disabled = True
 
         excel_files = self.email_service.get_excel_files()
@@ -357,7 +357,7 @@ class EPSProcessor:
             return
 
         logger.info(f"Procesando {len(excel_files)} archivos Excel de MUTUALSER")
-        self.messages_view.set_processing(True, f"📊 Procesando {len(excel_files)} archivo(s) Excel...")
+        self.messages_view.set_processing(True, f"Procesando {len(excel_files)} archivo(s) Excel...")
 
         resultado = self.email_service.procesar_mutualser()
 
@@ -372,13 +372,13 @@ class EPSProcessor:
         """Procesa archivos de COOSALUD"""
         from app.service.processors import CoosaludProcessor
 
-        self.messages_view.set_processing(True, "🔄 Procesando COOSALUD...")
+        self.messages_view.set_processing(True, "Procesando COOSALUD...")
         self.messages_view.process_eps_btn.disabled = True
 
         excel_files = self.email_service.get_excel_files(exclude_devoluciones=True)
 
         if not excel_files:
-            self.messages_view.set_processing(False, "❌ No hay archivos Excel para procesar")
+            self.messages_view.set_processing(False, "No hay archivos Excel para procesar")
             self.messages_view.process_eps_btn.disabled = False
             self.alert_dialog.show_warning(
                 page=self.page,
@@ -388,7 +388,7 @@ class EPSProcessor:
             return
 
         logger.info(f"Procesando {len(excel_files)} archivos Excel de COOSALUD")
-        self.messages_view.set_processing(True, f"📊 Procesando {len(excel_files)} archivo(s) Excel...")
+        self.messages_view.set_processing(True, f"Procesando {len(excel_files)} archivo(s) Excel...")
 
         # Configurar procesador (rutas centralizadas en settings)
         from app.config.settings import get_homologador_path, get_output_dir
@@ -445,7 +445,7 @@ class EPSProcessor:
         )
 
         if result_data:
-            self.messages_view.set_processing(False, f"✅ {message}")
+            self.messages_view.set_processing(False, str(message))
             self.messages_view.processing_status.color = ft.Colors.GREEN
             self.alert_dialog.show_success(
                 page=self.page,
@@ -453,7 +453,7 @@ class EPSProcessor:
                 message=message
             )
         else:
-            self.messages_view.set_processing(False, f"❌ {message}")
+            self.messages_view.set_processing(False, f"Error: {message}")
             self.messages_view.processing_status.color = ft.Colors.RED
             self.alert_dialog.show_error(
                 page=self.page,
@@ -465,7 +465,7 @@ class EPSProcessor:
 
     def _show_no_files_error(self):
         """Muestra error cuando no hay archivos"""
-        self.messages_view.set_processing(False, "❌ No hay archivos Excel para procesar")
+        self.messages_view.set_processing(False, "No hay archivos Excel para procesar")
         self.messages_view.process_eps_btn.disabled = False
         self.alert_dialog.show_warning(
             page=self.page,
@@ -476,11 +476,11 @@ class EPSProcessor:
     def _show_mutualser_success(self, resultado: dict):
         """Muestra éxito de procesamiento MUTUALSER"""
         resumen = resultado['resumen']
-        msg = "✅ ¡Archivos generados!\n"
-        msg += f"📄 {resultado['output_file']}\n"
+        msg = "¡Archivos generados!\n"
+        msg += f"Archivo: {resultado['output_file']}\n"
         if resultado.get('objeciones_file'):
-            msg += f"📋 {resultado['objeciones_file']}\n"
-        msg += f"📊 {resumen['total_registros']} registros | {resumen['codigos_homologados']} homologados"
+            msg += f"Objeciones: {resultado['objeciones_file']}\n"
+        msg += f"Resumen: {resumen['total_registros']} registros | {resumen['codigos_homologados']} homologados"
 
         self.messages_view.set_processing(False, msg)
         self.messages_view.processing_status.color = ft.Colors.GREEN
@@ -504,7 +504,7 @@ class EPSProcessor:
 
     def _show_processing_error(self, message: str):
         """Muestra error de procesamiento"""
-        self.messages_view.set_processing(False, f"❌ Error: {message}")
+        self.messages_view.set_processing(False, f"Error: {message}")
         self.messages_view.processing_status.color = ft.Colors.RED
         self.alert_dialog.show_error(
             page=self.page,

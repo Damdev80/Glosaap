@@ -69,7 +69,7 @@ class DataTable:
             return None
 
         info_text = (
-            f"📊 {len(self.df)} filas × {len(self.df.columns)} columnas | "
+            f"{len(self.df)} filas × {len(self.df.columns)} columnas | "
             f"Mostrando primeras {min(self.max_rows, len(self.df))} filas"
         )
 

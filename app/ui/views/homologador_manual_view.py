@@ -106,7 +106,8 @@ class HomologadorManualView:
         self.page.overlay.append(self.file_picker)
 
         btn_seleccionar = ft.ElevatedButton(
-            "📂 Seleccionar Archivo",
+            "Seleccionar Archivo",
+            icon=ft.Icons.FOLDER_OPEN,
             on_click=lambda e: self.file_picker.pick_files(
                 allowed_extensions=["xlsx", "xls"],
                 dialog_title="Seleccionar archivo Excel"
@@ -129,7 +130,8 @@ class HomologadorManualView:
 
         # Botón homologar
         self.btn_homologar = ft.ElevatedButton(
-            "🔄 Homologar",
+            "Homologar",
+            icon=ft.Icons.PLAY_ARROW,
             on_click=self._on_homologar,
             bgcolor=ft.Colors.GREEN,
             color=ft.Colors.SURFACE,
@@ -341,7 +343,7 @@ class HomologadorManualView:
                     self.sanitas_tipo_dropdown.value = None
                     self._sanitas_processor = None
                     self.df_homologacion = None
-                    self.status_text.value = "👆 Elige tabla Sanitas: NORMAL o INSUMOS"  # type: ignore
+                    self.status_text.value = "Elige tabla Sanitas: NORMAL o INSUMOS"  # type: ignore
                     self.status_text.color = ft.Colors.ON_SURFACE_VARIANT  # type: ignore
                     self._update_button_state()
                     self.page.update()
@@ -376,7 +378,7 @@ class HomologadorManualView:
             normal_path = get_homologador_path("sanitas")
             insumos_path = HOMOLOGADOR_FILES.get("sanitas_insumos", "")
         except Exception as ex:
-            self.status_text.value = f"❌ Error obteniendo ruta de homologación: {ex}"  # type: ignore
+            self.status_text.value = f"Error obteniendo ruta de homologación: {ex}"  # type: ignore
             self.status_text.color = ft.Colors.RED  # type: ignore
             self._sanitas_processor = None
             self.df_homologacion = None
@@ -390,13 +392,13 @@ class HomologadorManualView:
             )
             self._sanitas_processor = proc
             if not insumos_path or not os.path.exists(insumos_path):
-                self.status_text.value = f"❌ Homologador Sanitas Insumos no encontrado: {insumos_path}"  # type: ignore
+                self.status_text.value = f"Homologador Sanitas Insumos no encontrado: {insumos_path}"  # type: ignore
                 self.status_text.color = ft.Colors.RED  # type: ignore
                 self.df_homologacion = None
                 self.page.update()
                 return
             if not proc.load_homologador_insumos():
-                self.status_text.value = "❌ " + " | ".join(proc.errors)  # type: ignore
+                self.status_text.value = " | ".join(proc.errors)  # type: ignore
                 self.status_text.color = ft.Colors.RED  # type: ignore
                 self.df_homologacion = None
                 self.page.update()
@@ -408,7 +410,7 @@ class HomologadorManualView:
             except Exception:
                 pass
             self.df_homologacion = proc.insumos_df
-            self.status_text.value = f"✅ Homologación SANITAS INSUMOS cargada: {len(self.df_homologacion)} registros"  # type: ignore
+            self.status_text.value = f"Homologación SANITAS INSUMOS cargada: {len(self.df_homologacion)} registros"  # type: ignore
             self.status_text.color = ft.Colors.GREEN  # type: ignore
             return
 
@@ -418,21 +420,21 @@ class HomologadorManualView:
         self._sanitas_processor = SanitasProcessor(homologador_path=normal_path)
 
         if not normal_path or not os.path.exists(normal_path):
-            self.status_text.value = f"❌ Homologador Sanitas no encontrado: {normal_path}"  # type: ignore
+            self.status_text.value = f"Homologador Sanitas no encontrado: {normal_path}"  # type: ignore
             self.status_text.color = ft.Colors.RED  # type: ignore
             self.df_homologacion = None
             self.page.update()
             return
 
         if not self._sanitas_processor.load_homologador():
-            self.status_text.value = "❌ " + " | ".join(self._sanitas_processor.errors)  # type: ignore
+            self.status_text.value = " | ".join(self._sanitas_processor.errors)  # type: ignore
             self.status_text.color = ft.Colors.RED  # type: ignore
             self.df_homologacion = None
             self.page.update()
             return
 
         self.df_homologacion = self._sanitas_processor.homologador_df
-        self.status_text.value = f"✅ Homologación SANITAS cargada: {len(self.df_homologacion)} registros"  # type: ignore
+        self.status_text.value = f"Homologación SANITAS cargada: {len(self.df_homologacion)} registros"  # type: ignore
         self.status_text.color = ft.Colors.GREEN  # type: ignore
 
     def _cargar_homologacion(self):
@@ -447,7 +449,7 @@ class HomologadorManualView:
             except Exception:
                 path = ""
         if not path or not os.path.exists(path):
-            self.status_text.value = f"❌ Archivo de homologación no encontrado: {path}"  # type: ignore
+            self.status_text.value = f"Archivo de homologación no encontrado: {path}"  # type: ignore
             self.status_text.color = ft.Colors.RED  # type: ignore
             self.df_homologacion = None
             self.page.update()
@@ -469,11 +471,12 @@ class HomologadorManualView:
                 # COOSALUD no usa COD_SERV_FACT (por ahora)
                 self._todos_cod_serv_fact = None
 
-            self.status_text.value = f"✅ Homologación {self.selected_eps} cargada: {len(self.df_homologacion)} registros"  # type: ignore
+            self.status_text.value = f"Homologación {self.selected_eps} cargada: {len(self.df_homologacion)} registros"  # type: ignore
             self.status_text.color = ft.Colors.GREEN  # type: ignore
 
         except Exception as ex:
-            self.status_text.value = f"❌ Error cargando homologación: {ex}"  # type: ignore
+            self.status_text.value = f"Error cargando homologación: {ex}"  # type: ignore
+            self.status_text.color = ft.Colors.RED  # type: ignore
             self.status_text.color = ft.Colors.RED  # type: ignore
             self.df_homologacion = None
 
@@ -499,11 +502,11 @@ class HomologadorManualView:
             self.columna_dropdown.value = None  # type: ignore
             self.columna_seleccionada = None
 
-            self.status_text.value = f"📄 Archivo cargado: {len(self.df_archivo)} filas, {len(self.columnas_disponibles)} columnas"  # type: ignore
+            self.status_text.value = f"Archivo cargado: {len(self.df_archivo)} filas, {len(self.columnas_disponibles)} columnas"  # type: ignore
             self.status_text.color = ft.Colors.ON_SURFACE_VARIANT  # type: ignore
 
         except Exception as ex:
-            self.status_text.value = f"❌ Error leyendo archivo: {ex}"  # type: ignore
+            self.status_text.value = f"Error leyendo archivo: {ex}"  # type: ignore
             self.status_text.color = ft.Colors.RED  # type: ignore
             self.columna_dropdown.disabled = True  # type: ignore
 
@@ -573,7 +576,7 @@ class HomologadorManualView:
                             return cod
                 return ''
             except Exception as e:
-                print(f"⚠️ Error homologando {codigo}: {e}")
+                print(f"Error homologando {codigo}: {e}")
                 return ''
 
         try:
@@ -624,7 +627,7 @@ class HomologadorManualView:
             return ''
 
         except Exception as e:
-            print(f"⚠️ Error homologando {codigo}: {e}")
+            print(f"Error homologando {codigo}: {e}")
             return ''
 
     def _generar_objeciones_sanitas(self, df_archivo):
@@ -668,7 +671,7 @@ class HomologadorManualView:
             try:
                 self.btn_homologar.disabled = True  # type: ignore
                 self.progress_bar.visible = True  # type: ignore
-                self.status_text.value = "🔄 Homologando..."  # type: ignore
+                self.status_text.value = "Homologando..."  # type: ignore
                 self.status_text.color = ft.Colors.ON_SURFACE_VARIANT  # type: ignore
                 self.page.update()
 
@@ -696,12 +699,12 @@ class HomologadorManualView:
                     else:
                         no_homologados += 1
                         if len(preview_data) < 5 and str(valor).strip():
-                            preview_data.append((str(valor), "❌ No encontrado"))
+                            preview_data.append((str(valor), "No encontrado"))
 
-                    # Actualizar progreso cada 100 registros
-                    if idx % 100 == 0:
-                        self.progress_bar.value = idx / total  # type: ignore
-                        self.page.update()
+                # Actualizar progreso cada 100 registros
+                if idx % 100 == 0:
+                    self.progress_bar.value = idx / total  # type: ignore
+                    self.page.update()
 
                 # Guardar archivo
                 os.makedirs(self.OUTPUT_PATH, exist_ok=True)
@@ -727,7 +730,7 @@ class HomologadorManualView:
                 self.preview_table.rows = [  # type: ignore
                     ft.DataRow(cells=[
                         ft.DataCell(ft.Text(orig, size=12)),
-                        ft.DataCell(ft.Text(hom, size=12, color=ft.Colors.GREEN if "❌" not in hom else ft.Colors.RED))
+                        ft.DataCell(ft.Text(hom, size=12, color=ft.Colors.GREEN if hom != "No encontrado" else ft.Colors.RED))
                     ]) for orig, hom in preview_data
                 ]
                 self.preview_table.visible = True  # type: ignore
@@ -735,12 +738,12 @@ class HomologadorManualView:
                 # Status final
                 self.progress_bar.visible = False  # type: ignore
                 status = (
-                    f"✅ ¡Homologación completada!\n"
-                    f"📊 {homologados} homologados | {no_homologados} sin homologar\n"
-                    f"📁 Guardado en: {nombre_salida}"
+                    f"¡Homologación completada!\n"
+                    f"Resumen: {homologados} homologados | {no_homologados} sin homologar\n"
+                    f"Guardado en: {nombre_salida}"
                 )
                 if objeciones_path:
-                    status += f"\n📋 Objeciones: {os.path.basename(objeciones_path)}"
+                    status += f"\nObjeciones: {os.path.basename(objeciones_path)}"
                 self.status_text.value = status  # type: ignore
                 self.status_text.color = ft.Colors.GREEN  # type: ignore
                 self.btn_homologar.disabled = False  # type: ignore
@@ -752,7 +755,7 @@ class HomologadorManualView:
 
             except Exception as ex:
                 self.progress_bar.visible = False  # type: ignore
-                self.status_text.value = f"❌ Error: {ex}"  # type: ignore
+                self.status_text.value = f"Error: {ex}"  # type: ignore
                 self.status_text.color = ft.Colors.RED  # type: ignore
                 self.btn_homologar.disabled = False  # type: ignore
                 self.page.update()

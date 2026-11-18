@@ -2,6 +2,7 @@
 Controlador de navegación de la aplicación Glosaap
 
 Maneja todas las transiciones entre vistas de la aplicación.
+Soporta shell persistente con Sidebar lateral.
 """
 from typing import Any
 
@@ -17,7 +18,7 @@ class NavigationController:
     """Controlador de navegación entre vistas.
 
     Canal único de navegación de la app: toda transición entre vistas
-    (login -> method_selection -> dashboard -> eps -> messages y
+    (login -> dashboard -> eps -> messages y
     tools -> homologacion/mix/manual) pasa por aquí.
     """
 
@@ -37,7 +38,14 @@ class NavigationController:
         "method_selection": "login",
     }
 
-    def __init__(self, page: ft.Page, views: dict[str, Any], app_state):
+    def __init__(
+        self,
+        page: ft.Page,
+        views: dict[str, Any],
+        app_state,
+        sidebar: Any = None,
+        main_shell: ft.Control | None = None,
+    ):
         """
         Inicializa el controlador de navegación.
 
@@ -45,10 +53,14 @@ class NavigationController:
             page: Página principal de Flet
             views: Diccionario con todas las vistas {nombre: vista}
             app_state: Estado global de la aplicación
+            sidebar: Componente Sidebar persistente (opcional)
+            main_shell: Contenedor visual del Shell principal (opcional)
         """
         self.page = page
         self.views = views
         self.app_state = app_state
+        self.sidebar = sidebar
+        self.main_shell = main_shell
 
     def _hide_all_views(self):
         """Oculta todas las vistas (canal único; sin hide()/show() dispersos)."""
@@ -57,11 +69,7 @@ class NavigationController:
                 view.hide()
 
     def _hide_loading_overlays(self):
-        """Oculta overlays de carga activos tras navegar.
-
-        Centraliza los hide_loading() antes dispersos en app.py
-        (dashboard/tools) para no dejar spinners colgados.
-        """
+        """Oculta overlays de carga activos tras navegar."""
         for view in self.views.values():
             hide_fn = getattr(view, 'hide_loading', None)
             if callable(hide_fn):
@@ -71,11 +79,7 @@ class NavigationController:
                     pass
 
     def _set_window_size(self, width: int, height: int):
-        """Establece el tamaño de la ventana solo si NO está maximizada.
-
-        Compara con `is True` para no romper con MagicMock en tests
-        (un MagicMock nunca `is True`, así se aplica el tamaño).
-        """
+        """Establece el tamaño de la ventana solo si NO está maximizada."""
         maximized = getattr(self.page.window, 'maximized', False)
         full_screen = getattr(self.page.window, 'full_screen', False)
         if maximized is True or full_screen is True:
@@ -94,9 +98,18 @@ class NavigationController:
         self._hide_all_views()
         self.app_state.current_view = view_name
 
-        # Mostrar vista correspondiente
-        if view_name in self.views and hasattr(self.views[view_name], 'show'):
-            self.views[view_name].show()
+        if view_name == "login":
+            if self.main_shell is not None:
+                self.main_shell.visible = False
+            if "login" in self.views and hasattr(self.views["login"], 'show'):
+                self.views["login"].show()
+        else:
+            if self.main_shell is not None:
+                self.main_shell.visible = True
+            if self.sidebar is not None and hasattr(self.sidebar, "set_active"):
+                self.sidebar.set_active(view_name)
+            if view_name in self.views and hasattr(self.views[view_name], 'show'):
+                self.views[view_name].show()
 
         # Limpiar loadings residuales de forma centralizada
         self._hide_loading_overlays()
@@ -115,6 +128,8 @@ class NavigationController:
         """Navega a la pantalla de login"""
         if logout and hasattr(self.views.get("login"), 'logout'):
             self.views["login"].logout()
+        if self.main_shell is not None:
+            self.main_shell.visible = False
         self.go_to("login")
 
     def go_to_method_selection(self):
@@ -158,12 +173,7 @@ class NavigationController:
         self.go_to("messages")
 
     def go_back(self):
-        """Navega hacia atrás según la vista actual.
-
-        Mapa completo: messages->eps->dashboard, homologacion/mix_excel/
-        homologador_manual->tools, tools/web_download->dashboard,
-        method_selection/dashboard->login.
-        """
+        """Navega hacia atrás según la vista actual."""
         current = self.app_state.current_view
         if current in self.BACK_ROUTES:
             self.go_to(self.BACK_ROUTES[current])

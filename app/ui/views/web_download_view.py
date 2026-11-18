@@ -659,7 +659,7 @@ class WebDownloadView:
             self.familiar_usuario.value,
             self.familiar_password.value
         ]):
-            self.update_familiar_status("❌ Completa todos los campos obligatorios")
+            self.update_familiar_status("Completa todos los campos obligatorios")
             return
 
         # Guardar credenciales si está marcado
@@ -672,7 +672,7 @@ class WebDownloadView:
             )
 
         self.familiar_btn.disabled = True
-        self.update_familiar_status("🔄 Iniciando descarga...")
+        self.update_familiar_status("Iniciando descarga...")
 
         def worker():
             try:
@@ -703,12 +703,12 @@ class WebDownloadView:
                 )
 
                 if result["success"]:
-                    self.update_familiar_status(f"✅ {result['message']}")
+                    self.update_familiar_status(f"{result['message']}")
                 else:
-                    self.update_familiar_status(f"❌ {result['message']}")
+                    self.update_familiar_status(f"{result['message']}")
 
             except Exception as ex:
-                self.update_familiar_status(f"❌ Error: {str(ex)}")
+                self.update_familiar_status(f"Error: {str(ex)}")
             finally:
                 self.familiar_btn.disabled = False
                 self.page.update()
@@ -721,14 +721,14 @@ class WebDownloadView:
             self.fomag_usuario.value,
             self.fomag_password.value
         ]):
-            self.update_fomag_status("❌ Completa todos los campos")
+            self.update_fomag_status("Completa todos los campos")
             return
 
         # Validar fechas antes de abrir el navegador (ambas o ninguna)
         fecha_desde = (self.fomag_fecha_inicio.value or "").strip() or None
         fecha_hasta = (self.fomag_fecha_fin.value or "").strip() or None
         if bool(fecha_desde) != bool(fecha_hasta):
-            self.update_fomag_status("❌ Indica ambas fechas (Desde y Hasta) o ninguna")
+            self.update_fomag_status("Indica ambas fechas (Desde y Hasta) o ninguna")
             return
         if fecha_desde and fecha_hasta:
             try:
@@ -739,7 +739,7 @@ class WebDownloadView:
                 _d, _h = parse_fecha(fecha_desde), parse_fecha(fecha_hasta)
                 dividir_rango_fechas(_d, _h)  # valida orden del rango
             except ValueError as ve:
-                self.update_fomag_status(f"❌ {ve}")
+                self.update_fomag_status(f"{ve}")
                 return
 
         # Guardar credenciales si está marcado
@@ -751,7 +751,7 @@ class WebDownloadView:
             )
 
         self.fomag_btn.disabled = True
-        self.update_fomag_status("🔄 Abriendo navegador con sesión persistente...")
+        self.update_fomag_status("Abriendo navegador con sesión persistente...")
 
         def worker():
             try:
@@ -767,7 +767,7 @@ class WebDownloadView:
                     # Fallback a escritorio si no hay acceso a red
                     download_dir = os.path.join(os.path.expanduser("~"), "Desktop", "descargas_fomag")
                     os.makedirs(download_dir, exist_ok=True)
-                    self.update_fomag_status(f"⚠️ Sin acceso a red, guardando en: {download_dir}")
+                    self.update_fomag_status(f"Sin acceso a red, guardando en: {download_dir}")
 
                 scraper = FomagScraper(
                     download_dir=download_dir,
@@ -782,12 +782,12 @@ class WebDownloadView:
                 )
 
                 if result["success"]:
-                    self.update_fomag_status(f"✅ {result['message']}")
+                    self.update_fomag_status(f"{result['message']}")
                 else:
-                    self.update_fomag_status(f"❌ {result['message']}")
+                    self.update_fomag_status(f"{result['message']}")
 
             except Exception as ex:
-                self.update_fomag_status(f"❌ Error: {str(ex)}")
+                self.update_fomag_status(f"Error: {str(ex)}")
             finally:
                 self.fomag_btn.disabled = False
                 self.page.update()

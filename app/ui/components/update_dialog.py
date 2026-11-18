@@ -471,7 +471,8 @@ class UpdateDialog:
 
         # Botones
         self._download_btn = ft.ElevatedButton(
-            "⬇️ Actualizar ahora",
+            "Actualizar ahora",
+            icon=ft.Icons.DOWNLOAD,
             on_click=lambda e: self._start_download(release),
             bgcolor=ft.Colors.PRIMARY,
             color=ft.Colors.SURFACE,
@@ -707,11 +708,12 @@ class UpdateDialog:
         if self._progress_bar:
             self._progress_bar.visible = False
         if self._progress_text:
-            self._progress_text.value = f"❌ {message}"
+            self._progress_text.value = str(message)
             self._progress_text.color = ft.Colors.RED
         if self._download_btn:
             self._download_btn.disabled = False
-            self._download_btn.text = "⬇️ Reintentar"
+            self._download_btn.text = "Reintentar"
+            self._download_btn.icon = ft.Icons.REFRESH
         if self._cancel_btn:
             self._cancel_btn.disabled = False
         if self._skip_btn is not None:

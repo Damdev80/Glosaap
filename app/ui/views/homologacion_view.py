@@ -714,13 +714,13 @@ class HomologacionView:
         )
 
         if not codigo_erp or not codigo_dgh:
-            self.status_text.value = "❌ Completa ambos campos"  # type: ignore
+            self.status_text.value = "Completa ambos campos"  # type: ignore
             self.status_text.color = ft.Colors.RED  # type: ignore
             self.page.update()
             return
 
         if self.service.agregar(codigo_erp, codigo_dgh, codigo_extra):  # type: ignore
-            self.status_text.value = f"✅ Código {codigo_erp} agregado"  # type: ignore
+            self.status_text.value = f"Código {codigo_erp} agregado"  # type: ignore
             self.status_text.color = ft.Colors.GREEN  # type: ignore
             self.codigo_erp_field.value = ""  # type: ignore
             self.codigo_dgh_field.value = ""  # type: ignore
@@ -729,7 +729,7 @@ class HomologacionView:
             self._cargar_tabla()
             self._actualizar_estadisticas()
         else:
-            self.status_text.value = f"⚠️ El código {codigo_erp} ya existe"  # type: ignore
+            self.status_text.value = f"El código {codigo_erp} ya existe"  # type: ignore
             self.status_text.color = ft.Colors.ORANGE  # type: ignore
 
         self.page.update()
@@ -742,12 +742,12 @@ class HomologacionView:
         eps_nombre = (self.current_eps or "").upper() or "la EPS"
         def confirmar(ev):
             if self.service.eliminar(codigo):  # type: ignore
-                self.status_text.value = f"✅ Código {codigo} eliminado"  # type: ignore
+                self.status_text.value = f"Código {codigo} eliminado"  # type: ignore
                 self.status_text.color = ft.Colors.GREEN  # type: ignore
                 self._cargar_tabla()
                 self._actualizar_estadisticas()
             else:
-                self.status_text.value = f"❌ Error eliminando {codigo}"  # type: ignore
+                self.status_text.value = f"Error eliminando {codigo}"  # type: ignore
                 self.status_text.color = ft.Colors.RED  # type: ignore
             self.page.update()
         AlertDialog.show_confirm(
@@ -867,9 +867,9 @@ class HomologacionView:
             num_duplicados_carga = len(self.resultado_verificacion['duplicados_carga'])
             num_errores = len(self.resultado_verificacion['errores'])
 
-            self.resumen_validos.value = f"✅ {num_validos} válidos"
-            self.resumen_duplicados.value = f"⚠️ {num_duplicados_archivo + num_duplicados_carga} duplicados"
-            self.resumen_errores.value = f"❌ {num_errores} errores"
+            self.resumen_validos.value = f"{num_validos} válidos"
+            self.resumen_duplicados.value = f"{num_duplicados_archivo + num_duplicados_carga} duplicados"
+            self.resumen_errores.value = f"{num_errores} errores"
 
             # Cargar tabla de verificación
             self._cargar_tabla_verificacion()
@@ -904,7 +904,7 @@ class HomologacionView:
                 f"No se pudo leer el archivo:\n{str(ex)}",
                 "error"
             )
-            self.masiva_status_text.value = "❌ Error al leer archivo"
+            self.masiva_status_text.value = "Error al leer archivo"
             self.masiva_status_text.color = ft.Colors.RED
 
         self.page.update()

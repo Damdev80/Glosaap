@@ -176,17 +176,17 @@ class AlertDialog:
             if not output_dir and output_files:
                 output_dir = str(output_files[0]).replace('📁', '').replace('📄', '').replace('📋', '').strip()
 
-        # Construir mensaje con estadísticas (compat: conserva claves antiguas)
+        # Construir mensaje con estadísticas (cero emojis)
         stats_text = [
-            f"📁 {archivos} archivo(s) procesados",
-            f"📊 {total} registros en total",
-            f"✅ {homologados} homologados ({pct:.1f}%)",
-            f"⚠️ {no_homologados} no homologados",
+            f"Archivos procesados: {archivos}",
+            f"Registros en total: {total}",
+            f"Homologados: {homologados} ({pct:.1f}%)",
+            f"No homologados: {no_homologados}",
         ]
         if stats.get('facturas_unicas'):
-            stats_text.append(f"🧾 {stats['facturas_unicas']} facturas únicas")
+            stats_text.append(f"Facturas únicas: {stats['facturas_unicas']}")
         if output_dir:
-            stats_text.append(f"📂 Salida: {output_dir}")
+            stats_text.append(f"Carpeta de salida: {output_dir}")
 
         # Lista de archivos generados
         files_list = ft.Column([

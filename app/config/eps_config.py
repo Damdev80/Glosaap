@@ -79,7 +79,7 @@ class MutualserEps(EpsInfo):
     def __init__(self):
         super().__init__(
             name="Mutualser",
-            icon="🟢",
+            icon="",
             description="Mutualser EPS",
             filter_value="mutualser",
             filter_type="subject_exact_pattern",
@@ -97,7 +97,7 @@ class CoosaludEps(EpsInfo):
     def __init__(self):
         super().__init__(
             name="Coosalud",
-            icon="🟢",
+            icon="",
             description="Coosalud EPS",
             filter_value="coosalud",
             filter_type="subject_exact_pattern",
@@ -115,7 +115,7 @@ class SanitasEps(EpsInfo):
     def __init__(self):
         super().__init__(
             name="Sanitas",
-            icon="🔵",
+            icon="",
             description="Sanitas EPS",
             filter_value="sanitas",
             filter_type="subject_exact_pattern",
@@ -134,7 +134,7 @@ class PrevisoraEps(EpsInfo):
     def __init__(self):
         super().__init__(
             name="Previsora",
-            icon="🏥",
+            icon="",
             description="Previsora Seguros SOAT",
             filter_value="previsora",
             filter_type="subject_exact_pattern",
@@ -153,7 +153,7 @@ class NuevaEps(EpsInfo):
     def __init__(self):
         super().__init__(
             name="Nueva EPS",
-            icon="🟠",
+            icon="",
             description="Nueva EPS",
             filter_value="nuevaeps",
             filter_type="keyword",
@@ -168,7 +168,7 @@ class CompensarEps(EpsInfo):
     def __init__(self):
         super().__init__(
             name="Compensar",
-            icon="🟡",
+            icon="",
             description="Compensar EPS",
             filter_value="compensar",
             filter_type="keyword",
@@ -183,7 +183,7 @@ class FamisanarEps(EpsInfo):
     def __init__(self):
         super().__init__(
             name="Famisanar",
-            icon="🟣",
+            icon="",
             description="Famisanar EPS",
             filter_value="famisanar",
             filter_type="keyword",
@@ -198,7 +198,7 @@ class CosaludEps(EpsInfo):
     def __init__(self):
         super().__init__(
             name="Cosalud",
-            icon="🔴",
+            icon="",
             description="Cosalud EPS",
             filter_value="cosalud",
             filter_type="keyword",

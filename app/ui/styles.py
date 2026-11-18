@@ -257,17 +257,17 @@ WINDOW_STORAGE_KEY = "glosaap_window"
 
 WINDOW_SIZES = {
     "login": {"width": 480, "height": 520},
-    "method_selection": {"width": 900, "height": 600},
-    "dashboard": {"width": 1150, "height": 740},
-    "analytics": {"width": 1150, "height": 740},
-    "tools": {"width": 800, "height": 500},
-    "homologacion": {"width": 900, "height": 600},
-    "mix_excel": {"width": 600, "height": 700},
-    "homologador_manual": {"width": 650, "height": 700},
-    "web_download": {"width": 1000, "height": 700},
-    "eps": {"width": 950, "height": 720},
-    "messages": {"width": 950, "height": 720},
-    "main": {"width": 950, "height": 720},
+    "method_selection": {"width": 1050, "height": 720},
+    "dashboard": {"width": 1180, "height": 750},
+    "analytics": {"width": 1180, "height": 750},
+    "tools": {"width": 1050, "height": 720},
+    "homologacion": {"width": 1100, "height": 720},
+    "mix_excel": {"width": 1050, "height": 720},
+    "homologador_manual": {"width": 1050, "height": 720},
+    "web_download": {"width": 1100, "height": 720},
+    "eps": {"width": 1100, "height": 740},
+    "messages": {"width": 1150, "height": 740},
+    "main": {"width": 1180, "height": 750},
 }
 
 

@@ -68,8 +68,8 @@ class ToolsView:
 
         # Header con navegación
         header = self.nav_header.build(
-            title="⚙️ Herramientas",
-            back_text="← Volver al Dashboard",
+            title="Herramientas",
+            back_text="Volver al Dashboard",
             custom_back_action=lambda: self.navigation_controller.go_to_dashboard() if self.navigation_controller else None,
             on_help=self.on_guide,
         )

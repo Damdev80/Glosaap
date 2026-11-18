@@ -85,7 +85,7 @@ class MethodSelectionView:
 
         # Cards de métodos
         email_card = self._create_method_card(
-            title="📧 Glosa por Correo",
+            title="Glosa por Correo",
             description="Descarga archivos desde tu bandeja de entrada usando IMAP.\nIdeal para glosas recibidas vía email.",
             action_key="email",
             icon=ft.Icons.EMAIL_OUTLINED,
@@ -93,7 +93,7 @@ class MethodSelectionView:
         )
 
         web_card = self._create_method_card(
-            title="🌐 Glosa por Web",
+            title="Glosa por Web",
             description="Descarga automática desde portales web de EPS.\nAcceso directo a Familiar, Fomag, etc.",
             action_key="web",
             icon=ft.Icons.LANGUAGE,
