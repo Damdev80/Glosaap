@@ -139,6 +139,14 @@ HELP_BY_VIEW: dict[str, dict[str, str]] = {
             "procesar igual que los del correo."
         ),
     },
+    "analytics": {
+        "title": "Dashboard Analítico",
+        "body": (
+            "Consulta indicadores clave de glosas, facturas y tiempos de "
+            "procesamiento en tiempo real sincronizados con la base de datos "
+            "de la clínica. Puedes filtrar por EPS y rango de fechas."
+        ),
+    },
 }
 
 HELP_BY_EPS: dict[str, dict[str, str]] = {

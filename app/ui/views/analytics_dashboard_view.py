@@ -1,7 +1,7 @@
 """
-Vista del Dashboard Analítico y Trazabilidad de Glosas
+Vista del Dashboard Analítico y Trazabilidad de Glosas.
 Consume la API REST de Glosaap (servidor mercurio / BD glosapp).
-Soporta temas claro y oscuro respetando Glosa Flet Theme.
+Incluye estados de carga con esqueletos (skeletons), cero emojis y diseño limpio.
 """
 from __future__ import annotations
 
@@ -22,9 +22,10 @@ from app.ui.styles import SPACING
 class AnalyticsDashboardView:
     """Pantalla interactiva de métricas, trazabilidad de glosas y telemetría."""
 
-    def __init__(self, page: ft.Page, on_back=None):
+    def __init__(self, page: ft.Page, on_back=None, show_back_button: bool = True):
         self.page = page
         self.on_back = on_back
+        self.show_back_button = show_back_button
         self.navigation_controller = None
 
         # Estado local de datos
@@ -38,8 +39,8 @@ class AnalyticsDashboardView:
         # Controles principales
         self._status_badge = ft.Container(
             content=ft.Row([
-                ft.Icon(ft.Icons.CIRCLE, size=10, color=ft.Colors.GREY_500),
-                ft.Text("Verificando...", size=12, weight=ft.FontWeight.W_500),
+                ft.Icon(ft.Icons.RADIO_BUTTON_CHECKED, size=12, color=ft.Colors.GREY_500),
+                ft.Text("Verificando conexion...", size=12, weight=ft.FontWeight.W_500),
             ], spacing=6),
             padding=ft.padding.symmetric(horizontal=10, vertical=4),
             border_radius=12,
@@ -47,25 +48,23 @@ class AnalyticsDashboardView:
         )
 
         self._banner_container = ft.Container(visible=False)
-        self._loading_ring = ft.ProgressRing(width=28, height=28, stroke_width=3, visible=False)
+        self._progress_bar = ft.ProgressBar(height=3, visible=False)
 
         # Contenedores de contenido
-        self._kpi_row = ft.Row(spacing=15, wrap=True, alignment=ft.MainAxisAlignment.CENTER)
-        self._eps_breakdown_row = ft.Row(spacing=12, wrap=True, alignment=ft.MainAxisAlignment.CENTER)
-        self._lotes_table_container = ft.Container()
-        self._metricas_container = ft.Container()
+        self._kpi_row = ft.Row(spacing=14, wrap=True, alignment=ft.MainAxisAlignment.START)
+        self._eps_breakdown_row = ft.Row(spacing=12, wrap=True, alignment=ft.MainAxisAlignment.START)
+        self._tab_content_area = ft.Container(expand=True)
 
-        # Selector de pestañas
+        # Selector de pestañas sin emojis
         self._tabs = ft.Tabs(
             selected_index=0,
             animation_duration=200,
             tabs=[
-                ft.Tab(text="📊 Trazabilidad de Glosas", icon=ft.Icons.TABLE_CHART_OUTLINED),
-                ft.Tab(text="⚡ Rendimiento y Telemetría", icon=ft.Icons.SPEED_OUTLINED),
+                ft.Tab(text="Trazabilidad de Glosas", icon=ft.Icons.TABLE_CHART_OUTLINED),
+                ft.Tab(text="Rendimiento y Telemetria", icon=ft.Icons.SPEED_ROUNDED),
             ],
             on_change=self._on_tab_change,
         )
-        self._tab_content_area = ft.Container(expand=True)
 
         self.container = self._build()
 
@@ -73,26 +72,31 @@ class AnalyticsDashboardView:
 
     def _build(self) -> ft.Container:
         """Construye la jerarquía visual de la pantalla."""
-        # Header superior
+        # Botón de retroceso condicional
+        back_btn = (
+            ft.IconButton(
+                icon=ft.Icons.ARROW_BACK,
+                tooltip="Volver",
+                on_click=lambda e: self._handle_back(),
+            )
+            if self.show_back_button
+            else ft.Container(width=0, height=0)
+        )
+
         header = ft.Container(
             content=ft.Row([
-                ft.IconButton(
-                    icon=ft.Icons.ARROW_BACK,
-                    tooltip="Volver al menú principal",
-                    on_click=lambda e: self._handle_back(),
-                ),
+                back_btn,
                 ft.Column([
                     ft.Row([
-                        ft.Text("Dashboard Analítico", size=22, weight=ft.FontWeight.BOLD),
+                        ft.Text("Dashboard Analitico", size=22, weight=ft.FontWeight.BOLD),
                         self._status_badge,
                     ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                     ft.Text(
-                        "Trazabilidad de glosas, facturas y telemetría de procesamiento en tiempo real",
+                        "Trazabilidad de glosas, facturas y telemetria del sistema en tiempo real",
                         size=12,
                         color=ft.Colors.ON_SURFACE_VARIANT,
                     ),
                 ], spacing=2, expand=True),
-                self._loading_ring,
                 ft.ElevatedButton(
                     content=ft.Row([
                         ft.Icon(ft.Icons.REFRESH, size=16),
@@ -102,13 +106,13 @@ class AnalyticsDashboardView:
                 ),
                 ft.OutlinedButton(
                     content=ft.Row([
-                        ft.Icon(ft.Icons.KEY, size=16),
+                        ft.Icon(ft.Icons.VPN_KEY_OUTLINED, size=16),
                         ft.Text("Configurar API", size=12),
                     ], spacing=4),
                     on_click=lambda e: self._open_api_settings(),
                 ),
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-            padding=ft.padding.symmetric(horizontal=SPACING["md"], vertical=8),
+            padding=ft.padding.symmetric(horizontal=SPACING["md"], vertical=6),
         )
 
         # Barra de filtros
@@ -126,11 +130,11 @@ class AnalyticsDashboardView:
             label="Periodo",
             value="30",
             options=[
-                ft.dropdown.Option("7", "Últimos 7 días"),
-                ft.dropdown.Option("15", "Últimos 15 días"),
-                ft.dropdown.Option("30", "Últimos 30 días"),
-                ft.dropdown.Option("90", "Últimos 3 meses"),
-                ft.dropdown.Option("ALL", "Todo el histórico"),
+                ft.dropdown.Option("7", "Ultimos 7 dias"),
+                ft.dropdown.Option("15", "Ultimos 15 dias"),
+                ft.dropdown.Option("30", "Ultimos 30 dias"),
+                ft.dropdown.Option("90", "Ultimos 3 meses"),
+                ft.dropdown.Option("ALL", "Todo el historico"),
             ],
             dense=True,
             width=180,
@@ -153,14 +157,14 @@ class AnalyticsDashboardView:
 
         body = ft.Column([
             header,
-            ft.Divider(height=1),
+            self._progress_bar,
             self._banner_container,
             filters_bar,
-            ft.Container(height=8),
+            ft.Container(height=6),
             self._kpi_row,
-            ft.Container(height=12),
+            ft.Container(height=10),
             self._tabs,
-            ft.Container(height=8),
+            ft.Container(height=6),
             self._tab_content_area,
         ], expand=True, spacing=6, scroll=ft.ScrollMode.AUTO)
 
@@ -208,13 +212,13 @@ class AnalyticsDashboardView:
         )
 
     def _on_filter_changed(self, e):
-        """Maneja el cambio de filtros sin recargar de la red si no es necesario."""
+        """Maneja el cambio de filtros."""
         self._selected_eps = str(self._eps_dropdown.value or "TODAS")
         self._selected_rango = str(self._rango_dropdown.value or "30")
         self.refresh_data()
 
     def _on_tab_change(self, e):
-        """Cambia entre la pestaña de Glosas y la de Rendimiento."""
+        """Cambia de pestaña activa."""
         self._render_active_tab()
         try:
             self.page.update()
@@ -222,11 +226,14 @@ class AnalyticsDashboardView:
             pass
 
     def refresh_data(self):
-        """Inicia la carga de datos en segundo plano sin congelar la UI."""
+        """Inicia la carga de datos mostrando skeletons de inmediato."""
         if self._is_loading:
             return
         self._is_loading = True
-        self._loading_ring.visible = True
+        self._progress_bar.visible = True
+
+        # Renderizar skeletons de carga en lugar de dejar la pantalla vacía
+        self._render_skeletons()
         try:
             self.page.update()
         except Exception:
@@ -234,15 +241,64 @@ class AnalyticsDashboardView:
 
         threading.Thread(target=self._fetch_data_worker, daemon=True).start()
 
+    def _render_skeletons(self):
+        """Renderiza placeholders tipo skeleton mientras llegan los datos."""
+        def skeleton_card():
+            return ft.Card(
+                content=ft.Container(
+                    content=ft.Column([
+                        ft.Row([
+                            ft.Container(width=80, height=12, border_radius=4, bgcolor=ft.Colors.OUTLINE_VARIANT),
+                            ft.Container(width=18, height=18, border_radius=9, bgcolor=ft.Colors.OUTLINE_VARIANT),
+                        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                        ft.Container(height=4),
+                        ft.Container(width=110, height=22, border_radius=4, bgcolor=ft.Colors.OUTLINE_VARIANT),
+                        ft.Container(height=2),
+                        ft.Container(width=90, height=10, border_radius=4, bgcolor=ft.Colors.OUTLINE_VARIANT),
+                    ], spacing=4, tight=True),
+                    padding=14,
+                    width=190,
+                ),
+                elevation=1,
+            )
+
+        self._kpi_row.controls = [skeleton_card() for _ in range(5)]
+
+        # Esqueleto de tabla
+        skeleton_rows = []
+        for _ in range(5):
+            skeleton_rows.append(
+                ft.Container(
+                    content=ft.Row([
+                        ft.Container(width=40, height=14, border_radius=4, bgcolor=ft.Colors.OUTLINE_VARIANT),
+                        ft.Container(width=110, height=14, border_radius=4, bgcolor=ft.Colors.OUTLINE_VARIANT),
+                        ft.Container(width=80, height=14, border_radius=4, bgcolor=ft.Colors.OUTLINE_VARIANT),
+                        ft.Container(width=90, height=14, border_radius=4, bgcolor=ft.Colors.OUTLINE_VARIANT),
+                        ft.Container(width=50, height=14, border_radius=4, bgcolor=ft.Colors.OUTLINE_VARIANT),
+                        ft.Container(width=100, height=14, border_radius=4, bgcolor=ft.Colors.OUTLINE_VARIANT),
+                        ft.Container(width=60, height=14, border_radius=4, bgcolor=ft.Colors.OUTLINE_VARIANT),
+                        ft.Container(expand=True, height=14, border_radius=4, bgcolor=ft.Colors.OUTLINE_VARIANT),
+                    ], spacing=16),
+                    padding=ft.padding.symmetric(vertical=8, horizontal=12),
+                    border_radius=6,
+                )
+            )
+
+        self._tab_content_area.content = ft.Container(
+            content=ft.Column(skeleton_rows, spacing=6),
+            padding=16,
+            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
+            border_radius=10,
+        )
+
     def _fetch_data_worker(self):
-        """Hilo de fondo que consulta la API REST."""
+        """Consulta en segundo plano a la API REST."""
         url, key = get_stored_api_credentials(self.page)
         api_client.update_credentials(base_url=url, api_key=key)
 
-        # 1. Comprobar salud y validez de clave
         if not key:
             status_kind = "no_key"
-            error_msg = "No has configurado tu X-API-Key todavía."
+            error_msg = "No has configurado tu X-API-Key todavia."
             lotes_res = {"items": []}
             metricas_res = []
             eps_res = []
@@ -250,14 +306,13 @@ class AnalyticsDashboardView:
             val = api_client.validate_key()
             if not val.get("valid"):
                 status_kind = "auth_error" if val.get("status_code") == 401 else "error"
-                error_msg = val.get("message", "Error de conexión con la API")
+                error_msg = val.get("message", "Error de conexion con la API")
                 lotes_res = {"items": []}
                 metricas_res = []
                 eps_res = []
             else:
                 status_kind = "ok"
                 error_msg = ""
-                # Calcular rango de fechas
                 desde_str = None
                 hasta_str = date.today().isoformat()
                 if self._selected_rango.isdigit():
@@ -266,7 +321,6 @@ class AnalyticsDashboardView:
 
                 eps_filter = None if self._selected_eps == "TODAS" else self._selected_eps
 
-                # Consultar en paralelo o secuencial
                 eps_res = api_client.get_eps(activo=None)
                 lotes_res = api_client.get_lotes(
                     limit=200,
@@ -276,29 +330,25 @@ class AnalyticsDashboardView:
                 )
                 metricas_res = api_client.get_metricas_resumen(desde=desde_str, hasta=hasta_str)
 
-        # Actualizar datos en memoria
         self._eps_list = eps_res or []
         self._lotes_data = lotes_res.get("items", [])
         self._metricas_data = metricas_res or []
 
-        # Enviar resultados al hilo principal
         self._apply_data_to_ui(status_kind, error_msg)
 
     def _apply_data_to_ui(self, status_kind: str, error_msg: str):
-        """Actualiza todos los componentes de Flet en el hilo seguro."""
+        """Actualiza la interfaz en el hilo seguro de Flet."""
         self._is_loading = False
-        self._loading_ring.visible = False
+        self._progress_bar.visible = False
 
-        # Actualizar opciones del dropdown de EPS si llegaron nuevas
         if self._eps_list:
             options = [ft.dropdown.Option("TODAS", "Todas las EPS")]
             for eps in self._eps_list:
                 cod = str(eps.get("codigo_eps") or "").upper()
                 nom = eps.get("nombre_eps") or cod
-                options.append(ft.dropdown.Option(cod, f"{cod} — {nom}"))
+                options.append(ft.dropdown.Option(cod, f"{cod} - {nom}"))
             self._eps_dropdown.options = options
 
-        # 1. Status badge
         if status_kind == "ok":
             self._status_badge.content = ft.Row([
                 ft.Icon(ft.Icons.CHECK_CIRCLE, size=12, color=ft.Colors.GREEN_600),
@@ -308,23 +358,22 @@ class AnalyticsDashboardView:
             self._banner_container.visible = False
         elif status_kind == "no_key":
             self._status_badge.content = ft.Row([
-                ft.Icon(ft.Icons.KEY_OFF, size=12, color=ft.Colors.AMBER_800),
+                ft.Icon(ft.Icons.VPN_KEY_OFF, size=12, color=ft.Colors.AMBER_800),
                 ft.Text("Sin API Key", size=12, color=ft.Colors.AMBER_900, weight=ft.FontWeight.W_600),
             ], spacing=6)
             self._status_badge.bgcolor = ft.Colors.AMBER_50
             self._show_banner(
-                "🔑 Configuración requerida: Ingresa tu X-API-Key para conectarte a la base de datos de Glosaap.",
+                "Configuracion requerida: Ingresa tu X-API-Key para sincronizar los datos de la clinica.",
                 is_key_prompt=True,
             )
         else:
             self._status_badge.content = ft.Row([
-                ft.Icon(ft.Icons.ERROR, size=12, color=ft.Colors.ERROR),
+                ft.Icon(ft.Icons.ERROR_OUTLINE, size=12, color=ft.Colors.ERROR),
                 ft.Text("Desconectado", size=12, color=ft.Colors.ERROR, weight=ft.FontWeight.W_600),
             ], spacing=6)
             self._status_badge.bgcolor = ft.Colors.RED_50
-            self._show_banner(f"⚠️ {error_msg}. Verifica que estés conectado a la red interna de la clínica.")
+            self._show_banner(f"{error_msg}. Verifica que estes conectado a la red interna de la clinica.")
 
-        # 2. Renderizar KPIs y pestañas
         self._render_kpis()
         self._render_active_tab()
 
@@ -334,24 +383,24 @@ class AnalyticsDashboardView:
             pass
 
     def _show_banner(self, message: str, is_key_prompt: bool = False):
-        """Muestra un banner amigable arriba del contenido."""
+        """Muestra un banner informativo sin emojis."""
         actions = []
         if is_key_prompt:
             actions.append(
                 ft.ElevatedButton(
-                    "Ingresar API-Key ahora",
-                    icon=ft.Icons.KEY,
+                    "Ingresar API-Key",
+                    icon=ft.Icons.VPN_KEY,
                     on_click=lambda e: self._open_api_settings(),
                 )
             )
 
         self._banner_container.content = ft.Container(
             content=ft.Row([
-                ft.Icon(ft.Icons.INFO_OUTLINE, color=ft.Colors.PRIMARY, size=24),
+                ft.Icon(ft.Icons.INFO_OUTLINE, color=ft.Colors.PRIMARY, size=22),
                 ft.Text(message, size=13, expand=True),
                 *actions,
             ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-            padding=ft.padding.symmetric(horizontal=16, vertical=12),
+            padding=ft.padding.symmetric(horizontal=16, vertical=10),
             bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
             border_radius=10,
             border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
@@ -361,7 +410,7 @@ class AnalyticsDashboardView:
     # ==================== RENDERIZADO DE COMPONENTES ====================
 
     def _format_money(self, val: float | int | None) -> str:
-        """Formatea cifras en pesos colombianos con separador de miles."""
+        """Formatea cifras en pesos colombianos."""
         try:
             num = float(val or 0.0)
             return f"${num:,.0f}".replace(",", ".")
@@ -369,13 +418,12 @@ class AnalyticsDashboardView:
             return "$0"
 
     def _render_kpis(self):
-        """Calcula y muestra las 5 tarjetas de KPI consolidadas."""
+        """Calcula y muestra las tarjetas de KPI."""
         total_lotes = len(self._lotes_data)
         total_facturas = sum(int(lote.get("total_facturas") or 0) for lote in self._lotes_data)
         total_glosado = sum(float(lote.get("valor_total_objetado") or 0.0) for lote in self._lotes_data)
         total_facturado = sum(float(lote.get("valor_total_facturado") or 0.0) for lote in self._lotes_data)
 
-        # Tasa de homologación ponderada
         tasas = [float(lote.get("tasa_homologacion_pct") or 0.0) for lote in self._lotes_data if lote.get("tasa_homologacion_pct") is not None]
         prom_homologacion = (sum(tasas) / len(tasas)) if tasas else 0.0
 
@@ -401,10 +449,10 @@ class AnalyticsDashboardView:
 
         self._kpi_row.controls = [
             kpi_card("Lotes Procesados", str(total_lotes), "Corridas registradas", ft.Icons.ALL_INBOX, ft.Colors.BLUE_600),
-            kpi_card("Facturas Auditadas", f"{total_facturas:,}".replace(",", "."), "Cuentas médicas", ft.Icons.RECEIPT_LONG, ft.Colors.INDIGO_600),
-            kpi_card("Total Facturado", self._format_money(total_facturado), "Base de facturación", ft.Icons.ATTACH_MONEY, ft.Colors.TEAL_600),
-            kpi_card("Total Objetado", self._format_money(total_glosado), f"{pct_glosado:.1f}% del total facturado", ft.Icons.MONEY_OFF, ft.Colors.RED_600),
-            kpi_card("Homologación DGH", f"{prom_homologacion:.1f}%", "Efectividad de cruce", ft.Icons.TASK_ALT, ft.Colors.GREEN_600),
+            kpi_card("Facturas Auditadas", f"{total_facturas:,}".replace(",", "."), "Cuentas medicas", ft.Icons.RECEIPT_LONG, ft.Colors.INDIGO_600),
+            kpi_card("Total Facturado", self._format_money(total_facturado), "Base de facturacion", ft.Icons.ATTACH_MONEY, ft.Colors.TEAL_600),
+            kpi_card("Total Objetado", self._format_money(total_glosado), f"{pct_glosado:.1f}% del facturado", ft.Icons.MONEY_OFF, ft.Colors.RED_600),
+            kpi_card("Homologacion DGH", f"{prom_homologacion:.1f}%", "Efectividad de cruce", ft.Icons.TASK_ALT, ft.Colors.GREEN_600),
         ]
 
     def _render_active_tab(self):
@@ -417,7 +465,6 @@ class AnalyticsDashboardView:
 
     def _render_glosas_tab(self) -> ft.Control:
         """Pestaña 1: Resumen por EPS y tabla de lotes."""
-        # 1. Resumen por EPS
         eps_stats: dict[str, dict[str, Any]] = {}
         for lote in self._lotes_data:
             cod = str(lote.get("codigo_eps") or "OTRA").upper()
@@ -450,13 +497,12 @@ class AnalyticsDashboardView:
             )
 
         eps_section = ft.Column([
-            ft.Text("Distribución por Entidad (EPS)", size=14, weight=ft.FontWeight.W_600),
+            ft.Text("Distribucion por Entidad (EPS)", size=14, weight=ft.FontWeight.W_600),
             ft.Row(eps_cards, wrap=True, spacing=10) if eps_cards else ft.Text("No hay datos para mostrar", size=12, italic=True),
         ], spacing=8)
 
-        # 2. Tabla de lotes
         rows = []
-        for lote in self._lotes_data[:50]:  # Mostrar los primeros 50
+        for lote in self._lotes_data[:50]:
             f_ingesta = str(lote.get("fecha_ingesta") or "")[:16].replace("T", " ")
             cod_eps = str(lote.get("codigo_eps") or "")
             origen = str(lote.get("origen") or "")
@@ -525,7 +571,7 @@ class AnalyticsDashboardView:
                 content=ft.Column([
                     ft.Icon(ft.Icons.SPEED, size=40, color=ft.Colors.ON_SURFACE_VARIANT),
                     ft.Text("No hay mediciones de rendimiento registradas en este periodo.", size=13),
-                    ft.Text("A medida que proceses glosas o descargues correos, los tiempos de ejecución aparecerán aquí.", size=11, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Text("A medida que proceses glosas o descargues correos, los tiempos de ejecucion apareceran aqui.", size=11, color=ft.Colors.ON_SURFACE_VARIANT),
                 ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=6),
                 alignment=ft.alignment.center,
                 padding=30,
@@ -557,13 +603,13 @@ class AnalyticsDashboardView:
 
         table = ft.DataTable(
             columns=[
-                ft.DataColumn(ft.Text("Módulo", size=12, weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(ft.Text("Modulo", size=12, weight=ft.FontWeight.BOLD)),
                 ft.DataColumn(ft.Text("Fase Operativa", size=12, weight=ft.FontWeight.BOLD)),
                 ft.DataColumn(ft.Text("Mediciones", size=12, weight=ft.FontWeight.BOLD)),
                 ft.DataColumn(ft.Text("Fallidas", size=12, weight=ft.FontWeight.BOLD)),
-                ft.DataColumn(ft.Text("Duración Promedio", size=12, weight=ft.FontWeight.BOLD)),
-                ft.DataColumn(ft.Text("Duración Máxima", size=12, weight=ft.FontWeight.BOLD)),
-                ft.DataColumn(ft.Text("ms / Ítem Promedio", size=12, weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(ft.Text("Duracion Promedio", size=12, weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(ft.Text("Duracion Maxima", size=12, weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(ft.Text("ms / Item Promedio", size=12, weight=ft.FontWeight.BOLD)),
             ],
             rows=rows,
             border_radius=8,
@@ -571,7 +617,7 @@ class AnalyticsDashboardView:
         )
 
         return ft.Column([
-            ft.Text("Telemetría de Rendimiento por Módulo y Fase Operativa", size=14, weight=ft.FontWeight.W_600),
+            ft.Text("Telemetria de Rendimiento por Modulo y Fase Operativa", size=14, weight=ft.FontWeight.W_600),
             ft.Container(
                 content=ft.Row([table], scroll=ft.ScrollMode.AUTO),
                 border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),

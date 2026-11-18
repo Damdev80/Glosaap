@@ -258,7 +258,8 @@ WINDOW_STORAGE_KEY = "glosaap_window"
 WINDOW_SIZES = {
     "login": {"width": 480, "height": 520},
     "method_selection": {"width": 900, "height": 600},
-    "dashboard": {"width": 800, "height": 550},
+    "dashboard": {"width": 1150, "height": 740},
+    "analytics": {"width": 1150, "height": 740},
     "tools": {"width": 800, "height": 500},
     "homologacion": {"width": 900, "height": 600},
     "mix_excel": {"width": 600, "height": 700},

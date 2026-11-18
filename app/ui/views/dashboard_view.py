@@ -1,8 +1,11 @@
 """
-Vista del Dashboard principal con soporte de temas
+Vista principal de la aplicacion con Sidebar lateral y Dashboard Analitico integrado.
+Diseno profesional tipo SaaS sin emojis, con soporte de temas claro/oscuro.
 """
-import os
+from __future__ import annotations
+
 import threading
+from collections.abc import Callable
 
 import flet as ft
 
@@ -10,12 +13,23 @@ from app.config.settings import APP_VERSION
 from app.ui.components.alert_dialog import AlertDialog
 from app.ui.components.loading_overlay import LoadingOverlay, ToastNotification
 from app.ui.components.settings_dialog import show_settings_dialog
+from app.ui.views.analytics_dashboard_view import AnalyticsDashboardView
 
 
 class DashboardView:
-    """Vista del dashboard con las 3 cards principales"""
+    """Vista principal con Sidebar de navegacion y Dashboard Analitico como inicio."""
 
-    def __init__(self, page: ft.Page, assets_dir: str, on_card_click=None, on_tools_click=None, on_logout=None, on_web_download=None, on_guide=None, on_analytics_click=None):
+    def __init__(
+        self,
+        page: ft.Page,
+        assets_dir: str,
+        on_card_click: Callable | None = None,
+        on_tools_click: Callable | None = None,
+        on_logout: Callable | None = None,
+        on_web_download: Callable | None = None,
+        on_guide: Callable | None = None,
+        on_analytics_click: Callable | None = None,
+    ):
         self.page = page
         self.assets_dir = assets_dir
         self.on_card_click = on_card_click
@@ -25,296 +39,180 @@ class DashboardView:
         self.on_guide = on_guide
         self.on_analytics_click = on_analytics_click
 
-        # Componentes de loading
+        # Componentes de feedback
         self.loading_overlay = LoadingOverlay(page)
         self.toast = ToastNotification(page)
 
+        # Vista analítica embebida como pantalla principal
+        self.analytics_view = AnalyticsDashboardView(
+            page=page,
+            show_back_button=False,
+        )
+
         self.container = self._build()
 
-    def _create_dashboard_card(self, icon, title, subtitle, action_key, image_path=None, featured=False, in_development=False):
-        """Crea una card del dashboard usando Card de Flet (respeta temas)"""
+    # ==================== CONSTRUCCIÓN DE LA VISTA ====================
 
-        # Decidir si usar imagen o icono
-        if image_path and os.path.exists(image_path):
-            visual_element = ft.Image(
-                src=image_path,
-                width=80,
-                height=80,
-                fit=ft.ImageFit.CONTAIN,
-            )
-        else:
-            visual_element = ft.Container(
-                content=ft.Icon(icon, size=50),
-                width=80,
-                height=80,
-                border_radius=40,
-                alignment=ft.alignment.center
-            )
+    def _build(self) -> ft.Container:
+        """Construye la estructura con Sidebar y Contenido Principal."""
+        # 1. Cabecera del Sidebar
+        sidebar_brand = ft.Container(
+            content=ft.Row([
+                ft.Icon(ft.Icons.LOCAL_HOSPITAL, size=28, color=ft.Colors.PRIMARY),
+                ft.Column([
+                    ft.Text("Glosaap", size=18, weight=ft.FontWeight.BOLD),
+                    ft.Text("Clinica La Concepcion", size=11, color=ft.Colors.ON_SURFACE_VARIANT),
+                ], spacing=1),
+            ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            padding=ft.padding.only(left=12, right=12, top=16, bottom=14),
+        )
 
-        def on_click(e):
-            if self.on_card_click:
-                self.on_card_click(action_key)
-
-        # Protagonista más grande y con más elevación; en desarrollo atenuadas.
-        card_width = 230 if featured else 210
-        card_height = 260 if featured else 240
-
-        # Usar Card de Flet que respeta temas automáticamente
-        card = ft.Card(
-            content=ft.Container(
-                content=ft.Column([
-                    visual_element,
-                    ft.Container(height=15),
-                    ft.Text(
-                        title,
-                        size=20 if featured else 18,
-                        weight=ft.FontWeight.BOLD,
-                        text_align=ft.TextAlign.CENTER
-                    ),
-                    ft.Container(height=8),
-                    ft.Text(
-                        subtitle,
-                        size=13,
-                        text_align=ft.TextAlign.CENTER,
-                        weight=ft.FontWeight.W_400
-                    )
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                   alignment=ft.MainAxisAlignment.CENTER),
-                padding=28,
-                width=card_width,
-                height=card_height,
-                on_click=on_click,
+        # 2. Botones de Navegación del Sidebar
+        def nav_item(label: str, icon, on_click, is_active: bool = False):
+            bg = ft.Colors.PRIMARY_CONTAINER if is_active else None
+            fg = ft.Colors.ON_PRIMARY_CONTAINER if is_active else ft.Colors.ON_SURFACE
+            weight = ft.FontWeight.W_600 if is_active else ft.FontWeight.W_400
+            return ft.Container(
+                content=ft.Row([
+                    ft.Icon(icon, size=20, color=fg),
+                    ft.Text(label, size=13, weight=weight, color=fg),
+                ], spacing=12),
+                padding=ft.padding.symmetric(horizontal=14, vertical=10),
+                border_radius=8,
+                bgcolor=bg,
                 ink=True,
-            ),
-            elevation=4 if featured else 2,
-            opacity=0.6 if in_development else 1.0,
+                on_click=on_click,
+            )
+
+        btn_dashboard = nav_item(
+            "Dashboard",
+            ft.Icons.DASHBOARD_ROUNDED,
+            lambda e: self.analytics_view.refresh_data(),
+            is_active=True,
         )
 
-        if not in_development:
-            return card
+        def go_manejar(e):
+            if self.on_card_click:
+                self.on_card_click("manejar")
 
-        # Card en desarrollo: badge "En desarrollo" superpuesto (mismo
-        # patrón que eps_card.py). El click se mantiene en la card interna.
-        badge = ft.Container(
-            content=ft.Text(
-                "En desarrollo",
-                size=10,
-                weight=ft.FontWeight.W_600,
-                color=ft.Colors.ON_PRIMARY,
-            ),
-            bgcolor=ft.Colors.PRIMARY,
-            padding=ft.padding.symmetric(horizontal=8, vertical=4),
-            border_radius=8,
+        btn_glosas = nav_item(
+            "Gestion de Glosas",
+            ft.Icons.DESCRIPTION_OUTLINED,
+            go_manejar,
         )
-        return ft.Stack(
-            controls=[
-                card,
-                ft.Container(
-                    content=badge,
-                    alignment=ft.alignment.top_center,
-                    padding=ft.padding.only(top=6),
-                ),
-            ],
-            width=card_width,
-            height=card_height,
+        self._manejar_card = ft.Card(content=btn_glosas, elevation=0, color=None)
+        self._manejar_nav_btn = btn_glosas
+
+        btn_web = nav_item(
+            "Descarga Web",
+            ft.Icons.CLOUD_DOWNLOAD_OUTLINED,
+            lambda e: self.on_web_download() if self.on_web_download else None,
         )
 
-    def _build(self):
-        """Construye la vista del dashboard"""
-        # Crear las 3 cards
-        card_evitar = self._create_dashboard_card(
-            icon=ft.Icons.SHIELD_OUTLINED,
-            title="Evitar Glosa",
-            subtitle="Prevención y validación\nantes de facturar",
-            action_key="evitar",
-            image_path=os.path.join(self.assets_dir, "img", "evitar_glosa.png"),
-            in_development=True,
+        btn_tools = nav_item(
+            "Herramientas",
+            ft.Icons.BUILD_OUTLINED,
+            lambda e: self.on_tools_click() if self.on_tools_click else None,
         )
 
-        card_manejar = self._create_dashboard_card(
-            icon=ft.Icons.BUILD_OUTLINED,
-            title="Manejar Glosa",
-            subtitle="Gestión y seguimiento\nde glosas activas",
-            action_key="manejar",
-            image_path=os.path.join(self.assets_dir, "img", "manejar_glosa.png"),
-            featured=True,
-        )
-        self._manejar_card = card_manejar
-
-        card_responder = self._create_dashboard_card(
-            icon=ft.Icons.REPLY_ALL_OUTLINED,
-            title="Responder Glosa",
-            subtitle="Respuesta a objeciones\ny documentación",
-            action_key="responder",
-            image_path=os.path.join(self.assets_dir, "img", "responder_glosa.png"),
-            in_development=True,
+        # 3. Pie del Sidebar
+        btn_settings = nav_item(
+            "Configuracion",
+            ft.Icons.SETTINGS_OUTLINED,
+            lambda e: self._open_settings(e),
         )
 
-        # Las 3 cards visibles en fila: "Manejar Glosa" protagonista
-        # (primera, más grande); Evitar/Responder atenuadas con badge
-        # "En desarrollo". El click mantiene su diálogo actual.
-        main_content = ft.Column([
-            ft.Container(height=30),
-            # Header
-            ft.Column([
-                ft.Text("Glosaap", size=40, weight=ft.FontWeight.BOLD),
-                ft.Container(height=4),
-                ft.Text("Sistema de Gestión de Glosas", size=16, weight=ft.FontWeight.W_400),
-            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            ft.Container(height=30),
-            # Fila de 3 cards: Manejar protagonista primero
-            ft.Row([
-                card_manejar,
-                card_evitar,
-                card_responder
-            ], alignment=ft.MainAxisAlignment.CENTER, spacing=30),
-            ft.Container(height=30),
-            # Info de usuario
-            ft.Container(
-                content=ft.Row([
-                    ft.Icon(ft.Icons.PERSON_OUTLINE, size=16),
-                    ft.Text("Sesión activa", size=12),
-                    ft.Container(width=20),
-                    ft.TextButton(
-                        "Cerrar sesión",
-                        on_click=lambda e: self._confirm_logout(e),
-                    )
-                ], alignment=ft.MainAxisAlignment.CENTER),
-                padding=10
-            ),
-            ft.Container(
-                content=ft.TextButton(
-                    "¿Primera vez aquí? Ver guía rápida",
-                    icon=ft.Icons.HELP_OUTLINE,
-                    on_click=lambda e: self.on_guide() if self.on_guide else None,
-                ),
-                visible=self.on_guide is not None,
-            ),
-        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO)
-
-        # Botones flotantes
-        tools_btn = ft.Container(
-            content=ft.ElevatedButton(
-                content=ft.Row([
-                    ft.Image(
-                        src=os.path.join(self.assets_dir, "icons", "utils.png"),
-                        width=20,
-                        height=20,
-                        fit=ft.ImageFit.CONTAIN
-                    ),
-                    ft.Text("Herramientas", size=13, weight=ft.FontWeight.W_500)
-                ], spacing=6),
-                on_click=lambda e: self.on_tools_click() if self.on_tools_click else None
-            ),
-            right=20,
-            top=15,
+        btn_guide = nav_item(
+            "Guia de uso",
+            ft.Icons.HELP_OUTLINE,
+            lambda e: self.on_guide() if self.on_guide else None,
         )
 
-        web_btn = ft.Container(
-            content=ft.ElevatedButton(
-                content=ft.Row([
-                    ft.Icon(ft.Icons.CLOUD_DOWNLOAD, size=20),
-                    ft.Text("Descarga Web", size=13, weight=ft.FontWeight.W_500)
-                ], spacing=6),
-                on_click=lambda e: self.on_web_download() if self.on_web_download else None
-            ),
-            right=20,
-            top=70,
+        btn_logout = nav_item(
+            "Cerrar sesion",
+            ft.Icons.LOGOUT_ROUNDED,
+            lambda e: self._confirm_logout(e),
         )
 
-        analytics_btn = ft.Container(
-            content=ft.ElevatedButton(
-                content=ft.Row([
-                    ft.Icon(ft.Icons.INSIGHTS, size=20, color=ft.Colors.PRIMARY),
-                    ft.Text("Métricas / Dashboard", size=13, weight=ft.FontWeight.W_500)
-                ], spacing=6),
-                on_click=lambda e: self.on_analytics_click() if self.on_analytics_click else None
-            ),
-            right=20,
-            top=125,
-        )
-
-        version_btn = ft.Container(
+        version_label = ft.Container(
             content=ft.TextButton(
                 content=ft.Row([
-                    ft.Icon(ft.Icons.INFO_OUTLINE, size=14),
-                    ft.Text(f"v{APP_VERSION}", size=11)
+                    ft.Icon(ft.Icons.INFO_OUTLINE, size=12, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Text(f"v{APP_VERSION}", size=11, color=ft.Colors.ON_SURFACE_VARIANT),
                 ], spacing=4),
+                on_click=lambda e: self._check_updates(e),
                 tooltip="Buscar actualizaciones",
-                on_click=lambda e: self._check_updates(e)
             ),
-            left=10,
-            bottom=10,
+            padding=ft.padding.only(left=8, bottom=8),
         )
 
-        settings_btn = ft.Container(
-            content=ft.IconButton(
-                icon=ft.Icons.SETTINGS,
-                icon_size=22,
-                tooltip="Configuración",
-                on_click=lambda e: self._open_settings(e),
-            ),
-            right=15,
-            bottom=10,
+        # Columna completa del Sidebar
+        sidebar_content = ft.Column([
+            sidebar_brand,
+            ft.Divider(height=1),
+            ft.Container(height=4),
+            btn_dashboard,
+            self._manejar_card,
+            btn_web,
+            btn_tools,
+            ft.Container(expand=True),
+            ft.Divider(height=1),
+            btn_settings,
+            btn_guide,
+            btn_logout,
+            version_label,
+        ], spacing=4, expand=True)
+
+        sidebar_container = ft.Container(
+            content=sidebar_content,
+            width=230,
+            bgcolor=ft.Colors.SURFACE_CONTAINER_LOW if hasattr(ft.Colors, "SURFACE_CONTAINER_LOW") else ft.Colors.SURFACE,
+            border=ft.border.only(right=ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
+            padding=ft.padding.all(6),
         )
 
-        self.container = ft.Container(
-            content=ft.Stack([
-                ft.Container(
-                    content=main_content,
-                    expand=True,
-                    alignment=ft.alignment.center,
-                ),
-                tools_btn,
-                web_btn,
-                analytics_btn,
-                version_btn,
-                settings_btn,
-            ], expand=True),
+        # 4. Área de contenido principal (Dashboard Analítico)
+        # Asegurar que el contenedor interno de la vista analítica sea visible
+        self.analytics_view.container.visible = True
+        main_content_area = ft.Container(
+            content=self.analytics_view.container,
+            expand=True,
+            bgcolor=ft.Colors.SURFACE,
+        )
+
+        # Layout horizontal general
+        layout = ft.Row([
+            sidebar_container,
+            main_content_area,
+        ], expand=True, spacing=0)
+
+        return ft.Container(
+            content=layout,
             bgcolor=ft.Colors.SURFACE,
             expand=True,
-            visible=False
+            visible=False,
         )
 
-        return self.container
-
-    def show_loading(self, message="Cargando..."):
-        """Muestra el overlay de carga"""
-        if self.loading_overlay:
-            self.loading_overlay.show(message)
-
-    def hide_loading(self):
-        """Oculta el overlay de carga"""
-        if self.loading_overlay:
-            self.loading_overlay.hide()
-
-    def show_toast(self, message, toast_type="success"):
-        """Muestra una notificación toast"""
-        if self.toast:
-            if toast_type == "success":
-                self.toast.success(message)
-            elif toast_type == "error":
-                self.toast.error(message)
-            elif toast_type == "warning":
-                self.toast.warning(message)
-            else:
-                self.toast.info(message)
+    # ==================== MÉTODOS DE COMPATIBILIDAD ====================
 
     def flash_manejar(self, duration=1.4):
-        """Resalta la tarjeta Manejar Glosa (focus de la guía)."""
+        """Resalta la opción Gestión de Glosas (focus de la guía)."""
         card = getattr(self, "_manejar_card", None)
-        if card is None:
-            return
-        prev_color = getattr(card, "color", None)
-        prev_elevation = getattr(card, "elevation", None)
+        btn = getattr(self, "_manejar_nav_btn", None)
+        prev_color = getattr(card, "color", None) if card else None
+        prev_bg = getattr(btn, "bgcolor", None) if btn else None
 
         def apply():
-            card.color = ft.Colors.PRIMARY_CONTAINER
-            card.elevation = 8
+            if card:
+                card.color = ft.Colors.PRIMARY_CONTAINER
+            if btn:
+                btn.bgcolor = ft.Colors.PRIMARY_CONTAINER
 
         def revert():
-            card.color = prev_color
-            card.elevation = prev_elevation
+            if card:
+                card.color = prev_color
+            if btn:
+                btn.bgcolor = prev_bg
 
         try:
             apply()
@@ -333,63 +231,90 @@ class DashboardView:
             pass
 
     def _confirm_logout(self, e):
-        """Antepone confirmación antes de cerrar sesión y limpiar datos."""
+        """Confirmación antes de cerrar sesión."""
         def do_logout(ev):
             if self.on_logout:
                 self.on_logout()
+
         AlertDialog.show_confirm(
             self.page,
-            title="Cerrar sesión",
-            message=(
-                "¿Cerrar la sesión actual?\n\n"
-                "Se limpiará la sesión guardada y tendrás que iniciar sesión de nuevo."
-            ),
-            confirm_text="Cerrar sesión",
+            title="Cerrar sesion",
+            message="¿Deseas cerrar la sesion actual?",
+            confirm_text="Cerrar sesion",
             cancel_text="Cancelar",
             on_confirm=do_logout,
         )
 
     def _check_updates(self, e):
-        """Abre el diálogo de verificación de actualizaciones"""
+        """Abre el diálogo de verificación de actualizaciones."""
         try:
             self.show_loading("Verificando actualizaciones...")
-
             if hasattr(self.page, 'data') and self.page.data:
                 check_fn = self.page.data.get('check_updates')
                 if check_fn:
                     check_fn()
                 else:
-                    self.show_toast("Función de actualización no disponible", "warning")
+                    self.show_toast("Funcion de actualizacion no disponible", "warning")
             else:
                 self.show_toast("No se pudo verificar actualizaciones", "error")
-
         except Exception as ex:
-            self.show_toast(f"Error: {str(ex)}", "error")
+            self.show_toast(f"Error: {ex}", "error")
         finally:
             self.hide_loading()
 
     def _open_settings(self, e):
-        """Abre el panel de configuración (reutiliza el diálogo canónico)."""
-        show_settings_dialog(self.page)
+        """Abre el panel de configuración."""
+        show_settings_dialog(
+            self.page,
+            on_api_change=lambda: self.analytics_view.refresh_data(),
+        )
+
+    def show_loading(self, message: str = "Cargando..."):
+        if self.loading_overlay:
+            self.loading_overlay.show(message)
+
+    def hide_loading(self):
+        if self.loading_overlay:
+            self.loading_overlay.hide()
+
+    def show_toast(self, message: str, message_type: str = "info"):
+        if self.toast:
+            if message_type == "success":
+                self.toast.success(message)
+            elif message_type == "error":
+                self.toast.error(message)
+            elif message_type == "warning":
+                self.toast.warning(message)
+            else:
+                self.toast.info(message)
 
     def rebuild(self):
-        """Reconstruye el dashboard con el tema actual"""
+        """Reconstruye el layout con el tema actual."""
         was_visible = self.container.visible if self.container else False
-
-        # Reconstruir manteniendo visibilidad
         self.container = self._build()
         self.container.visible = was_visible
-        self.page.update()
+        try:
+            self.page.update()
+        except Exception:
+            pass
 
     def show(self):
-        """Muestra el dashboard"""
+        """Muestra la vista y actualiza los datos del dashboard."""
         if self.container:
             self.container.visible = True
-            self.page.update()
+            # Asegurar que el contenido interno de analytics esté visible y refrescado
+            self.analytics_view.container.visible = True
+            self.analytics_view.refresh_data()
+            try:
+                self.page.update()
+            except Exception:
+                pass
 
     def hide(self):
-        """Oculta el dashboard"""
+        """Oculta la vista."""
         if self.container:
             self.container.visible = False
-            self.page.update()
-
+            try:
+                self.page.update()
+            except Exception:
+                pass

@@ -92,7 +92,7 @@ def show_settings_dialog(page: ft.Page, on_theme_change=None, on_api_change=None
         prefix_icon=ft.Icons.KEY,
     )
     status_text = ft.Text(
-        "🔑 Ingresa tu clave para conectar con el servidor" if not current_key else "✅ Clave configurada",
+        "Ingresa tu clave para conectar con el servidor" if not current_key else "Clave configurada",
         size=11,
         color=ft.Colors.PRIMARY if current_key else ft.Colors.AMBER_700,
     )
@@ -101,7 +101,7 @@ def show_settings_dialog(page: ft.Page, on_theme_change=None, on_api_change=None
 
     def on_test_click(e):
         test_btn.disabled = True
-        status_text.value = "⏳ Verificando con el servidor..."
+        status_text.value = "Verificando con el servidor..."
         status_text.color = ft.Colors.ON_SURFACE_VARIANT
         try:
             page.update()
@@ -113,11 +113,11 @@ def show_settings_dialog(page: ft.Page, on_theme_change=None, on_api_change=None
             target_key = api_key_input.value.strip()
             res = api_client.validate_key(api_key=target_key, base_url=target_url)
             if res.get("valid"):
-                status_text.value = "✅ ¡Conexión y clave válidas!"
+                status_text.value = "Conexión y clave válidas"
                 status_text.color = ft.Colors.GREEN_700
             else:
                 msg = res.get("message", "Error de conexión")
-                status_text.value = f"❌ {msg}"
+                status_text.value = str(msg)
                 status_text.color = ft.Colors.ERROR
             test_btn.disabled = False
             try:
@@ -131,7 +131,7 @@ def show_settings_dialog(page: ft.Page, on_theme_change=None, on_api_change=None
         target_url = api_url_input.value.strip()
         target_key = api_key_input.value.strip()
         save_stored_api_credentials(page, target_url, target_key)
-        status_text.value = "💾 Configuración guardada correctamente"
+        status_text.value = "Configuración guardada correctamente"
         status_text.color = ft.Colors.GREEN_700
         try:
             page.update()
@@ -148,7 +148,10 @@ def show_settings_dialog(page: ft.Page, on_theme_change=None, on_api_change=None
 
     settings_dialog = ft.AlertDialog(
         modal=True,
-        title=ft.Text("⚙️ Configuración", size=18, weight=ft.FontWeight.W_600),
+        title=ft.Row([
+            ft.Icon(ft.Icons.SETTINGS, size=20, color=ft.Colors.PRIMARY),
+            ft.Text("Configuración", size=18, weight=ft.FontWeight.W_600),
+        ], spacing=8),
         content=ft.Container(
             content=ft.Column([
                 # Apariencia

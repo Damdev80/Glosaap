@@ -433,8 +433,8 @@ def main(page: ft.Page):
     # ==================== FUNCIONES DE NEGOCIO ====================
 
     def handle_login_success():
-        """Callback cuando el login es exitoso - ir a selección de método"""
-        go_to_method_selection()
+        """Callback cuando el login es exitoso - ir directo al Dashboard principal con sidebar"""
+        go_to_dashboard()
 
     def on_email_method():
         """Callback cuando se selecciona método de correo"""
