@@ -4,6 +4,7 @@ Con soporte de temas claro/oscuro
 """
 import os
 import threading
+from datetime import UTC, datetime
 
 import flet as ft
 
@@ -675,6 +676,10 @@ class WebDownloadView:
         self.update_familiar_status("Iniciando descarga...")
 
         def worker():
+            t_start = datetime.now(UTC)
+            files_count = 0
+            is_success = False
+            err_msg = None
             try:
                 from app.service.web_scraper import FamiliarScraper
 
@@ -692,8 +697,6 @@ class WebDownloadView:
                 if not self.familiar_password.value:
                     raise ValueError("La contraseña es obligatoria")
 
-
-
                 result = scraper.login_and_download(
                     nit=self.familiar_nit.value,
                     usuario=self.familiar_usuario.value,
@@ -702,14 +705,32 @@ class WebDownloadView:
                     fecha_fin=self.familiar_fecha_fin.value or None
                 )
 
+                is_success = bool(result.get("success", False))
+                files_count = result.get("files", 0) if is_success else 0
                 if result["success"]:
                     self.update_familiar_status(f"{result['message']}")
                 else:
                     self.update_familiar_status(f"{result['message']}")
 
             except Exception as ex:
+                err_msg = str(ex)
                 self.update_familiar_status(f"Error: {str(ex)}")
             finally:
+                t_end = datetime.now(UTC)
+                try:
+                    from app.service.glosapp_api_client import api_client
+                    api_client.registrar_metricas({
+                        "modulo": "DESCARGA_WEB",
+                        "fase_operacion": "DESCARGA_FAMILIAR",
+                        "fecha_inicio": t_start.isoformat(),
+                        "fecha_fin": t_end.isoformat(),
+                        "duracion_segundos": (t_end - t_start).total_seconds(),
+                        "cantidad_items": files_count,
+                        "fue_exitosa": is_success,
+                        "mensaje_error": err_msg,
+                    })
+                except Exception:
+                    pass
                 self.familiar_btn.disabled = False
                 self.page.update()
 
@@ -754,6 +775,10 @@ class WebDownloadView:
         self.update_fomag_status("Abriendo navegador con sesión persistente...")
 
         def worker():
+            t_start = datetime.now(UTC)
+            files_count = 0
+            is_success = False
+            err_msg = None
             try:
                 from app.service.web_scraper import FomagScraper
 
@@ -781,14 +806,32 @@ class WebDownloadView:
                     fecha_hasta=fecha_hasta,
                 )
 
+                is_success = bool(result.get("success", False))
+                files_count = result.get("total_archivos", 0) or (1 if is_success else 0)
                 if result["success"]:
                     self.update_fomag_status(f"{result['message']}")
                 else:
                     self.update_fomag_status(f"{result['message']}")
 
             except Exception as ex:
+                err_msg = str(ex)
                 self.update_fomag_status(f"Error: {str(ex)}")
             finally:
+                t_end = datetime.now(UTC)
+                try:
+                    from app.service.glosapp_api_client import api_client
+                    api_client.registrar_metricas({
+                        "modulo": "DESCARGA_WEB",
+                        "fase_operacion": "DESCARGA_FOMAG",
+                        "fecha_inicio": t_start.isoformat(),
+                        "fecha_fin": t_end.isoformat(),
+                        "duracion_segundos": (t_end - t_start).total_seconds(),
+                        "cantidad_items": files_count,
+                        "fue_exitosa": is_success,
+                        "mensaje_error": err_msg,
+                    })
+                except Exception:
+                    pass
                 self.fomag_btn.disabled = False
                 self.page.update()
 

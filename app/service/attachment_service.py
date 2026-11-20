@@ -178,7 +178,7 @@ class AttachmentService:
         return self.session_files
 
     def get_file_metadata(self, file_path):
-        """Obtiene metadatos de un archivo específico
+        """Obtiene metadatos de un archivo específico con búsqueda tolerante.
 
         Args:
             file_path: Ruta del archivo
@@ -186,7 +186,22 @@ class AttachmentService:
         Returns:
             dict: Metadatos del archivo o None si no existen
         """
-        return self.file_metadata.get(file_path)
+        if not file_path:
+            return None
+        # 1. Coincidencia directa
+        if file_path in self.file_metadata:
+            return self.file_metadata[file_path]
+        # 2. Coincidencia normalizada de ruta (evita discrepancias / vs \ y mayúsculas en Windows)
+        norm_target = os.path.normcase(os.path.normpath(file_path))
+        for k, v in self.file_metadata.items():
+            if os.path.normcase(os.path.normpath(k)) == norm_target:
+                return v
+        # 3. Coincidencia por nombre base de archivo si difiere la ruta
+        base_target = os.path.basename(file_path).lower()
+        for k, v in self.file_metadata.items():
+            if os.path.basename(k).lower() == base_target:
+                return v
+        return None
 
     def get_session_excel_files(self, exclude_devoluciones=True):
         """

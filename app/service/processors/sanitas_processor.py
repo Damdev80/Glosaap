@@ -715,6 +715,28 @@ class SanitasProcessor(BaseProcessor):
             logger.info("Sanitas: %s filas TA procesadas", procesadas)
         return df_obj
 
+    def _buscar_fecha_en_dataframe(self, df: pd.DataFrame) -> str | None:
+        """Busca columnas de fecha típicas en el Excel de Sanitas si no vino del correo."""
+        if df is None or df.empty:
+            return None
+        candidatas = [
+            "FECHA NOTIFICACION", "FECHA NOTIFICACIÓN", "FECHA RADICACION", "FECHA RADICACIÓN",
+            "FECHA GLOSA", "FECHA DE RADICACION", "FECHA DE NOTIFICACION", "FECHA RECEPCION",
+            "FECHA DE RECEPCION", "FECHA CORREO", "FECHA", "FECHA DE AUDITORIA", "FECHA AUDITORIA"
+        ]
+        col = self._resolve_column(df, candidatas, None)
+        if col and col in df.columns:
+            valores = df[col].dropna()
+            for val in valores:
+                formateado = self._formatear_fecha_dmy(val)
+                if formateado:
+                    try:
+                        p = datetime.strptime(formateado, "%d/%m/%Y")
+                        return p.strftime("%Y-%m-%d %H:%M:%S")
+                    except Exception:
+                        return formateado
+        return None
+
     def _build_objeciones_df(
         self, detalle_df: pd.DataFrame, email_date: str | None = None
     ) -> pd.DataFrame:
@@ -893,7 +915,11 @@ class SanitasProcessor(BaseProcessor):
                 elif email_date:
                     raw_date = email_date
                 else:
-                    raw_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    fecha_excel = self._buscar_fecha_en_dataframe(df)
+                    if fecha_excel:
+                        raw_date = fecha_excel
+                    else:
+                        raw_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 df["fecha_correo"] = raw_date
                 frames.append(df)
             except Exception as e:

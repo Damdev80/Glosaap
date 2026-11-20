@@ -6,6 +6,17 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.11.36] - 2026-11-20
+
+### 🐛 Correcciones
+- **Fecha de Objeción en Sanitas (`CROFECOBJ`)**: Corrección del error donde Sanitas asignaba la fecha del día de procesamiento en lugar de la fecha original de recepción del correo. Se implementó un parser RFC 2822 multietapa en `_parse_email_date` que limpia comentarios de zona horaria como `(COT)` y `(UTC)`, normaliza meses en español y extrae la fecha real del correo. Adicionalmente, se integró búsqueda por columnas de fecha internas en el Excel (`FECHA NOTIFICACION`, `FECHA RADICACION`) y resolución insensible a rutas/slashes en `AttachmentService` mediante coincidencia normalizada y por nombre de archivo (`basename`).
+
+### ✨ Nuevas Características
+- **Telemetría y Métricas Automáticas en Descargas y Procesamiento**: Instrumentación completa en segundo plano de todos los flujos de descarga web (`FamiliarScraper`, `FomagScraper`), descarga IMAP y procesadores de glosas (`Mutualser`, `Coosalud`, `Sanitas`, `Previsora`). Ahora cada descarga y lote procesado reporta automáticamente sus métricas operativas y transaccionales a la API Glosapp (`10.10.10.18:8081`), reflejándose en tiempo real en los KPIs y tablas del Dashboard.
+- **Rastreo Automático de Sesión**: Apertura y cierre automático de sesión de usuario en la API (`/sesiones/abrir`, `/sesiones/{id}/cerrar`) durante el ciclo de vida de autenticación.
+
+---
+
 ## [0.11.35] - 2026-11-20
 
 ### ✨ Nuevas Características

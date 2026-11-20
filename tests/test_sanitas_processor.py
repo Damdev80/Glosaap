@@ -547,3 +547,116 @@ class TestWiring:
         service = EmailService()
         resultado = service.procesar_sanitas([])
         assert resultado["success"] is False
+
+
+class TestEmailDateParsingAndSanitasMetadata:
+    """Verifica el parsing robusto de fechas de correo con (COT)/(UTC) y asignación a CROFECOBJ."""
+
+    def test_parse_email_date_formats(self):
+        from app.ui.app import _parse_email_date
+
+        # Formato típico Sanitas con comentario (COT)
+        d1 = _parse_email_date("Thu, 20 Nov 2026 10:45:00 -0500 (COT)")
+        assert d1 is not None
+        assert d1.strftime("%Y-%m-%d") == "2026-11-20"
+
+        # Formato con (UTC)
+        d2 = _parse_email_date("Thu, 20 Nov 2026 15:45:00 +0000 (UTC)")
+        assert d2 is not None
+
+        # Formato RFC simple
+        d3 = _parse_email_date("Fri, 21 Nov 2026 09:15:00 GMT")
+        assert d3 is not None
+
+        # Formato ISO / estándar
+        d4 = _parse_email_date("2026-11-20 08:30:00")
+        assert d4 is not None
+        assert d4.strftime("%Y-%m-%d %H:%M:%S") == "2026-11-20 08:30:00"
+
+        # Fecha con formato DD/MM/YYYY
+        d5 = _parse_email_date("20/11/2026 11:22:33")
+        assert d5 is not None
+        assert d5.strftime("%Y-%m-%d") == "2026-11-20"
+
+        # Cadena inválida o None
+        assert _parse_email_date("") is None
+        assert _parse_email_date(None) is None
+        assert _parse_email_date("invalido total") is None
+
+    def test_buscar_fecha_en_dataframe(self):
+        proc = SanitasProcessor(homologador_path="")
+
+        # Caso 1: Columna 'FECHA NOTIFICACION'
+        df1 = pd.DataFrame([{"FECHA NOTIFICACION": "2026-11-19", "VALOR": 100}])
+        f1 = proc._buscar_fecha_en_dataframe(df1)
+        assert f1 is not None
+        assert f1.startswith("2026-11-19")
+
+        # Caso 2: Columna 'FECHA RADICACION'
+        df2 = pd.DataFrame([{"FECHA RADICACION": "18/11/2026", "VALOR": 200}])
+        f2 = proc._buscar_fecha_en_dataframe(df2)
+        assert f2 is not None
+        assert f2.startswith("2026-11-18")
+
+        # Caso 3: Sin columnas de fecha
+        df3 = pd.DataFrame([{"NUMERO": 123, "VALOR": 300}])
+        assert proc._buscar_fecha_en_dataframe(df3) is None
+
+    def test_sanitas_crofecobj_usa_email_date_de_metadata(self, tmp_path):
+        from app.service.attachment_service import AttachmentService
+
+        proc = SanitasProcessor(homologador_path="")
+        xlsx_file = _xlsx(tmp_path / "glosa_sanitas.xlsx", [_fila_base()])
+
+        # Registrar metadata en AttachmentService con fecha de correo
+        att_service = AttachmentService()
+        fecha_correo = "2026-11-15 14:30:00"
+        att_service.add_files(
+            [xlsx_file],
+            metadata={
+                "email_date": fecha_correo,
+                "subject": "GLOSA NOTIFICACION SANITAS",
+                "sender": "notificaciones@colsanitas.com",
+            },
+        )
+
+        res, msg = proc.process_glosas(
+            [xlsx_file],
+            output_dir=str(tmp_path),
+            attachment_service=att_service,
+        )
+
+        assert res is not None
+        df_obj = res["objeciones"]
+        assert not df_obj.empty
+        # CROFECOBJ debe ser 15/11/2026, NO la fecha de hoy
+        assert df_obj.loc[0, "CROFECOBJ"] == "15/11/2026"
+
+    def test_attachment_service_lookup_normalizado_y_basename(self, tmp_path):
+        from app.service.attachment_service import AttachmentService
+
+        att = AttachmentService()
+        ruta_original = str(tmp_path / "test_sanitas.xlsx")
+        with open(ruta_original, "wb") as f:
+            f.write(b"data")
+
+        att.add_files(
+            [ruta_original],
+            metadata={
+                "email_date": "2026-11-20 10:00:00",
+                "subject": "Test Subject",
+            },
+        )
+
+        # 1. Búsqueda exacta
+        meta1 = att.get_file_metadata(ruta_original)
+        assert meta1["subject"] == "Test Subject"
+
+        # 2. Búsqueda normalizada (slashes diferentes)
+        ruta_alt = ruta_original.replace("\\", "/")
+        meta2 = att.get_file_metadata(ruta_alt)
+        assert meta2["subject"] == "Test Subject"
+
+        # 3. Búsqueda por basename fallback
+        meta3 = att.get_file_metadata(r"D:\OtroLado\test_sanitas.xlsx")
+        assert meta3["subject"] == "Test Subject"

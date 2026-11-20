@@ -41,6 +41,7 @@ class GlosappApiClient:
         self.api_key = (api_key or DEFAULT_GLOSAPP_API_KEY).strip()
         self.timeout = timeout
         self._session = requests.Session()
+        self.current_session_id: int | None = None
 
     def update_credentials(self, base_url: str | None = None, api_key: str | None = None) -> None:
         """Actualiza la URL base o la API Key en caliente."""
@@ -333,17 +334,25 @@ class GlosappApiClient:
         try:
             resp = self._session.post(url, headers=self._headers(), json=payload, timeout=(3.0, 5.0))
             if resp.status_code in (200, 201):
-                return resp.json().get("id_sesion")
+                self.current_session_id = resp.json().get("id_sesion")
+                return self.current_session_id
             return None
         except Exception:
             return None
 
-    def cerrar_sesion(self, id_sesion: int) -> bool:
+    def cerrar_sesion(self, id_sesion: int | None = None) -> bool:
         """Registra el cierre de la sesión de Glosaap."""
-        url = f"{self.base_url}/sesiones/{id_sesion}/cerrar"
+        target_id = id_sesion or self.current_session_id
+        if not target_id:
+            return False
+        url = f"{self.base_url}/sesiones/{target_id}/cerrar"
         try:
             resp = self._session.post(url, headers=self._headers(), json={}, timeout=(2.0, 4.0))
-            return resp.status_code == 200
+            if resp.status_code == 200:
+                if target_id == self.current_session_id:
+                    self.current_session_id = None
+                return True
+            return False
         except Exception:
             return False
 

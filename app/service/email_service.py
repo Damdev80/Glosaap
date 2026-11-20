@@ -110,8 +110,18 @@ class EmailService:
             logger.warning("Red no accesible (%s), usando local: %s", e, fallback_path)
 
         # Fallback a ruta local
-        os.makedirs(fallback_path, exist_ok=True)
-        return fallback_path
+        try:
+            os.makedirs(fallback_path, exist_ok=True)
+            return fallback_path
+        except (OSError, PermissionError) as e:
+            logger.warning("No se pudo crear fallback local %s (%s); usando temporal", fallback_path, e)
+            import tempfile
+            tmp_dir = os.path.join(tempfile.gettempdir(), "glosaap_outputs", os.path.basename(fallback_path))
+            try:
+                os.makedirs(tmp_dir, exist_ok=True)
+                return tmp_dir
+            except Exception:
+                return fallback_path
 
     def connect(self, email, password, server="imap.gmail.com", port=993):
         """Conecta al servidor IMAP"""
@@ -722,6 +732,14 @@ class EmailService:
             archivos_previos = set(os.listdir(output_dir)) if os.path.exists(output_dir) else set()
         except Exception:
             archivos_previos = set()
+
+        # Si email_date no se pasó explícito, intentar rescatarlo de los metadatos de los archivos
+        if not email_date and self.attachment_service:
+            for arch in (archivos or []):
+                meta = self.attachment_service.get_file_metadata(arch)
+                if meta and meta.get("email_date"):
+                    email_date = meta["email_date"]
+                    break
 
         try:
             result_data, message = self.sanitas_processor.process_glosas(

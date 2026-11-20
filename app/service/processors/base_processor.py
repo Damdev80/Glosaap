@@ -134,7 +134,11 @@ class BaseProcessor(ABC):
         try:
             if isinstance(fecha, (pd.Timestamp, datetime)):
                 return fecha.strftime("%d/%m/%Y")
-            fecha_dt = pd.to_datetime(str(fecha), errors="coerce")
+            s = str(fecha).strip()
+            if len(s) >= 10 and s[:4].isdigit() and s[4] in ("-", "/"):
+                fecha_dt = pd.to_datetime(s, errors="coerce")
+            else:
+                fecha_dt = pd.to_datetime(s, errors="coerce", dayfirst=True)
             return fecha_dt.strftime("%d/%m/%Y") if pd.notna(fecha_dt) else ""
         except Exception:
             return ""

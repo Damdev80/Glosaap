@@ -5,7 +5,9 @@ Con soporte completo de temas claro/oscuro.
 Bootstrap + inyección: crea servicios, estado (AppState) y vistas, y
 delega TODA la navegación al NavigationController (canal único).
 """
+import email.utils
 import os
+import re as _re
 import sys
 import threading
 from datetime import datetime as _dt
@@ -59,28 +61,92 @@ ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..",
 
 
 def _parse_email_date(msg_date):
-    """Parsea la fecha de un correo a datetime (múltiples formatos) o None."""
+    """Parsea la fecha de un correo a datetime (múltiples formatos, zonas RFC y español) o None."""
     if msg_date is None:
         return None
-    try:
-        if isinstance(msg_date, str):
-            for fmt in (
-                '%a, %d %b %Y %H:%M:%S %z',
-                '%a, %d %b %Y %H:%M:%S',
-                '%d %b %Y %H:%M:%S %z',
-                '%d %b %Y %H:%M:%S',
-                '%Y-%m-%d %H:%M:%S',
-                '%d/%m/%Y %H:%M:%S',
-            ):
-                try:
-                    return _dt.strptime(msg_date.strip(), fmt)
-                except ValueError:
-                    continue
-            return None
-        if hasattr(msg_date, 'strftime'):
-            return msg_date
-    except Exception:
+    if hasattr(msg_date, 'strftime'):
+        return msg_date
+    if not isinstance(msg_date, str):
         return None
+    raw = msg_date.strip()
+    if not raw:
+        return None
+
+    # 1. Limpieza de sufijos comunes de zona horaria entre paréntesis: (COT), (UTC), (EST), etc.
+    cleaned = _re.sub(r'\s*\([A-Za-z0-9_\-+\s]+\)\s*$', '', raw).strip()
+    cleaned = _re.sub(r'\s+GMT(\s|$)', ' ', cleaned).strip()
+
+    # 2. Traducción de nombres de días y meses en español si vinieran en español
+    spanish_months = {
+        'ene': 'Jan', 'feb': 'Feb', 'mar': 'Mar', 'abr': 'Apr',
+        'may': 'May', 'jun': 'Jun', 'jul': 'Jul', 'ago': 'Aug',
+        'sep': 'Sep', 'set': 'Sep', 'oct': 'Oct', 'nov': 'Nov', 'dic': 'Dec'
+    }
+    spanish_days = {
+        'lun': 'Mon', 'mar': 'Tue', 'mie': 'Wed', 'mié': 'Wed',
+        'jue': 'Thu', 'vie': 'Fri', 'sab': 'Sat', 'sáb': 'Sat', 'dom': 'Sun'
+    }
+    translated = cleaned
+    for es, en in spanish_days.items():
+        translated = _re.sub(rf'\b{es}\b', en, translated, flags=_re.IGNORECASE)
+    for es, en in spanish_months.items():
+        translated = _re.sub(rf'\b{es}\b', en, translated, flags=_re.IGNORECASE)
+
+    # 3. Intentar con email.utils.parsedate_to_datetime (RFC 2822 estándar de correo)
+    for candidate in (cleaned, translated):
+        try:
+            dt = email.utils.parsedate_to_datetime(candidate)
+            if dt is not None:
+                if dt.tzinfo is not None:
+                    try:
+                        return dt.astimezone().replace(tzinfo=None)
+                    except Exception:
+                        return dt.replace(tzinfo=None)
+                return dt
+        except Exception:
+            pass
+
+    # 4. Formatos explícitos con strptime
+    for candidate in (cleaned, translated, raw):
+        for fmt in (
+            '%a, %d %b %Y %H:%M:%S %z',
+            '%a, %d %b %Y %H:%M:%S',
+            '%d %b %Y %H:%M:%S %z',
+            '%d %b %Y %H:%M:%S',
+            '%Y-%m-%d %H:%M:%S',
+            '%d/%m/%Y %H:%M:%S',
+            '%d-%m-%Y %H:%M:%S',
+            '%Y-%m-%d',
+            '%d/%m/%Y',
+            '%d-%m-%Y',
+        ):
+            try:
+                dt = _dt.strptime(candidate, fmt)
+                if hasattr(dt, 'tzinfo') and dt.tzinfo is not None:
+                    try:
+                        return dt.astimezone().replace(tzinfo=None)
+                    except Exception:
+                        return dt.replace(tzinfo=None)
+                return dt
+            except ValueError:
+                continue
+
+    # 5. Fallback con pandas dayfirst=True
+    try:
+        import pandas as _pd
+
+        pdt = _pd.to_datetime(cleaned, dayfirst=True, errors='coerce')
+        if _pd.notna(pdt):
+            dt = pdt.to_pydatetime()
+            if hasattr(dt, 'tzinfo') and dt.tzinfo is not None:
+                try:
+                    return dt.astimezone().replace(tzinfo=None)
+                except Exception:
+                    return dt.replace(tzinfo=None)
+            return dt
+    except Exception:
+        pass
+
     return None
 
 
@@ -94,6 +160,59 @@ def _latest_email_date_str(messages):
     if not dates:
         return None
     return max(dates).strftime('%Y-%m-%d %H:%M:%S')
+
+
+def _report_processing_to_api(codigo_eps: str, origen: str, files_count: int, resultado: dict, duracion: float):
+    """Envía telemetría y lote a la API de Glosapp en segundo plano sin bloquear la UI."""
+    try:
+        from app.service.glosapp_api_client import api_client
+        resumen = resultado.get("resumen") or {}
+        try:
+            total_reg = int(resumen.get("total_registros", 0) or 0)
+        except (TypeError, ValueError):
+            total_reg = 0
+        try:
+            hom = int(resumen.get("codigos_homologados", 0) or 0)
+        except (TypeError, ValueError):
+            hom = 0
+        tasa = (hom / total_reg * 100) if total_reg > 0 else 0.0
+
+        api_client.registrar_metricas({
+            "modulo": "PROCESADOR",
+            "fase_operacion": "HOMOLOGACION",
+            "duracion_segundos": duracion,
+            "cantidad_items": total_reg,
+            "fue_exitosa": bool(resultado.get("success", False)),
+            "mensaje_error": resultado.get("message") if not resultado.get("success") else None,
+        })
+        if resultado.get("success"):
+            obj_file = resultado.get("objeciones_file") or resultado.get("output_file") or ""
+            api_client.registrar_lote_completo({
+                "codigo_eps": codigo_eps.upper(),
+                "origen": origen,
+                "nombre_archivo_objeciones": os.path.basename(str(obj_file)) if obj_file else None,
+                "total_facturas": files_count,
+                "total_registros_glosa": total_reg,
+                "tasa_homologacion_pct": round(tasa, 2),
+                "facturas": [],
+            })
+    except Exception as ex:
+        logger.debug("No se pudo reportar lote a la API: %s", ex)
+
+
+def _report_imap_download_to_api(count: int, duracion: float, eps_code: str):
+    """Envía telemetría de búsqueda/descarga IMAP a la API en segundo plano."""
+    try:
+        from app.service.glosapp_api_client import api_client
+        api_client.registrar_metricas({
+            "modulo": "IMAP_CORREO",
+            "fase_operacion": f"DESCARGA_{eps_code.upper()}",
+            "duracion_segundos": duracion,
+            "cantidad_items": count,
+            "fue_exitosa": True,
+        })
+    except Exception as ex:
+        logger.debug("No se pudo reportar descarga a la API: %s", ex)
 
 
 def _open_folder_in_explorer(folder_path):
@@ -337,6 +456,12 @@ def main(page: ft.Page):
 
     def go_to_login(logout=False):
         """Navega a login vía NavigationController."""
+        if logout:
+            try:
+                from app.service.glosapp_api_client import api_client
+                threading.Thread(target=api_client.cerrar_sesion, daemon=True).start()
+            except Exception:
+                pass
         ctl = _nav()
         if ctl is None:
             return
@@ -438,6 +563,11 @@ def main(page: ft.Page):
         try:
             page.window.maximized = True
             page.update()
+        except Exception:
+            pass
+        try:
+            from app.service.glosapp_api_client import api_client
+            threading.Thread(target=api_client.abrir_sesion, daemon=True).start()
         except Exception:
             pass
         go_to_dashboard()
@@ -543,6 +673,7 @@ def main(page: ft.Page):
         """Carga mensajes del servidor y descarga adjuntos automáticamente"""
         def worker():
             load_seq = messages_view.new_generation()
+            t_start_load = _dt.now()
             try:
                 # IMPORTANTE: Limpiar archivos antiguos para que los nuevos tengan metadatos frescos
                 logger.debug("Limpiando archivos temporales antiguos...")
@@ -653,6 +784,16 @@ def main(page: ft.Page):
 
                 excel_count = len(email_service.get_excel_files())
                 messages_view.refresh_checklist(len(msgs), excel_count, False)
+                try:
+                    t_duracion = (_dt.now() - t_start_load).total_seconds()
+                    eps_cod = (ui_state.selected_eps or {}).get("filter") or "GENERAL"
+                    threading.Thread(
+                        target=_report_imap_download_to_api,
+                        args=(excel_count, t_duracion, eps_cod),
+                        daemon=True,
+                    ).start()
+                except Exception:
+                    pass
                 if msgs:
                     messages_view.set_loading(False, f"{len(msgs)} correo(s) | {excel_count} Excel listos para procesar")
 
@@ -804,7 +945,14 @@ def main(page: ft.Page):
                     logger.info("Procesando %s archivos Excel automaticamente", len(excel_files))
                     messages_view.set_processing(True, f"Procesando {len(excel_files)} archivo(s) Excel...")
 
+                    t_proc_start = _dt.now()
                     resultado = email_service.procesar_mutualser()
+                    t_proc_dur = (_dt.now() - t_proc_start).total_seconds()
+                    threading.Thread(
+                        target=_report_processing_to_api,
+                        args=("MUTUALSER", "IMAP_CORREO", len(excel_files), resultado, t_proc_dur),
+                        daemon=True,
+                    ).start()
 
                     # Cancelado durante el procesado (no divisible): no aplicar tardíos
                     if messages_view.is_cancelled(proc_seq):
@@ -921,6 +1069,7 @@ def main(page: ft.Page):
                     else:
                         logger.warning("COOSALUD sin fecha extraible de %s mensajes", len(ui_state.found_messages))
 
+                    t_proc_start = _dt.now()
                     processor = CoosaludProcessor(homologador_path=homologador_path)
                     result_data, message = processor.process_glosas(
                         excel_files,
@@ -928,6 +1077,7 @@ def main(page: ft.Page):
                         email_date=email_date,
                         attachment_service=email_service.attachment_service
                     )
+                    t_proc_dur = (_dt.now() - t_proc_start).total_seconds()
 
                     # Cancelado durante el procesado (no divisible): no aplicar tardíos
                     if messages_view.is_cancelled(proc_seq):
@@ -989,6 +1139,12 @@ def main(page: ft.Page):
                                 message=f"Hay {_coosalud_no_hom} registro(s) no homologados.\n\nRevisa el Excel generado en:\n{_coosalud_dir}",
                             )
 
+                        threading.Thread(
+                            target=_report_processing_to_api,
+                            args=("COOSALUD", "IMAP_CORREO", len(excel_files), {"success": True, "resumen": stats, "output_file": str(output_dir)}, t_proc_dur),
+                            daemon=True,
+                        ).start()
+
                         AlertDialog.show_processing_complete(
                             page=page,
                             eps_name="COOSALUD",
@@ -1032,7 +1188,14 @@ def main(page: ft.Page):
 
                     # Fecha del correo más reciente (helper centralizado)
                     email_date = _latest_email_date_str(ui_state.found_messages)
+                    t_proc_start = _dt.now()
                     resultado = email_service.procesar_sanitas(email_date=email_date)
+                    t_proc_dur = (_dt.now() - t_proc_start).total_seconds()
+                    threading.Thread(
+                        target=_report_processing_to_api,
+                        args=("SANITAS", "IMAP_CORREO", len(excel_files), resultado, t_proc_dur),
+                        daemon=True,
+                    ).start()
 
                     # Cancelado durante el procesado (no divisible): no aplicar tardíos
                     if messages_view.is_cancelled(proc_seq):
@@ -1140,7 +1303,14 @@ def main(page: ft.Page):
                     messages_view.set_processing(True, f"Procesando {len(pdf_files)} archivo(s) PDF...")
 
                     email_date = _latest_email_date_str(ui_state.found_messages)
+                    t_proc_start = _dt.now()
                     resultado = email_service.procesar_previsora(email_date=email_date)
+                    t_proc_dur = (_dt.now() - t_proc_start).total_seconds()
+                    threading.Thread(
+                        target=_report_processing_to_api,
+                        args=("PREVISORA", "IMAP_CORREO", len(pdf_files), resultado, t_proc_dur),
+                        daemon=True,
+                    ).start()
 
                     if messages_view.is_cancelled(proc_seq):
                         messages_view.process_eps_btn.disabled = False
