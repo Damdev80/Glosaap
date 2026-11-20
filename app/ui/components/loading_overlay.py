@@ -356,15 +356,16 @@ class ToastNotification:
             content=ft.Row(
                 controls=[
                     ft.Icon(icon, color=ft.Colors.SURFACE, size=20),
-                    ft.Text(message, color=ft.Colors.SURFACE, size=14),
+                    ft.Text(message, color=ft.Colors.SURFACE, size=13, weight=ft.FontWeight.W_500),
                 ],
                 spacing=SPACING["sm"],
+                alignment=ft.MainAxisAlignment.CENTER,
             ),
             bgcolor=bgcolor,
             duration=duration,
             behavior=ft.SnackBarBehavior.FLOATING,
             shape=ft.RoundedRectangleBorder(radius=8),
-            margin=SPACING["md"],
+            width=380,
         )
         self.page.overlay.append(self._snack_bar)
         self._snack_bar.open = True

@@ -51,7 +51,7 @@ class AnalyticsDashboardView:
         self._progress_bar = ft.ProgressBar(height=3, visible=False)
 
         # Contenedores de contenido
-        self._kpi_row = ft.Row(spacing=14, wrap=True, alignment=ft.MainAxisAlignment.START)
+        self._kpi_row = ft.Row(spacing=14, alignment=ft.MainAxisAlignment.START)
         self._eps_breakdown_row = ft.Row(spacing=12, wrap=True, alignment=ft.MainAxisAlignment.START)
         self._tab_content_area = ft.Container(expand=True)
 
@@ -160,13 +160,13 @@ class AnalyticsDashboardView:
             self._progress_bar,
             self._banner_container,
             filters_bar,
-            ft.Container(height=6),
+            ft.Container(height=4),
             self._kpi_row,
-            ft.Container(height=10),
+            ft.Container(height=8),
             self._tabs,
-            ft.Container(height=6),
+            ft.Container(height=4),
             self._tab_content_area,
-        ], expand=True, spacing=6, scroll=ft.ScrollMode.AUTO)
+        ], expand=True, spacing=4)
 
         return ft.Container(
             content=body,
@@ -244,29 +244,31 @@ class AnalyticsDashboardView:
     def _render_skeletons(self):
         """Renderiza placeholders tipo skeleton mientras llegan los datos."""
         def skeleton_card():
-            return ft.Card(
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.Row([
-                            ft.Container(width=80, height=12, border_radius=4, bgcolor=ft.Colors.OUTLINE_VARIANT),
-                            ft.Container(width=18, height=18, border_radius=9, bgcolor=ft.Colors.OUTLINE_VARIANT),
-                        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                        ft.Container(height=4),
-                        ft.Container(width=110, height=22, border_radius=4, bgcolor=ft.Colors.OUTLINE_VARIANT),
-                        ft.Container(height=2),
-                        ft.Container(width=90, height=10, border_radius=4, bgcolor=ft.Colors.OUTLINE_VARIANT),
-                    ], spacing=4, tight=True),
-                    padding=14,
-                    width=190,
+            return ft.Container(
+                content=ft.Card(
+                    content=ft.Container(
+                        content=ft.Column([
+                            ft.Row([
+                                ft.Container(width=80, height=12, border_radius=4, bgcolor=ft.Colors.OUTLINE_VARIANT),
+                                ft.Container(width=18, height=18, border_radius=9, bgcolor=ft.Colors.OUTLINE_VARIANT),
+                            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                            ft.Container(height=4),
+                            ft.Container(width=110, height=22, border_radius=4, bgcolor=ft.Colors.OUTLINE_VARIANT),
+                            ft.Container(height=2),
+                            ft.Container(width=90, height=10, border_radius=4, bgcolor=ft.Colors.OUTLINE_VARIANT),
+                        ], spacing=4, tight=True),
+                        padding=14,
+                    ),
+                    elevation=1,
                 ),
-                elevation=1,
+                expand=1,
             )
 
         self._kpi_row.controls = [skeleton_card() for _ in range(5)]
 
-        # Esqueleto de tabla
+        # Esqueleto de tabla ocupando el 100% vh restante
         skeleton_rows = []
-        for _ in range(5):
+        for _ in range(8):
             skeleton_rows.append(
                 ft.Container(
                     content=ft.Row([
@@ -279,16 +281,17 @@ class AnalyticsDashboardView:
                         ft.Container(width=60, height=14, border_radius=4, bgcolor=ft.Colors.OUTLINE_VARIANT),
                         ft.Container(expand=True, height=14, border_radius=4, bgcolor=ft.Colors.OUTLINE_VARIANT),
                     ], spacing=16),
-                    padding=ft.padding.symmetric(vertical=8, horizontal=12),
+                    padding=ft.padding.symmetric(vertical=10, horizontal=12),
                     border_radius=6,
                 )
             )
 
         self._tab_content_area.content = ft.Container(
-            content=ft.Column(skeleton_rows, spacing=6),
+            content=ft.Column(skeleton_rows, spacing=10, expand=True),
             padding=16,
             border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
             border_radius=10,
+            expand=True,
         )
 
     def _fetch_data_worker(self):
@@ -428,21 +431,23 @@ class AnalyticsDashboardView:
         prom_homologacion = (sum(tasas) / len(tasas)) if tasas else 0.0
 
         def kpi_card(title: str, value: str, subtitle: str, icon, color=None):
-            return ft.Card(
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.Row([
-                            ft.Text(title, size=12, color=ft.Colors.ON_SURFACE_VARIANT, weight=ft.FontWeight.W_500),
-                            ft.Icon(icon, size=18, color=color or ft.Colors.PRIMARY),
-                        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                        ft.Container(height=4),
-                        ft.Text(value, size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
-                        ft.Text(subtitle, size=11, color=ft.Colors.ON_SURFACE_VARIANT),
-                    ], spacing=2, tight=True),
-                    padding=14,
-                    width=190,
+            return ft.Container(
+                content=ft.Card(
+                    content=ft.Container(
+                        content=ft.Column([
+                            ft.Row([
+                                ft.Text(title, size=12, color=ft.Colors.ON_SURFACE_VARIANT, weight=ft.FontWeight.W_600),
+                                ft.Icon(icon, size=18, color=color or ft.Colors.PRIMARY),
+                            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                            ft.Container(height=4),
+                            ft.Text(value, size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+                            ft.Text(subtitle, size=11, color=ft.Colors.ON_SURFACE_VARIANT),
+                        ], spacing=2, tight=True),
+                        padding=14,
+                    ),
+                    elevation=2,
                 ),
-                elevation=2,
+                expand=1,
             )
 
         pct_glosado = (total_glosado / total_facturado * 100) if total_facturado > 0 else 0.0
@@ -548,33 +553,64 @@ class AnalyticsDashboardView:
                 ft.Text(f"Mostrando {len(rows)} de {len(self._lotes_data)} lotes", size=11, color=ft.Colors.ON_SURFACE_VARIANT),
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ft.Container(
-                content=ft.Row([table], scroll=ft.ScrollMode.AUTO),
+                content=ft.Column([
+                    ft.Row([table], scroll=ft.ScrollMode.AUTO),
+                ], scroll=ft.ScrollMode.AUTO, expand=True),
                 border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
                 border_radius=10,
                 padding=8,
+                expand=True,
             ) if rows else ft.Container(
-                content=ft.Text("No se encontraron lotes registrados para los filtros actuales.", size=12, italic=True),
-                padding=20,
+                content=ft.Column([
+                    ft.Icon(ft.Icons.ALL_INBOX_OUTLINED, size=52, color=ft.Colors.PRIMARY),
+                    ft.Container(height=4),
+                    ft.Text("No hay lotes registrados", size=16, weight=ft.FontWeight.BOLD),
+                    ft.Text(
+                        "No se encontraron lotes de glosas registrados para los filtros seleccionados.\n"
+                        "Al procesar glosas desde 'Gestión de Glosas' o 'Descarga Web', la trazabilidad se reflejará aquí en tiempo real.",
+                        size=12,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        text_align=ft.TextAlign.CENTER,
+                    ),
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.CENTER, spacing=6),
+                alignment=ft.alignment.center,
+                border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
+                border_radius=10,
+                padding=24,
+                expand=True,
             ),
-        ], spacing=8)
+        ], spacing=8, expand=True)
 
-        return ft.Column([
-            eps_section,
-            ft.Container(height=10),
-            lotes_section,
-        ], spacing=12)
+        if eps_cards:
+            return ft.Column([
+                eps_section,
+                ft.Container(height=6),
+                lotes_section,
+            ], spacing=8, expand=True)
+        else:
+            return lotes_section
 
     def _render_metricas_tab(self) -> ft.Control:
         """Pestaña 2: Rendimiento y telemetría de tiempos."""
         if not self._metricas_data:
             return ft.Container(
                 content=ft.Column([
-                    ft.Icon(ft.Icons.SPEED, size=40, color=ft.Colors.ON_SURFACE_VARIANT),
-                    ft.Text("No hay mediciones de rendimiento registradas en este periodo.", size=13),
-                    ft.Text("A medida que proceses glosas o descargues correos, los tiempos de ejecucion apareceran aqui.", size=11, color=ft.Colors.ON_SURFACE_VARIANT),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=6),
+                    ft.Icon(ft.Icons.SPEED_OUTLINED, size=52, color=ft.Colors.PRIMARY),
+                    ft.Container(height=4),
+                    ft.Text("No hay mediciones de telemetría registradas", size=16, weight=ft.FontWeight.BOLD),
+                    ft.Text(
+                        "Aún no hay mediciones de rendimiento registradas en este periodo.\n"
+                        "A medida que proceses glosas o descargues correos, los tiempos de ejecución aparecerán aquí en tiempo real.",
+                        size=12,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        text_align=ft.TextAlign.CENTER,
+                    ),
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.CENTER, spacing=6),
                 alignment=ft.alignment.center,
-                padding=30,
+                border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
+                border_radius=10,
+                padding=24,
+                expand=True,
             )
 
         rows = []
@@ -619,9 +655,12 @@ class AnalyticsDashboardView:
         return ft.Column([
             ft.Text("Telemetria de Rendimiento por Modulo y Fase Operativa", size=14, weight=ft.FontWeight.W_600),
             ft.Container(
-                content=ft.Row([table], scroll=ft.ScrollMode.AUTO),
+                content=ft.Column([
+                    ft.Row([table], scroll=ft.ScrollMode.AUTO),
+                ], scroll=ft.ScrollMode.AUTO, expand=True),
                 border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
                 border_radius=10,
                 padding=8,
+                expand=True,
             ),
-        ], spacing=8)
+        ], spacing=8, expand=True)

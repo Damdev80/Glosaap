@@ -435,6 +435,11 @@ def main(page: ft.Page):
 
     def handle_login_success():
         """Callback cuando el login es exitoso - ir directo al Dashboard principal con sidebar"""
+        try:
+            page.window.maximized = True
+            page.update()
+        except Exception:
+            pass
         go_to_dashboard()
 
     def on_email_method():
