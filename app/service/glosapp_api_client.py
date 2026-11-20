@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import getpass
 import socket
+from datetime import UTC, datetime
 from typing import Any
 
 import requests
@@ -251,16 +252,44 @@ class GlosappApiClient:
         except requests.exceptions.RequestException as ex:
             return {"success": False, "data": None, "error": str(ex)}
 
-    def registrar_metricas(self, metricas: list[dict[str, Any]]) -> dict[str, Any]:
-        """Registra una lista de métricas de telemetría."""
+    def registrar_metricas(self, metricas: list[dict[str, Any]] | dict[str, Any]) -> dict[str, Any]:
+        """Registra una lista o un registro individual de métricas de telemetría."""
         if not metricas:
             return {"success": True, "insertados": 0, "error": None}
         url = f"{self.base_url}/metricas"
         try:
-            resp = self._session.post(url, headers=self._headers(), json=metricas, timeout=(3.0, 10.0))
+            payload = metricas if isinstance(metricas, list) else [metricas]
+            normalized = []
+            for m in payload:
+                item: dict[str, Any] = {
+                    "modulo": m.get("modulo", "GENERAL"),
+                    "fase_operacion": m.get("fase_operacion") or m.get("fase", "OPERACION"),
+                    "fecha_inicio": m.get("fecha_inicio") or datetime.now(UTC).isoformat(),
+                    "fecha_fin": m.get("fecha_fin") or datetime.now(UTC).isoformat(),
+                }
+                if "duracion_segundos" in m and m["duracion_segundos"] is not None:
+                    item["duracion_segundos"] = float(m["duracion_segundos"])
+                if "cantidad_items" in m and m["cantidad_items"] is not None:
+                    item["cantidad_items"] = int(m["cantidad_items"])
+                elif "registros_procesados" in m and m["registros_procesados"] is not None:
+                    item["cantidad_items"] = int(m["registros_procesados"])
+                if "id_lote" in m and m["id_lote"] is not None:
+                    item["id_lote"] = int(m["id_lote"])
+                if "fue_exitosa" in m and m["fue_exitosa"] is not None:
+                    item["fue_exitosa"] = bool(m["fue_exitosa"])
+                if "mensaje_error" in m and m["mensaje_error"] is not None:
+                    item["mensaje_error"] = str(m["mensaje_error"])
+                normalized.append(item)
+
+            resp = self._session.post(url, headers=self._headers(), json=normalized, timeout=(3.0, 10.0))
             if resp.status_code in (200, 201):
                 return {"success": True, "data": resp.json(), "error": None}
-            return {"success": False, "error": f"HTTP {resp.status_code}"}
+            detail = resp.text
+            try:
+                detail = resp.json().get("detail", detail)
+            except Exception:
+                pass
+            return {"success": False, "error": f"HTTP {resp.status_code}: {detail}"}
         except requests.exceptions.RequestException as ex:
             return {"success": False, "error": str(ex)}
 

@@ -6,6 +6,18 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.11.35] - 2026-11-20
+
+### ✨ Nuevas Características
+- **Dashboard Analítico y Trazabilidad 100% vh**: El Dashboard principal se adapta dinámicamente al 100% de la altura y ancho del viewport (`100% vh`). Las 5 tarjetas KPI se expanden equitativamente sin márgenes muertos, las tablas de lotes y telemetría cuentan con scroll interno independiente, y se incorporaron contenedores de estado vacío informativos y centrados.
+- **Escritura y Trazabilidad en Base de Datos (API Mercurio v1)**: Conexión y persistencia verificada contra la API REST de Glosapp (`10.10.10.18:8081`). Soporte completo para registro de apertura/cierre de sesiones, eventos de auditoría técnica (`/logs`), telemetría de rendimiento operativo (`/metricas`) e ingesta transaccional de lotes con facturas y detalles (`/lotes/completo`).
+- **Navegación Unificada con Sidebar Persistente**: Shell de aplicación con barra lateral fija que no desaparece al cambiar de módulo, botones de retorno contextuales hacia el Dashboard y maximización automática de ventana tras el inicio de sesión.
+
+### 🐛 Correcciones
+- **Notificaciones Flotantes Centradas**: Rediseño de las alertas SnackBar para evitar barras que cruzaban todo el monitor, fijando su ancho a una píldora flotante centrada de 380px.
+- **Compatibilidad de Esquema en Métricas**: Normalización automática de parámetros en `GlosappApiClient.registrar_metricas` para cumplir estrictamente con el esquema `MetricaIn` de la API de producción.
+
+
 ## [0.11.34] - 2026-11-12
 
 ### 🐛 Correcciones
