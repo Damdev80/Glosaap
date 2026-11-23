@@ -830,6 +830,46 @@ class UpdateChecker:
         except Exception:
             return False
 
+    def check_on_startup(self) -> bool:
+        """Verifica actualizaciones inmediatamente al iniciar la app.
+
+        No espera el intervalo de 24 horas y no es bloqueado por remind_at
+        o last_check previo. Si existe una versión más reciente en GitHub,
+        muestra de inmediato el diálogo de actualización para que el usuario
+        actualice antes de comenzar su jornada de trabajo.
+        """
+        try:
+            self._update_dialog = UpdateDialog(
+                page=self.page,
+                current_version=self.current_version,
+                github_repo=self.github_repo,
+                auto_check=False,
+            )
+
+            def startup_worker():
+                try:
+                    logger.info("Verificando actualizaciones al inicio en GitHub (%s)...", self.github_repo)
+                    release = self._update_dialog.update_service.check_for_updates()
+                    try:
+                        mark_check_now()
+                    except Exception:
+                        pass
+                    if release:
+                        logger.info("Actualización detectada al inicio: v%s", release.version)
+                        self._update_dialog._release_info = release
+                        self._update_dialog._run_on_ui(self._update_dialog._show_update_available, release)
+                    else:
+                        logger.debug("Al inicio: la app está al día en la versión %s", self.current_version)
+                except Exception as ex:
+                    logger.warning("No se pudo verificar actualización al inicio: %s", ex)
+
+            import threading
+            threading.Thread(target=startup_worker, daemon=True).start()
+            return True
+        except Exception as ex:
+            logger.warning("Error iniciando check_on_startup: %s", ex)
+            return False
+
     def maybe_check(self) -> bool:
         """Verifica si toca (intervalo + remind) y dispara check silencioso.
 

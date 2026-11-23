@@ -719,22 +719,30 @@ class SanitasProcessor(BaseProcessor):
         """Busca columnas de fecha típicas en el Excel de Sanitas si no vino del correo."""
         if df is None or df.empty:
             return None
+        from app.core.date_utils import format_date_iso, parse_email_date
+
         candidatas = [
             "FECHA NOTIFICACION", "FECHA NOTIFICACIÓN", "FECHA RADICACION", "FECHA RADICACIÓN",
             "FECHA GLOSA", "FECHA DE RADICACION", "FECHA DE NOTIFICACION", "FECHA RECEPCION",
-            "FECHA DE RECEPCION", "FECHA CORREO", "FECHA", "FECHA DE AUDITORIA", "FECHA AUDITORIA"
+            "FECHA DE RECEPCION", "FECHA CORREO", "FECHA", "FECHA DE AUDITORIA", "FECHA AUDITORIA",
+            "FECHA ENVIO", "FECHA DE ENVIO", "FECHA_NOTIFICACION", "FECHA_RADICACION"
         ]
-        col = self._resolve_column(df, candidatas, None)
+        col = self._resolve_column_optional(df, candidatas)
+        if not col:
+            # Buscar cualquier columna que contenga FECHA o NOTIF o RADIC
+            for c in df.columns:
+                c_clean = str(c).upper().replace("Ó", "O").replace("Í", "I").replace("Á", "A")
+                if "FECHA" in c_clean or "NOTIF" in c_clean or "RADIC" in c_clean:
+                    col = c
+                    break
+
         if col and col in df.columns:
             valores = df[col].dropna()
             for val in valores:
-                formateado = self._formatear_fecha_dmy(val)
-                if formateado:
-                    try:
-                        p = datetime.strptime(formateado, "%d/%m/%Y")
-                        return p.strftime("%Y-%m-%d %H:%M:%S")
-                    except Exception:
-                        return formateado
+                parsed_dt = parse_email_date(val)
+                if parsed_dt:
+                    return format_date_iso(parsed_dt)
+
         return None
 
     def _build_objeciones_df(
@@ -767,16 +775,26 @@ class SanitasProcessor(BaseProcessor):
         df_obj["CRNCXC"] = detalle_df["CRNCXC"] if "CRNCXC" in detalle_df.columns else ""
 
         # CROFECOBJ: fecha de recepción del correo por fila (DD/MM/AAAA).
+        fecha_encontrada = None
         if "fecha_correo" in detalle_df.columns and (
             detalle_df["fecha_correo"].astype(str).str.strip() != ""
         ).any():
-            df_obj["CROFECOBJ"] = detalle_df["fecha_correo"].apply(
-                lambda v: self._formatear_fecha_dmy(v) or hoy_dmy
+            f_series = detalle_df["fecha_correo"].apply(
+                lambda v: self._formatear_fecha_dmy(v) if v else ""
             )
+            if (f_series.astype(str).str.strip() != "").any():
+                fecha_encontrada = f_series
+
+        if fecha_encontrada is not None:
+            df_obj["CROFECOBJ"] = fecha_encontrada.replace("", hoy_dmy)
         elif email_date:
             df_obj["CROFECOBJ"] = self._formatear_fecha_dmy(email_date) or hoy_dmy
         else:
-            df_obj["CROFECOBJ"] = hoy_dmy
+            fecha_excel = self._buscar_fecha_en_dataframe(detalle_df)
+            if fecha_excel:
+                df_obj["CROFECOBJ"] = self._formatear_fecha_dmy(fecha_excel) or hoy_dmy
+            else:
+                df_obj["CROFECOBJ"] = hoy_dmy
 
         df_obj["CROREFERE"] = ""
         df_obj["CROOBSERV"] = df_obj["CROFECOBJ"].apply(
@@ -919,7 +937,21 @@ class SanitasProcessor(BaseProcessor):
                     if fecha_excel:
                         raw_date = fecha_excel
                     else:
-                        raw_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        import re
+
+                        from app.core.date_utils import format_date_iso, parse_email_date
+                        m = re.search(r'\b(20\d\d[-_]?[01]\d[-_]?[0-3]\d)\b', os.path.basename(path))
+                        parsed_fname = parse_email_date(m.group(1).replace('_', '-')) if m else None
+                        if parsed_fname:
+                            raw_date = format_date_iso(parsed_fname)
+                        elif os.path.exists(path):
+                            try:
+                                mtime = os.path.getmtime(path)
+                                raw_date = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
+                            except Exception:
+                                raw_date = None
+                        if not raw_date:
+                            raw_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 df["fecha_correo"] = raw_date
                 frames.append(df)
             except Exception as e:
@@ -941,10 +973,19 @@ class SanitasProcessor(BaseProcessor):
             return None, f"[ERROR] Error: {'; '.join(self.errors) or 'sin datos homologados'}"
 
         objeciones_df = self._build_objeciones_df(detalle, email_date)
-        result_data: dict[str, pd.DataFrame] = {
+        total_glosado = float(detalle["CROVALOBJ"].sum()) if "CROVALOBJ" in detalle.columns else 0.0
+        col_factura_val = self._resolve_column_optional(
+            combined,
+            ["VALOR FACTURADO", "VALOR FACTURA", "VALOR TOTAL FACTURA", "VALOR_FACTURA", "VALOR_TOTAL"]
+        )
+        total_facturado = float(combined[col_factura_val].apply(self._obtener_valor_numerico).sum()) if col_factura_val else total_glosado
+
+        result_data: dict[str, Any] = {
             "detalle": detalle,
             "glosa": objeciones_df,
             "objeciones": objeciones_df,
+            "valor_total_glosado": total_glosado,
+            "valor_total_facturado": total_facturado,
         }
 
         if output_dir:

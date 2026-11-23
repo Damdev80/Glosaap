@@ -4,7 +4,10 @@ Orquesta las operaciones entre IMAP y adjuntos
 """
 import os
 
+import pandas as pd
+
 from app.config.settings import HOMOLOGADOR_FILES, NETWORK_PATHS, logger
+from app.core.date_utils import format_date_iso, parse_email_date
 from app.core.imap_client import ImapClient
 from app.core.mutualser_processor import MutualserProcessor
 from app.service.attachment_service import AttachmentService
@@ -233,6 +236,20 @@ class EmailService:
         if not self.imap_client:
             raise Exception("No hay conexión IMAP establecida")
 
+        # Fallback inteligente: si no se suministra email_date, buscar en self.messages
+        resolved_email_date = email_date
+        if not resolved_email_date and self.messages:
+            for m in self.messages:
+                if str(m.get("id")) == str(message_id) and m.get("date"):
+                    dt_parsed = parse_email_date(m["date"])
+                    if dt_parsed:
+                        resolved_email_date = format_date_iso(dt_parsed)
+                    break
+        elif resolved_email_date:
+            dt_parsed = parse_email_date(resolved_email_date)
+            if dt_parsed:
+                resolved_email_date = format_date_iso(dt_parsed)
+
         saved_files = self.imap_client.download_attachments(
             message_id,
             dest_dir=self.attachment_service.base_dir
@@ -245,7 +262,7 @@ class EmailService:
             metadata = {}
             for file_path in saved_files:
                 metadata[file_path] = {
-                    "email_date": email_date,
+                    "email_date": resolved_email_date,
                     "message_id": message_id,
                 }
 
@@ -337,37 +354,12 @@ class EmailService:
                             on_progress(idx, len(msgs), msg, [])
                         continue
                     seen_ids.add(msg_id)
-                # Extraer fecha del correo si está disponible (mismos formatos
-                # que app.ui.app._parse_email_date + limpieza de zona horaria).
+                # Extraer fecha del correo si está disponible usando parser centralizado robusto
                 email_date = None
                 if "date" in msg and msg["date"]:
-                    from datetime import datetime
-                    msg_date = msg["date"]
-                    try:
-                        if isinstance(msg_date, str):
-                            txt = msg_date.strip()
-                            # Quitar sufijos como (UTC), (GMT), GMT sin offset.
-                            import re as _re
-                            txt = _re.sub(r"\s*\(.*?\)\s*", " ", txt).strip()
-                            txt = _re.sub(r"\s+GMT(\s|$)", " ", txt).strip()
-                            for fmt in [
-                                '%a, %d %b %Y %H:%M:%S %z',
-                                '%a, %d %b %Y %H:%M:%S',
-                                '%d %b %Y %H:%M:%S %z',
-                                '%d %b %Y %H:%M:%S',
-                                '%Y-%m-%d %H:%M:%S',
-                                '%d/%m/%Y %H:%M:%S',
-                            ]:
-                                try:
-                                    parsed = datetime.strptime(txt, fmt)
-                                    email_date = parsed.strftime('%Y-%m-%d %H:%M:%S')
-                                    break
-                                except ValueError:
-                                    continue
-                        elif hasattr(msg_date, 'strftime'):
-                            email_date = msg_date.strftime('%Y-%m-%d %H:%M:%S')
-                    except Exception:
-                        pass
+                    email_dt = parse_email_date(msg["date"])
+                    if email_dt:
+                        email_date = format_date_iso(email_dt)
 
                 files = self.download_message_attachments(msg["id"], email_date=email_date)
 
@@ -416,7 +408,7 @@ class EmailService:
 
     # Métodos específicos para procesamiento de EPS
 
-    def procesar_mutualser(self, archivos=None):
+    def procesar_mutualser(self, archivos=None, email_date=None):
         """
         Procesa archivos de respuesta de glosas de MUTUALSER y genera Excel consolidado
         con objeciones separadas por tipo.
@@ -424,6 +416,7 @@ class EmailService:
         Args:
             archivos (list, optional): Lista de rutas de archivos Excel a procesar.
                                      Si None, usa archivos Excel descargados en la sesión actual.
+            email_date (str, optional): Fecha del correo en formato '%Y-%m-%d %H:%M:%S' o similar.
 
         Returns:
             dict: Resultado del procesamiento con las siguientes claves:
@@ -495,7 +488,7 @@ class EmailService:
             }
 
         # Exportar consolidado y generar archivo de objeciones
-        resultado = self.mutualser_processor.exportar_consolidado()
+        resultado = self.mutualser_processor.exportar_consolidado(email_date=email_date)
 
         if resultado:
             output_path, objeciones_path = resultado
@@ -644,6 +637,27 @@ class EmailService:
             facturas_unicas = 0
             codigos_homologados = 0
 
+        # Calcular valores financieros para métricas
+        val_fact = 0.0
+        val_obj = 0.0
+        if detalle_df is not None and not detalle_df.empty:
+            for c in detalle_df.columns:
+                c_str = str(c).lower()
+                if "valor" in c_str and ("fact" in c_str or "total" in c_str) and "glos" not in c_str:
+                    try:
+                        val_fact = float(detalle_df[c].apply(self.coosalud_processor._obtener_valor_numerico).sum())
+                        break
+                    except Exception:
+                        pass
+            for c in detalle_df.columns:
+                c_str = str(c).lower()
+                if "valor" in c_str and ("glos" in c_str or "obj" in c_str):
+                    try:
+                        val_obj = float(detalle_df[c].apply(self.coosalud_processor._obtener_valor_numerico).sum())
+                        break
+                    except Exception:
+                        pass
+
         resumen = {
             'total_registros': total_detalles,
             'total_detalles': total_detalles,
@@ -652,6 +666,9 @@ class EmailService:
             'facturas_unicas': facturas_unicas,
             'codigos_homologados': codigos_homologados,
             'errores': len(getattr(self.coosalud_processor, 'errors', []) or []),
+            'valor_total_facturado': round(val_fact, 2),
+            'valor_total_glosado': round(val_obj, 2),
+            'valor_total_objetado': round(val_obj, 2),
         }
 
         logger.info(
@@ -806,6 +823,9 @@ class EmailService:
             facturas_unicas = 0
             codigos_homologados = 0
 
+        val_fact = float(result_data.get('valor_total_facturado', 0.0) if isinstance(result_data, dict) else 0.0)
+        val_obj = float(result_data.get('valor_total_glosado', 0.0) if isinstance(result_data, dict) else 0.0)
+
         resumen = {
             'total_registros': total_detalles,
             'total_detalles': total_detalles,
@@ -814,6 +834,9 @@ class EmailService:
             'facturas_unicas': facturas_unicas,
             'codigos_homologados': codigos_homologados,
             'errores': len(getattr(self.sanitas_processor, 'errors', []) or []),
+            'valor_total_facturado': round(val_fact, 2),
+            'valor_total_glosado': round(val_obj, 2),
+            'valor_total_objetado': round(val_obj, 2),
         }
 
         logger.info(
@@ -942,6 +965,25 @@ class EmailService:
             facturas_unicas = 0
             codigos_homologados = 0
 
+        val_fact = 0.0
+        val_obj = 0.0
+        if detalle_df is not None and not detalle_df.empty:
+            if "VALOR_FACTURA" in detalle_df.columns:
+                try:
+                    val_fact = float(pd.to_numeric(detalle_df["VALOR_FACTURA"], errors="coerce").fillna(0).sum())
+                except Exception:
+                    pass
+            if "CROVALOBJ" in detalle_df.columns:
+                try:
+                    val_obj = float(pd.to_numeric(detalle_df["CROVALOBJ"], errors="coerce").fillna(0).sum())
+                except Exception:
+                    pass
+            elif "VALOR_GLOSA" in detalle_df.columns:
+                try:
+                    val_obj = float(pd.to_numeric(detalle_df["VALOR_GLOSA"], errors="coerce").fillna(0).sum())
+                except Exception:
+                    pass
+
         resumen = {
             'total_registros': total,
             'total_detalles': total,
@@ -950,6 +992,9 @@ class EmailService:
             'facturas_unicas': facturas_unicas,
             'codigos_homologados': codigos_homologados,
             'errores': len(getattr(self.previsora_processor, 'errors', []) or []),
+            'valor_total_facturado': round(val_fact, 2),
+            'valor_total_glosado': round(val_obj, 2),
+            'valor_total_objetado': round(val_obj, 2),
         }
 
         logger.info(

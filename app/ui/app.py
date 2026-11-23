@@ -5,14 +5,13 @@ Con soporte completo de temas claro/oscuro.
 Bootstrap + inyección: crea servicios, estado (AppState) y vistas, y
 delega TODA la navegación al NavigationController (canal único).
 """
-import email.utils
 import os
-import re as _re
 import sys
 import threading
 from datetime import datetime as _dt
 
 import flet as ft
+import pandas as pd
 
 # Configurar path para imports - agregar el directorio raíz del proyecto
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -60,94 +59,10 @@ from app.ui.views.web_download_view import WebDownloadView
 ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "assets"))
 
 
-def _parse_email_date(msg_date):
-    """Parsea la fecha de un correo a datetime (múltiples formatos, zonas RFC y español) o None."""
-    if msg_date is None:
-        return None
-    if hasattr(msg_date, 'strftime'):
-        return msg_date
-    if not isinstance(msg_date, str):
-        return None
-    raw = msg_date.strip()
-    if not raw:
-        return None
+from app.core.date_utils import parse_email_date
 
-    # 1. Limpieza de sufijos comunes de zona horaria entre paréntesis: (COT), (UTC), (EST), etc.
-    cleaned = _re.sub(r'\s*\([A-Za-z0-9_\-+\s]+\)\s*$', '', raw).strip()
-    cleaned = _re.sub(r'\s+GMT(\s|$)', ' ', cleaned).strip()
-
-    # 2. Traducción de nombres de días y meses en español si vinieran en español
-    spanish_months = {
-        'ene': 'Jan', 'feb': 'Feb', 'mar': 'Mar', 'abr': 'Apr',
-        'may': 'May', 'jun': 'Jun', 'jul': 'Jul', 'ago': 'Aug',
-        'sep': 'Sep', 'set': 'Sep', 'oct': 'Oct', 'nov': 'Nov', 'dic': 'Dec'
-    }
-    spanish_days = {
-        'lun': 'Mon', 'mar': 'Tue', 'mie': 'Wed', 'mié': 'Wed',
-        'jue': 'Thu', 'vie': 'Fri', 'sab': 'Sat', 'sáb': 'Sat', 'dom': 'Sun'
-    }
-    translated = cleaned
-    for es, en in spanish_days.items():
-        translated = _re.sub(rf'\b{es}\b', en, translated, flags=_re.IGNORECASE)
-    for es, en in spanish_months.items():
-        translated = _re.sub(rf'\b{es}\b', en, translated, flags=_re.IGNORECASE)
-
-    # 3. Intentar con email.utils.parsedate_to_datetime (RFC 2822 estándar de correo)
-    for candidate in (cleaned, translated):
-        try:
-            dt = email.utils.parsedate_to_datetime(candidate)
-            if dt is not None:
-                if dt.tzinfo is not None:
-                    try:
-                        return dt.astimezone().replace(tzinfo=None)
-                    except Exception:
-                        return dt.replace(tzinfo=None)
-                return dt
-        except Exception:
-            pass
-
-    # 4. Formatos explícitos con strptime
-    for candidate in (cleaned, translated, raw):
-        for fmt in (
-            '%a, %d %b %Y %H:%M:%S %z',
-            '%a, %d %b %Y %H:%M:%S',
-            '%d %b %Y %H:%M:%S %z',
-            '%d %b %Y %H:%M:%S',
-            '%Y-%m-%d %H:%M:%S',
-            '%d/%m/%Y %H:%M:%S',
-            '%d-%m-%Y %H:%M:%S',
-            '%Y-%m-%d',
-            '%d/%m/%Y',
-            '%d-%m-%Y',
-        ):
-            try:
-                dt = _dt.strptime(candidate, fmt)
-                if hasattr(dt, 'tzinfo') and dt.tzinfo is not None:
-                    try:
-                        return dt.astimezone().replace(tzinfo=None)
-                    except Exception:
-                        return dt.replace(tzinfo=None)
-                return dt
-            except ValueError:
-                continue
-
-    # 5. Fallback con pandas dayfirst=True
-    try:
-        import pandas as _pd
-
-        pdt = _pd.to_datetime(cleaned, dayfirst=True, errors='coerce')
-        if _pd.notna(pdt):
-            dt = pdt.to_pydatetime()
-            if hasattr(dt, 'tzinfo') and dt.tzinfo is not None:
-                try:
-                    return dt.astimezone().replace(tzinfo=None)
-                except Exception:
-                    return dt.replace(tzinfo=None)
-            return dt
-    except Exception:
-        pass
-
-    return None
+# Alias por compatibilidad interna y tests
+_parse_email_date = parse_email_date
 
 
 def _latest_email_date_str(messages):
@@ -177,6 +92,13 @@ def _report_processing_to_api(codigo_eps: str, origen: str, files_count: int, re
             hom = 0
         tasa = (hom / total_reg * 100) if total_reg > 0 else 0.0
 
+        # Totales financieros para KPIs analíticos
+        val_facturado = float(resumen.get("valor_total_facturado") or 0.0)
+        val_objetado = float(resumen.get("valor_total_glosado") or resumen.get("valor_total_objetado") or resumen.get("total_glosa") or 0.0)
+        if val_facturado == 0.0 and val_objetado > 0.0:
+            val_facturado = val_objetado
+        facturas_count = int(resumen.get("facturas_unicas") or files_count or 0)
+
         api_client.registrar_metricas({
             "modulo": "PROCESADOR",
             "fase_operacion": "HOMOLOGACION",
@@ -191,8 +113,10 @@ def _report_processing_to_api(codigo_eps: str, origen: str, files_count: int, re
                 "codigo_eps": codigo_eps.upper(),
                 "origen": origen,
                 "nombre_archivo_objeciones": os.path.basename(str(obj_file)) if obj_file else None,
-                "total_facturas": files_count,
+                "total_facturas": facturas_count,
                 "total_registros_glosa": total_reg,
+                "valor_total_facturado": val_facturado,
+                "valor_total_objetado": val_objetado,
                 "tasa_homologacion_pct": round(tasa, 2),
                 "facturas": [],
             })
@@ -945,8 +869,9 @@ def main(page: ft.Page):
                     logger.info("Procesando %s archivos Excel automaticamente", len(excel_files))
                     messages_view.set_processing(True, f"Procesando {len(excel_files)} archivo(s) Excel...")
 
+                    email_date = _latest_email_date_str(ui_state.found_messages)
                     t_proc_start = _dt.now()
-                    resultado = email_service.procesar_mutualser()
+                    resultado = email_service.procesar_mutualser(email_date=email_date)
                     t_proc_dur = (_dt.now() - t_proc_start).total_seconds()
                     threading.Thread(
                         target=_report_processing_to_api,
@@ -1107,12 +1032,32 @@ def main(page: ft.Page):
                         except Exception:
                             _coosalud_hom = 0
 
+                        _coosalud_val_fact = 0.0
+                        _coosalud_val_obj = 0.0
+                        try:
+                            if _detalle_df is not None and not _detalle_df.empty:
+                                for c in _detalle_df.columns:
+                                    c_str = str(c).lower()
+                                    if "valor" in c_str and ("fact" in c_str or "total" in c_str) and "glos" not in c_str:
+                                        _coosalud_val_fact = float(pd.to_numeric(_detalle_df[c], errors="coerce").fillna(0).sum())
+                                        break
+                                for c in _detalle_df.columns:
+                                    c_str = str(c).lower()
+                                    if "valor" in c_str and ("glos" in c_str or "obj" in c_str):
+                                        _coosalud_val_obj = float(pd.to_numeric(_detalle_df[c], errors="coerce").fillna(0).sum())
+                                        break
+                        except Exception:
+                            pass
+
                         stats = {
                             'archivos_procesados': len(excel_files),
                             'total_registros': _coosalud_total,
                             'codigos_homologados': _coosalud_hom,
                             'no_homologados': max(_coosalud_total - _coosalud_hom, 0) if _coosalud_total else 0,
                             'output_dir': str(output_dir),
+                            'valor_total_facturado': round(_coosalud_val_fact, 2),
+                            'valor_total_glosado': round(_coosalud_val_obj, 2),
+                            'valor_total_objetado': round(_coosalud_val_obj, 2),
                         }
 
                         # Extraer nombre del archivo del mensaje
@@ -1737,7 +1682,7 @@ def main(page: ft.Page):
     if AUTO_UPDATE_CONFIG.get("enabled") and AUTO_UPDATE_CONFIG.get("check_on_startup"):
         logger.info(f"Verificando actualizaciones al inicio (v{APP_VERSION})...")
         try:
-            update_checker.maybe_check()
+            update_checker.check_on_startup()
         except Exception as ex:
             logger.warning("No se pudo verificar actualización inicial: %s", ex)
 

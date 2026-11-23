@@ -369,7 +369,7 @@ class MutualserProcessor(BaseProcessor):
 
     # ==================== GENERACIÓN DE OBJECIONES ====================
 
-    def _generar_archivo_objeciones(self):
+    def _generar_archivo_objeciones(self, email_date=None):
         """Genera archivo Objeciones.xlsx"""
         if self.df_consolidado is None or self.df_consolidado.empty:
             return None
@@ -387,7 +387,11 @@ class MutualserProcessor(BaseProcessor):
             # Formato D/M/A (día/mes/año sin ceros a la izquierda)
             df_obj['CDFECDOC'] = datetime.now().strftime('%#d/%#m/%Y') if os.name == 'nt' else datetime.now().strftime('%-d/%-m/%Y')
             df_obj['CRNCXC'] = (self.df_consolidado['Número de factura'] if 'Número de factura' in self.df_consolidado.columns else pd.Series(dtype=object)).apply(self._formatear_crncxc)
-            df_obj['CROFECOBJ'] = (self.df_consolidado['Fecha'] if 'Fecha' in self.df_consolidado.columns else pd.Series(dtype=object)).apply(self._formatear_fecha_dmy)
+            fechas_series = (self.df_consolidado['Fecha'] if 'Fecha' in self.df_consolidado.columns else pd.Series(dtype=object)).apply(self._formatear_fecha_dmy)
+            if email_date:
+                email_date_formatted = self._formatear_fecha_dmy(email_date)
+                fechas_series = fechas_series.replace('', pd.NA).fillna(email_date_formatted)
+            df_obj['CROFECOBJ'] = fechas_series.fillna('')
             df_obj['CROREFERE'] = ''
             df_obj['CROOBSERV'] = self.df_consolidado['REG GLOSA'] if 'REG GLOSA' in self.df_consolidado.columns else ''
             df_obj['CROCLAOBJ'] = 0
@@ -526,7 +530,7 @@ class MutualserProcessor(BaseProcessor):
 
     # ==================== EXPORTACIÓN ====================
 
-    def exportar_consolidado(self, nombre_archivo=None):
+    def exportar_consolidado(self, nombre_archivo=None, email_date=None):
         """Exporta consolidado y genera objeciones"""
         if self.df_consolidado is None or self.df_consolidado.empty:
             logger.error("No hay datos para exportar")
@@ -569,7 +573,7 @@ class MutualserProcessor(BaseProcessor):
             logger.info("Consolidado: %s", output_path)
 
             # Generar objeciones
-            objeciones_path = self._generar_archivo_objeciones()
+            objeciones_path = self._generar_archivo_objeciones(email_date=email_date)
 
             return (output_path, objeciones_path)
 
@@ -579,13 +583,32 @@ class MutualserProcessor(BaseProcessor):
 
     def get_resumen(self):
         """Obtiene resumen del procesamiento"""
-        if self.df_consolidado is None:
-            return {'total_registros': 0, 'archivos_procesados': 0, 'errores': len(self.errors)}
+        if self.df_consolidado is None or self.df_consolidado.empty:
+            return {
+                'total_registros': 0,
+                'archivos_procesados': len(self.archivos_procesados),
+                'errores': len(self.errors),
+                'facturas_unicas': 0,
+                'codigos_homologados': 0,
+                'valor_total_facturado': 0.0,
+                'valor_total_glosado': 0.0,
+                'valor_total_objetado': 0.0,
+            }
+
+        val_fact = 0.0
+        val_obj = 0.0
+        if 'Valor Facturado' in self.df_consolidado.columns:
+            val_fact = float(self.df_consolidado['Valor Facturado'].apply(self._obtener_valor_numerico).sum())
+        if 'Valor glosado' in self.df_consolidado.columns:
+            val_obj = float(self.df_consolidado['Valor glosado'].apply(self._obtener_valor_numerico).sum())
 
         return {
             'total_registros': len(self.df_consolidado),
             'archivos_procesados': len(self.archivos_procesados),
             'errores': len(self.errors),
             'facturas_unicas': self.df_consolidado['Número de factura'].nunique() if 'Número de factura' in self.df_consolidado.columns else 0,
-            'codigos_homologados': (self.df_consolidado['Codigo homologado DGH'] != '').sum() if 'Codigo homologado DGH' in self.df_consolidado.columns else 0
+            'codigos_homologados': (self.df_consolidado['Codigo homologado DGH'] != '').sum() if 'Codigo homologado DGH' in self.df_consolidado.columns else 0,
+            'valor_total_facturado': round(val_fact, 2),
+            'valor_total_glosado': round(val_obj, 2),
+            'valor_total_objetado': round(val_obj, 2),
         }

@@ -4,6 +4,7 @@ Maneja la descarga, almacenamiento y filtrado de archivos adjuntos
 """
 import os
 import tempfile
+from datetime import datetime
 
 from app.config.settings import logger
 
@@ -39,6 +40,36 @@ class AttachmentService:
                 self.base_dir = base_dir
 
         self._ensure_directory()
+        self._load_persisted_metadata()
+
+    def _metadata_file_path(self) -> str:
+        return os.path.join(self.base_dir, "metadata.json")
+
+    def _load_persisted_metadata(self):
+        """Carga metadatos persistidos en disco para que sobrevivan reinicios de la app."""
+        meta_path = self._metadata_file_path()
+        if os.path.exists(meta_path):
+            try:
+                import json
+                with open(meta_path, encoding="utf-8") as f:
+                    saved = json.load(f)
+                    if isinstance(saved, dict):
+                        for k, v in saved.items():
+                            if k not in self.file_metadata and isinstance(v, dict):
+                                self.file_metadata[k] = v
+                logger.debug("[ATTACH] Metadatos persistidos cargados (%s registros)", len(saved))
+            except Exception as ex:
+                logger.debug("[ATTACH] No se pudo leer metadata.json: %s", ex)
+
+    def _save_persisted_metadata(self):
+        """Persiste metadatos a disco en formato JSON."""
+        meta_path = self._metadata_file_path()
+        try:
+            import json
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump(self.file_metadata, f, ensure_ascii=False, indent=2)
+        except Exception as ex:
+            logger.debug("[ATTACH] No se pudo guardar metadata.json: %s", ex)
 
     def _ensure_directory(self):
         """Crea el directorio si no existe y carga archivos existentes"""
@@ -103,6 +134,19 @@ class AttachmentService:
                     # Si no, asumir que metadata es para aplicar a todos
                     else:
                         self.file_metadata[path] = metadata.copy()
+
+                    # Sincronizar fecha en el timestamp del archivo del sistema operativo
+                    try:
+                        ed = self.file_metadata[path].get("email_date")
+                        if ed:
+                            from app.core.date_utils import parse_email_date
+                            p_dt = parse_email_date(ed)
+                            if p_dt:
+                                ts = p_dt.timestamp()
+                                os.utime(path, (ts, ts))
+                    except Exception:
+                        pass
+        self._save_persisted_metadata()
         logger.debug(
             "[ATTACH] Archivos sesion: %s | Total dir: %s",
             len(self.session_files),
@@ -160,6 +204,7 @@ class AttachmentService:
         self.downloaded_files = []
         self.session_files = []
         self.file_metadata = {}
+        self._save_persisted_metadata()
         logger.info("[CLEANUP] Listas en memoria limpiadas")
 
         return {"deleted": deleted, "errors": errors, "delete_files": delete_files}
@@ -201,6 +246,28 @@ class AttachmentService:
         for k, v in self.file_metadata.items():
             if os.path.basename(k).lower() == base_target:
                 return v
+
+        # 4. Intentar recargar metadatos desde disco si la clave aún no está en memoria
+        self._load_persisted_metadata()
+        if file_path in self.file_metadata:
+            return self.file_metadata[file_path]
+        for k, v in self.file_metadata.items():
+            if os.path.basename(k).lower() == base_target:
+                return v
+
+        # 5. Fallback a fecha de modificación física del archivo si existe
+        if os.path.exists(file_path):
+            try:
+                mtime = os.path.getmtime(file_path)
+                mtime_dt = datetime.fromtimestamp(mtime)
+                # Solo usar mtime si tiene sentido (ej: no es del futuro)
+                return {
+                    "email_date": mtime_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                    "source": "filesystem_mtime",
+                }
+            except Exception:
+                pass
+
         return None
 
     def get_session_excel_files(self, exclude_devoluciones=True):

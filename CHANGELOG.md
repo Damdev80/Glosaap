@@ -6,6 +6,15 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.11.37] - 2026-11-23
+
+### 🐛 Correcciones
+- **Verificación de Actualizaciones al Iniciar la App (`check_on_startup`)**: Corrección del mecanismo de auto-actualización para que verifique nuevas versiones en GitHub inmediatamente al abrir la aplicación, sin quedar suspendido por intervalos de 24 horas (`is_due()`) ni omitir notificaciones a usuarios de versiones desactualizadas.
+- **Fecha de Objeción CROFECOBJ Centralizada y Robusta (Sanitas, Mutualser, Coosalud, Previsora)**: Extracción unificada y universal en `app.core.date_utils.parse_email_date`. Soporta correos con nombres de días y meses en español (ej. `jueves, 20 de noviembre`), conectores (`"de"`), comentarios de huso horario (`(COT)`, `(UTC)`), formatos RFC 2822 e ISO 8601. Adicionalmente se implementó persistencia en disco de los metadatos de adjuntos (`metadata.json`) y sincronización de timestamp de archivo (`os.utime`), garantizando que `CROFECOBJ` conserve la fecha real del correo incluso si la app se reinicia o se procesa por lotes.
+- **Cálculo de Métricas Financieras en el Dashboard**: Corrección en todos los procesadores de EPS (`Sanitas`, `Mutualser`, `Coosalud`, `Previsora`) y en el servicio de correos para computar y propagar `valor_total_facturado` y `valor_total_glosado` (u `valor_total_objetado`) en el resumen de procesamiento. Ahora los KPIs de **Total Facturado** y **Total Objetado** en el Dashboard Analítico reflejan los montos reales de las facturas auditadas.
+
+---
+
 ## [0.11.36] - 2026-11-20
 
 ### 🐛 Correcciones

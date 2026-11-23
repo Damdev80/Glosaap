@@ -240,29 +240,11 @@ class EmailLoader:
         self.messages_view.update_message_status(msg_id, "Descargando...")
         try:
             email_date = None
-            try:
-                if isinstance(msg_date, str) and msg_date.strip():
-                    import re as _re
-                    from datetime import datetime as _dt
-                    txt = _re.sub(r"\s*\(.*?\)\s*", " ", msg_date.strip()).strip()
-                    txt = _re.sub(r"\s+GMT(\s|$)", " ", txt).strip()
-                    for fmt in (
-                        '%a, %d %b %Y %H:%M:%S %z',
-                        '%a, %d %b %Y %H:%M:%S',
-                        '%d %b %Y %H:%M:%S %z',
-                        '%d %b %Y %H:%M:%S',
-                        '%Y-%m-%d %H:%M:%S',
-                        '%d/%m/%Y %H:%M:%S',
-                    ):
-                        try:
-                            email_date = _dt.strptime(txt, fmt).strftime('%Y-%m-%d %H:%M:%S')
-                            break
-                        except ValueError:
-                            continue
-                elif hasattr(msg_date, 'strftime'):
-                    email_date = msg_date.strftime('%Y-%m-%d %H:%M:%S')
-            except Exception:
-                email_date = None
+            if msg_date:
+                from app.core.date_utils import format_date_iso, parse_email_date
+                parsed_dt = parse_email_date(msg_date)
+                if parsed_dt:
+                    email_date = format_date_iso(parsed_dt)
             files = self.email_service.download_message_attachments(msg_id, email_date=email_date)
             if files:
                 self.messages_view.update_message_status(msg_id, f"{len(files)} archivo(s)")
