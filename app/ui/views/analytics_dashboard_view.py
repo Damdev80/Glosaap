@@ -17,6 +17,7 @@ from app.ui.components.settings_dialog import (
     show_settings_dialog,
 )
 from app.ui.styles import SPACING
+from app.ui.views.glosas_report_tab_view import GlosasReportTabView
 
 
 class AnalyticsDashboardView:
@@ -56,12 +57,14 @@ class AnalyticsDashboardView:
         self._tab_content_area = ft.Container(expand=True)
 
         # Selector de pestañas sin emojis
+        self._report_tab_view = GlosasReportTabView(page=self.page)
         self._tabs = ft.Tabs(
             selected_index=0,
             animation_duration=200,
             tabs=[
                 ft.Tab(text="Trazabilidad de Glosas", icon=ft.Icons.TABLE_CHART_OUTLINED),
                 ft.Tab(text="Rendimiento y Telemetria", icon=ft.Icons.SPEED_ROUNDED),
+                ft.Tab(text="Informe de Glosas", icon=ft.Icons.ASSESSMENT_OUTLINED),
             ],
             on_change=self._on_tab_change,
         )
@@ -142,7 +145,7 @@ class AnalyticsDashboardView:
             on_change=self._on_filter_changed,
         )
 
-        filters_bar = ft.Container(
+        self._filters_bar = ft.Container(
             content=ft.Row([
                 ft.Icon(ft.Icons.FILTER_LIST, size=18, color=ft.Colors.PRIMARY),
                 ft.Text("Filtros:", size=13, weight=ft.FontWeight.W_600),
@@ -159,7 +162,7 @@ class AnalyticsDashboardView:
             header,
             self._progress_bar,
             self._banner_container,
-            filters_bar,
+            self._filters_bar,
             ft.Container(height=4),
             self._kpi_row,
             ft.Container(height=8),
@@ -227,6 +230,9 @@ class AnalyticsDashboardView:
 
     def refresh_data(self):
         """Inicia la carga de datos mostrando skeletons de inmediato."""
+        if self._tabs.selected_index == 2:
+            self._report_tab_view.refresh_report()
+            return
         if self._is_loading:
             return
         self._is_loading = True
@@ -463,10 +469,17 @@ class AnalyticsDashboardView:
     def _render_active_tab(self):
         """Renderiza la pestaña seleccionada."""
         idx = self._tabs.selected_index
+        is_report_tab = idx == 2
+        self._filters_bar.visible = not is_report_tab
+        self._kpi_row.visible = not is_report_tab
+
         if idx == 0:
             self._tab_content_area.content = self._render_glosas_tab()
-        else:
+        elif idx == 1:
             self._tab_content_area.content = self._render_metricas_tab()
+        else:
+            self._tab_content_area.content = self._report_tab_view.container
+            self._report_tab_view.ensure_loaded()
 
     def _render_glosas_tab(self) -> ft.Control:
         """Pestaña 1: Resumen por EPS y tabla de lotes."""

@@ -12,7 +12,7 @@ from pathlib import Path
 
 # Versión actual de la aplicación (seguir semver: MAJOR.MINOR.PATCH)
 # Actualizar manualmente en cada release
-APP_VERSION = "0.11.37"
+APP_VERSION = "0.12.0"
 
 # Nombre de la aplicación
 APP_NAME = "Glosaap"
@@ -190,6 +190,13 @@ DEFAULT_GLOSAPP_API_URL = os.environ.get(
 DEFAULT_GLOSAPP_API_KEY = os.environ.get(
     "GLOSAPP_API_KEY", "Tjdw3yHRZtQ60JfzwVmabvvY8w5_PHOH9E8mPjtv1iM"
 )
+
+
+# ==================== CONFIGURACIÓN SQL SERVER (DGH - INFORME GLOSAS) ====================
+
+DEFAULT_DGH_SQL_SERVER = os.environ.get("GLOSA_SQL_SERVER", r"diana\sql1")
+DEFAULT_DGH_SQL_DATABASE = os.environ.get("GLOSA_SQL_DATABASE", "DGEMPRES91")
+DEFAULT_DGH_SQL_USER = os.environ.get("GLOSA_SQL_USER", "user_dev")
 
 
 # ==================== INICIALIZACIÓN ====================

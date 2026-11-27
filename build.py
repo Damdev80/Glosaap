@@ -201,6 +201,9 @@ def build_main_executable():
         # con `sys.executable -m pip install`, que en el exe congelado
         # RE-EJECUTA Glosaap.exe en bucle infinito (fork bomb).
         "--collect-all", "flet_desktop",
+
+        # Garantizar inclusión del binario C de pyodbc para consultas SQL Server (DGH)
+        "--hidden-import", "pyodbc",
         
         # Archivo principal
         "main.py"

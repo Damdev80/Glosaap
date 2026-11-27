@@ -3,7 +3,7 @@ from PyInstaller.utils.hooks import collect_all
 
 datas = [('app', 'app'), ('assets', 'assets')]
 binaries = []
-hiddenimports = []
+hiddenimports = ['pyodbc']
 tmp_ret = collect_all('flet_desktop')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 

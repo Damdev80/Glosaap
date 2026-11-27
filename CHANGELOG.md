@@ -6,6 +6,23 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [0.12.0] - 2026-11-27
+
+### ✨ Nuevas Características
+- **Nuevo Módulo "Informe de Glosas" (SQL Server – Dinámica Gerencial)**: Pestaña independiente integrada en `AnalyticsDashboardView` para consultar glosas directamente en modo de solo lectura contra SQL Server (`DGEMPRES91` vía `pyodbc` con `DghSqlGlosasProvider`). Soporta cortes **Semanal**, **Quincenal**, **Mensual**, **Trimestral**, **Semestral** y **Personalizado** (modos *Últimos N días* y *Periodo calendario*), filtro por Entidad/EPS y deduplicación automática del valor facturado por factura única.
+- **3 Consultas Analíticas Integradas (DGH)**: Incorporación de desgloses por rango de fechas para **Glosas por Servicio** (`SLNSERPRO`), **Glosas por Facturador** (`SLNFACTUR` / `GENUSUARIO`) y **Top Conceptos de Objeción** (`CRNCONOBJ` con clasificación Administrativa/Asistencial), navegables directamente mediante sub-vistas interactivas en la pantalla del informe.
+- **Motor de Exportación Dual (Excel 5 Hojas + PDF Ejecutivo)**:
+  - **Excel (`.xlsx`)**: Libro corporativo de 5 hojas (`Resumen del Informe`, `Glosas por Servicio`, `Glosas por Facturador`, `Top Conceptos Objecion` y `Detalle de Glosas`) con formato monetario, encabezados estilizados y autofiltro.
+  - **PDF (`.pdf`)**: Resumen gerencial compacto en formato tabular nativo con tarjetas KPI y 3 tablas ejecutivas (**Resumen por Entidad / EPS**, **Top Conceptos de Objeción** y **Glosas por Facturador**), sin volcar el detalle fila por fila.
+- **Rediseño UX/UI del Informe de Glosas**: Cabecera compacta con chip de estado SQL en línea, selector de fechas con calendario nativo (`DatePicker`), 5 tarjetas KPI de alto contraste, tira horizontal desplazable de entidades con filtro por clic y barra de participación, búsqueda local instantánea y tabla paginada de 50 registros por página.
+- **Gestión Segura de Credenciales SQL**: Diálogo `Configurar SQL` que persiste la contraseña exclusivamente en el almacén seguro local de Windows (Keyring/DPAPI mediante `CredentialManager`), sin credenciales en texto plano en el código ni en el repositorio.
+
+### 🐛 Correcciones
+- **Compatibilidad SQL Server `DATEFORMAT dmy` y Valores `Decimal`**: Envío parametrizado de objetos `datetime.date` en consultas `pyodbc` para evitar el error 242 en perfiles SQL en español, y conversión precisa de tipos `Decimal` y moneda colombiana en el motor de reportes.
+- **Estabilidad de Layout Flet 0.27.6 y Empaquetado**: Eliminación de colapso visual en pestañas Flet con `Row(wrap=True)` e inclusión explícita de `pyodbc` en `requirements.txt`, `build.py` y `glosaap.spec` para el ejecutable empaquetado.
+
+---
+
 ## [0.11.37] - 2026-11-23
 
 ### 🐛 Correcciones
